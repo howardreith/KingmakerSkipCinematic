@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildToolsPath)\Microsoft.Common.props" Condition="Exists('$(MSBuildToolsPath)\Microsoft.Common.props')" />
+  <Import Project="..\..\GamePath.props" Condition="Exists('..\..\GamePath.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{5B0C8E3A-6D2F-4C1E-9A7B-3E4F2D1C0B9A}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>KingmakerCutsceneSkip</RootNamespace>
+    <AssemblyName>KingmakerCutsceneSkip</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch>true</ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch>
+    <OutputPath>..\..\artifacts\bin\$(Configuration)\KingmakerCutsceneSkip\</OutputPath>
+    <IntermediateOutputPath>..\..\artifacts\obj\$(Configuration)\KingmakerCutsceneSkip\</IntermediateOutputPath>
+  </PropertyGroup>
+  <Target Name="RequireLocalGamePaths" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(KingmakerManagedDir)\Assembly-CSharp.dll')" Text="GamePath.props must point to the Kingmaker 2.1.7b Managed directory." />
+    <Error Condition="!Exists('$(UnityModManagerDir)\UnityModManager.dll')" Text="UnityModManagerDir must contain UnityModManager.dll." />
+    <Error Condition="!Exists('$(UnityModManagerDir)\0Harmony12.dll')" Text="UnityModManagerDir must contain 0Harmony12.dll." />
+  </Target>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="Assembly-CSharp"><HintPath>$(KingmakerManagedDir)\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="0Harmony12"><HintPath>$(UnityModManagerDir)\0Harmony12.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityModManager"><HintPath>$(UnityModManagerDir)\UnityModManager.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(KingmakerManagedDir)\UnityEngine.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>False</Private></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="**\*.cs" Exclude="bin\**;obj\**" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
