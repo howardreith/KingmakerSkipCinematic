@@ -1,0 +1,30 @@
+# Local game configuration
+GamePath.props
+
+# Build and qualification output
+artifacts/
+bin/
+obj/
+TestResults/
+
+# IDE and user state
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+
+# Runtime/user material must never enter source control
+*.zks
+*.zip
+*.save
+*.sav
+*.log
+*.dmp
+*.assets
+settings.json
+runtime-evidence/
+/recovery/
+
+# Local runtime-test lab material
+requests/
