@@ -1,0 +1,19 @@
+{
+  "description": "Discovery: Auto_1079: record cutscene commands reached on load (owner mod set).",
+  "save": "Auto_1079.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "snapshot",
+      "label": "loaded"
+    },
+    {
+      "op": "wait",
+      "seconds": 8.0
+    },
+    {
+      "op": "snapshot",
+      "label": "after-wait"
+    }
+  ]
+}

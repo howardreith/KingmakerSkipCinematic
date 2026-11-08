@@ -1,0 +1,59 @@
+{
+  "description": "Ordinary menu pause and resume during a cinematic through the game's own Escape handler (API-driven, not key delivery). Run with and without Cutscene Skip; compare with startgame-normal.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "escMenu"
+    },
+    {
+      "op": "waitMode",
+      "mode": "EscMode",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "wait",
+      "seconds": 2.0
+    },
+    {
+      "op": "snapshot",
+      "label": "menu"
+    },
+    {
+      "op": "escMenu"
+    },
+    {
+      "op": "waitNotMode",
+      "mode": "EscMode",
+      "seconds": 0.5,
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 90
+    },
+    {
+      "op": "wait",
+      "seconds": 1.0
+    },
+    {
+      "op": "snapshot",
+      "label": "boundary"
+    }
+  ]
+}

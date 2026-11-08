@@ -1,23 +1,86 @@
 {
-  "description": "Loader compatibility: settings panel, disable and re-enable, a direct skip to the dialogue, then save and reload.",
+  "description": "Loader compatibility: settings panel, disable and re-enable, a direct skip to the dialogue, native play to free control, then save and reload (the game refuses saves during dialogue).",
   "save": "Auto_1069.zks",
   "captureEveryFrames": 0,
   "steps": [
-    { "op": "ummPanel", "seconds": 1.5, "timeoutSeconds": 20 },
-    { "op": "toggleMod", "enabled": false },
-    { "op": "wait", "seconds": 0.5 },
-    { "op": "toggleMod", "enabled": true },
-    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 240 },
-    { "op": "wait", "seconds": 2.5 },
-    { "op": "snapshot", "label": "pre" },
-    { "op": "skipDirect" },
-    { "op": "waitSkipIdle", "mode": "InteractionBoundary", "timeoutSeconds": 60 },
-    { "op": "waitMode", "mode": "Dialog", "seconds": 0.0, "timeoutSeconds": 30 },
-    { "op": "wait", "seconds": 1.0 },
-    { "op": "snapshot", "label": "boundary" },
-    { "op": "saveGame", "label": "KMCS_LOADER_SMOKE", "timeoutSeconds": 60 },
-    { "op": "loadLastSave", "timeoutSeconds": 120 },
-    { "op": "wait", "seconds": 2.0 },
-    { "op": "snapshot", "label": "reloaded" }
+    {
+      "op": "ummPanel",
+      "seconds": 1.5,
+      "timeoutSeconds": 20
+    },
+    {
+      "op": "toggleMod",
+      "enabled": false
+    },
+    {
+      "op": "wait",
+      "seconds": 0.5
+    },
+    {
+      "op": "toggleMod",
+      "enabled": true
+    },
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "skipDirect"
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "InteractionBoundary",
+      "timeoutSeconds": 60
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "seconds": 0.0,
+      "timeoutSeconds": 30
+    },
+    {
+      "op": "wait",
+      "seconds": 1.0
+    },
+    {
+      "op": "snapshot",
+      "label": "boundary"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    },
+    {
+      "op": "saveGame",
+      "label": "KMCS_LOADER_SMOKE",
+      "timeoutSeconds": 60
+    },
+    {
+      "op": "loadLastSave",
+      "timeoutSeconds": 120
+    },
+    {
+      "op": "wait",
+      "seconds": 2.0
+    },
+    {
+      "op": "snapshot",
+      "label": "reloaded"
+    }
   ]
 }

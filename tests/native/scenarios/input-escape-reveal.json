@@ -1,0 +1,55 @@
+{
+  "description": "Real keys: Escape during the reveal is outside the cancellable window; it reaches the game unchanged and opens the native menu at the dialogue.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "pressKey",
+      "key": "Return",
+      "holdMs": 60
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "Revealing",
+      "timeoutSeconds": 60
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitMode",
+      "mode": "EscMode",
+      "timeoutSeconds": 6
+    },
+    {
+      "op": "snapshot",
+      "label": "menu-at-reveal"
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "snapshot",
+      "label": "boundary"
+    }
+  ]
+}

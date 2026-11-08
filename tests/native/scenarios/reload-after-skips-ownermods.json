@@ -1,0 +1,15 @@
+{
+  "description": "Load the save written after skipped cinematics in the owner's mod set, with Cutscene Skip removed. Compare 'control' with the writer run's 'control'. No key input.",
+  "save": "KMCS_AFTER_SKIPS_012_OWNERMODS.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "wait",
+      "seconds": 2.0
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

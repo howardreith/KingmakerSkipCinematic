@@ -1,0 +1,96 @@
+{
+  "description": "Real keys: Enter starts one skip, Escape during acceleration cancels without opening the menu; a later fresh Escape opens the native menu and another closes it; the scene continues to its dialogue.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 1.5
+    },
+    {
+      "op": "pressKey",
+      "key": "Return",
+      "holdMs": 60
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "Advancing",
+      "timeoutSeconds": 5
+    },
+    {
+      "op": "wait",
+      "seconds": 0.3
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "Cancelled",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "waitNotMode",
+      "mode": "EscMode",
+      "seconds": 1.0,
+      "timeoutSeconds": 6
+    },
+    {
+      "op": "snapshot",
+      "label": "cancelled"
+    },
+    {
+      "op": "markOperations",
+      "label": "after-cancel"
+    },
+    {
+      "op": "wait",
+      "seconds": 1.0
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitMode",
+      "mode": "EscMode",
+      "timeoutSeconds": 6
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitNotMode",
+      "mode": "EscMode",
+      "seconds": 0.5,
+      "timeoutSeconds": 6
+    },
+    {
+      "op": "expectNoSkip"
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 90
+    },
+    {
+      "op": "wait",
+      "seconds": 1.0
+    },
+    {
+      "op": "snapshot",
+      "label": "boundary"
+    }
+  ]
+}

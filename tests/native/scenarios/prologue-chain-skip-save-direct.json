@@ -1,0 +1,27 @@
+{
+  "description": "Prologue chain with direct skip requests to free control, then a save for the reload-without-mod check.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "skipAfterSeconds": 1.0,
+      "key": "direct",
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    },
+    {
+      "op": "saveGame",
+      "label": "KMCS_AFTER_SKIPS_012",
+      "timeoutSeconds": 60
+    }
+  ]
+}

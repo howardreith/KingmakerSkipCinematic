@@ -1,0 +1,54 @@
+{
+  "description": "Commenter's concern: a skip cancelled during acceleration, then the scene plays out natively to free control (API request, API cancel). Compare 'control' with prologue-chain-normal.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 1.5
+    },
+    {
+      "op": "skipDirect"
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "Advancing",
+      "timeoutSeconds": 5
+    },
+    {
+      "op": "wait",
+      "seconds": 0.3
+    },
+    {
+      "op": "cancelDirect"
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "Cancelled",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "snapshot",
+      "label": "cancelled"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

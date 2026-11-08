@@ -74,7 +74,7 @@ $lock = Enter-RuntimeLock $lab $runId
 $evidence = Join-Path $lab.Evidence $runId
 $backup = Join-Path $lab.Backups $runId
 New-Item -ItemType Directory -Force -Path $evidence, $backup | Out-Null
-$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started' }
+$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started'; failure = $null }
 $journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
 $savesBefore = $null
 $installBefore = $null
