@@ -1,0 +1,13 @@
+{
+  "description": "Discovery: walk toward the first assassin group in the night mansion and record the encounter.",
+  "save": "Manual_303_KBP_AUTOMATION_SEED.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "moveTo", "position": "24.5,-6.0,-12.0", "timeoutSeconds": 30, "optional": true },
+    { "op": "screenshot", "label": "arrived" },
+    { "op": "wait", "seconds": 3 },
+    { "op": "snapshot", "label": "t3" },
+    { "op": "wait", "seconds": 6 },
+    { "op": "snapshot", "label": "t9" }
+  ]
+}

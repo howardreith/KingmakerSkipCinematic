@@ -25,8 +25,24 @@ def distance(a, b):
     return ((pa[0] - pb[0]) ** 2 + (pa[2] - pb[2]) ** 2) ** 0.5
 
 
-def units_by_id(units):
-    return {unit["id"]: unit for unit in units}
+def pair_units(normal_units, skipped_units):
+    """Pairs units by UniqueId; units spawned at runtime get random ids, so leftovers pair by blueprint and proximity."""
+    a = {unit["id"]: unit for unit in normal_units}
+    b = {unit["id"]: unit for unit in skipped_units}
+    pairs = [(a[i], b[i]) for i in sorted(set(a) & set(b))]
+    left = [a[i] for i in sorted(set(a) - set(b))]
+    right = [b[i] for i in sorted(set(b) - set(a))]
+    unmatched = []
+    for unit in left:
+        candidates = [other for other in right if other["unit"] == unit["unit"]]
+        if not candidates:
+            unmatched.append(("normal only", unit))
+            continue
+        best = min(candidates, key=lambda other: distance(unit["position"], other["position"]))
+        right.remove(best)
+        pairs.append((unit, best))
+    unmatched.extend(("skipped only", unit) for unit in right)
+    return pairs, unmatched
 
 
 def main():
@@ -45,19 +61,13 @@ def main():
             failures.append("{0}: normal={1} skipped={2}".format(key, json.dumps(normal.get(key)), json.dumps(skipped.get(key))))
 
     for group in ("party", "areaUnits"):
-        a, b = units_by_id(normal.get(group, [])), units_by_id(skipped.get(group, []))
-        for unit_id in sorted(set(a) | set(b)):
-            if unit_id not in a or unit_id not in b:
-                present = "skipped only" if unit_id in b else "normal only"
-                failures.append("{0} {1} ({2}) present in {3}".format(group, (a.get(unit_id) or b.get(unit_id))["unit"], unit_id, present))
-                continue
-            ua, ub = a[unit_id], b[unit_id]
-            if ua["dead"] != ub["dead"]:
-                failures.append("{0} {1} dead: normal={2} skipped={3}".format(group, ua["unit"], ua["dead"], ub["dead"]))
-            if ua["hp"] != ub["hp"]:
-                failures.append("{0} {1} hp: normal={2} skipped={3}".format(group, ua["unit"], ua["hp"], ub["hp"]))
-            if ua.get("inCombat") != ub.get("inCombat"):
-                failures.append("{0} {1} inCombat: normal={2} skipped={3}".format(group, ua["unit"], ua.get("inCombat"), ub.get("inCombat")))
+        pairs, unmatched = pair_units(normal.get(group, []), skipped.get(group, []))
+        for side, unit in unmatched:
+            failures.append("{0} {1} ({2}) present in {3}".format(group, unit["unit"], unit["id"], side))
+        for ua, ub in pairs:
+            for key in ("dead", "hp", "inCombat"):
+                if ua.get(key) != ub.get(key):
+                    failures.append("{0} {1} {2}: normal={3} skipped={4}".format(group, ua["unit"], key, ua.get(key), ub.get(key)))
             moved = distance(ua["position"], ub["position"])
             if moved > tolerance:
                 failures.append("{0} {1} position differs by {2:.1f}m: normal={3} skipped={4}".format(group, ua["unit"], moved, ua["position"], ub["position"]))

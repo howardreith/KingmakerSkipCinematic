@@ -1,0 +1,10 @@
+{
+  "description": "Discovery: load Manual_303_KBP_AUTOMATION_SEED and record what plays until free control.",
+  "save": "Manual_303_KBP_AUTOMATION_SEED.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "snapshot", "label": "loaded" },
+    { "op": "autoplayUntilControl", "seconds": 4, "timeoutSeconds": 200 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

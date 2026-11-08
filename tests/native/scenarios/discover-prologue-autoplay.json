@@ -1,0 +1,9 @@
+{
+  "description": "Discovery: autoplay the prologue opening (deterministic answers, no skipping) until free player control.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "autoplayUntilControl", "seconds": 5, "timeoutSeconds": 500 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

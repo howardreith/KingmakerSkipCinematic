@@ -41,6 +41,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 HarmonyInstance harmony = HarmonyInstance.Create("howardreith.kingmaker.cutsceneskip.runtimeharness");
                 result["isolation"] = ProfileIsolation.Apply(harmony, request.ProfileDir);
                 FaultInjection.Install(harmony);
+                CommandTrace.Install(harmony, recorder);
             }
             catch (Exception exception)
             {
@@ -80,6 +81,36 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             return null;
+        }
+    }
+
+    /// <summary>Timeline entry for every cutscene command start: cutscene, command asset, type and game time.</summary>
+    internal static class CommandTrace
+    {
+        private static EvidenceRecorder traceRecorder;
+
+        public static void Install(HarmonyInstance harmony, EvidenceRecorder recorder)
+        {
+            traceRecorder = recorder;
+            MethodInfo run = typeof(Kingmaker.AreaLogic.Cutscenes.CommandBase).GetMethod("Run", BindingFlags.Instance | BindingFlags.Public);
+            harmony.Patch(run, null, new HarmonyMethod(typeof(CommandTrace).GetMethod(nameof(Postfix), BindingFlags.Static | BindingFlags.NonPublic)));
+        }
+
+        private static void Postfix(Kingmaker.AreaLogic.Cutscenes.CommandBase __instance, Kingmaker.AreaLogic.Cutscenes.CutscenePlayerData player)
+        {
+            try
+            {
+                traceRecorder?.Event("cmd", new JObject
+                {
+                    ["cutscene"] = player?.Cutscene != null ? player.Cutscene.name : "?",
+                    ["command"] = __instance.name,
+                    ["type"] = __instance.GetType().Name,
+                    ["game"] = Kingmaker.Game.Instance.Player?.GameTime.TotalSeconds ?? -1
+                });
+            }
+            catch (Exception)
+            {
+            }
         }
     }
 

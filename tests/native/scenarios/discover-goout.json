@@ -1,0 +1,10 @@
+{
+  "description": "Discovery: from the prologue autosave with Obj_1-GoOut active, use the nearest door and record the transition.",
+  "save": "Auto_1120.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "useAreaTransition" },
+    { "op": "autoplayUntilControl", "seconds": 5, "timeoutSeconds": 200 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

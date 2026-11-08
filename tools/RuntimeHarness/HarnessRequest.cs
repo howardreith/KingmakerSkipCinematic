@@ -41,6 +41,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         [JsonProperty("enabled")] public bool Enabled;
         [JsonProperty("save")] public string Save;
 
+        /// <summary>autoplayUntilControl: press the key this many seconds into each cinematic episode (-1 = never).</summary>
+        [JsonProperty("skipAfterSeconds")] public double SkipAfterSeconds = -1;
+
         /// <summary>World position "x,y,z" for moveTo.</summary>
         [JsonProperty("position")] public string Position;
 

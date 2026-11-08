@@ -64,6 +64,13 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             if (stage == Stage.Finished) return;
+            if (pendingKeyUp != null && Now >= pendingKeyUpAt)
+            {
+                NativeKeyboard.Send(pendingKeyUp, false);
+                recorder.Event("keyUp", pendingKeyUp);
+                pendingKeyUp = null;
+            }
+
             SubscribeToSkipReports();
             recorder.Tick(Controller);
 
@@ -228,11 +235,20 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 case "moveTo":
                     return MoveMainCharacter(game, step);
 
+                case "interactNearest":
+                    return InteractNearest(game, step);
+
+                case "useAreaTransition":
+                    return UseNearestAreaTransition(game);
+
                 case "answer":
                     return SelectAnswer(game, step.Index);
 
                 case "advanceUntil":
                     return AdvanceDialoguesUntil(game, step);
+
+                case "autoplayUntilControl":
+                    return AutoplayUntilControl(game, step);
 
                 case "toggleMod":
                     UnityModManager.FindMod(ProductMetadata.Id).Active = step.Enabled;
@@ -358,7 +374,134 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             return StepStatus.Running;
         }
 
+        /// <summary>
+        /// Answers dialogues with the deterministic rule and waits through cinematics until ordinary control
+        /// (Default mode, no control-locking cutscene) has persisted for step.seconds.
+        /// </summary>
+        private StepStatus AutoplayUntilControl(Game game, HarnessStep step)
+        {
+            if (game.CurrentMode == Kingmaker.GameModes.GameModeType.Dialog)
+            {
+                controlSince = double.NaN;
+                cinematicSince = double.NaN;
+                HarnessStep cadence = new HarnessStep { Mode = "__never__", Seconds = 1.0 };
+                AdvanceDialoguesUntil(game, cadence);
+                return StepStatus.Running;
+            }
+
+            if (game.CurrentMode == Kingmaker.GameModes.GameModeType.Cutscene)
+            {
+                controlSince = double.NaN;
+                if (double.IsNaN(cinematicSince))
+                {
+                    cinematicSince = Now;
+                    skipPressedThisEpisode = false;
+                }
+
+                if (step.SkipAfterSeconds >= 0 && !skipPressedThisEpisode && Now - cinematicSince >= step.SkipAfterSeconds)
+                {
+                    skipPressedThisEpisode = true;
+                    PressOnce(step.Key ?? "Return");
+                }
+
+                return StepStatus.Running;
+            }
+
+            cinematicSince = double.NaN;
+            bool control = game.CurrentMode == Kingmaker.GameModes.GameModeType.Default && !game.CutsceneLock;
+            if (!control)
+            {
+                controlSince = double.NaN;
+                return StepStatus.Running;
+            }
+
+            if (double.IsNaN(controlSince)) controlSince = Now;
+            return Now - controlSince >= step.Seconds ? StepStatus.Done : StepStatus.Running;
+        }
+
+        /// <summary>One real key press (down now, up a few frames later), only while the game is foreground.</summary>
+        private void PressOnce(string key)
+        {
+            if (!NativeKeyboard.EnsureForeground() || !NativeKeyboard.Send(key, true))
+            {
+                recorder.Event("keyRefused", key + ": game not foreground");
+                return;
+            }
+
+            recorder.Event("keyDown", key);
+            pendingKeyUp = key;
+            pendingKeyUpAt = Now + 0.08;
+        }
+
+        private string pendingKeyUp;
+        private double pendingKeyUpAt;
+        private double cinematicSince = double.NaN;
+        private bool skipPressedThisEpisode;
+        private double controlSince = double.NaN;
+
         private readonly System.Collections.Generic.HashSet<string> chosenAnswers = new System.Collections.Generic.HashSet<string>();
+
+        /// <summary>Issues the native click interaction (UnitInteractWithObject) with the nearest interactable map object.</summary>
+        private StepStatus InteractNearest(Game game, HarnessStep step)
+        {
+            UnitEntityData unit = game.Player.MainCharacter.Value;
+            double radius = step.Seconds > 0 ? step.Seconds : 8.0;
+            Kingmaker.View.MapObjects.InteractionComponent best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var interaction in UnityEngine.Object.FindObjectsOfType<Kingmaker.View.MapObjects.InteractionComponent>())
+            {
+                if (interaction == null || !interaction.isActiveAndEnabled) continue;
+                if (!string.IsNullOrEmpty(step.Match) && interaction.name.IndexOf(step.Match, StringComparison.OrdinalIgnoreCase) < 0 &&
+                    interaction.GetType().Name.IndexOf(step.Match, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                float distance = Vector3.Distance(interaction.transform.position, unit.Position);
+                if (distance < bestDistance)
+                {
+                    best = interaction;
+                    bestDistance = distance;
+                }
+            }
+
+            if (best == null || bestDistance > radius)
+            {
+                string nearest = string.Join("; ", UnityEngine.Object.FindObjectsOfType<Kingmaker.View.MapObjects.InteractionComponent>()
+                    .OrderBy(candidate => Vector3.Distance(candidate.transform.position, unit.Position)).Take(6)
+                    .Select(candidate => candidate.name + "/" + candidate.GetType().Name + "@" +
+                        Vector3.Distance(candidate.transform.position, unit.Position).ToString("0.0", CultureInfo.InvariantCulture) +
+                        (candidate.isActiveAndEnabled ? string.Empty : "(inactive)")).ToArray());
+                stepFailure = "no interactable object within " + radius + "m; nearest: " + nearest;
+                return StepStatus.Failed;
+            }
+
+            recorder.Event("interact", best.name + " (" + best.GetType().Name + ") at " + bestDistance.ToString("0.0", CultureInfo.InvariantCulture) + "m");
+            unit.Commands.Run(new UnitInteractWithObject(best));
+            return StepStatus.Done;
+        }
+
+        /// <summary>Uses the nearest area exit exactly as clicking its overtip does (AreaTransitionController.StartAreaTransition).</summary>
+        private StepStatus UseNearestAreaTransition(Game game)
+        {
+            UnitEntityData unit = game.Player.MainCharacter.Value;
+            Kingmaker.View.MapObjects.AreaTransition exit = UnityEngine.Object.FindObjectsOfType<Kingmaker.View.MapObjects.AreaTransition>()
+                .Where(candidate => candidate != null && candidate.isActiveAndEnabled)
+                .OrderBy(candidate => Vector3.Distance(candidate.transform.position, unit.Position))
+                .FirstOrDefault();
+            if (exit == null)
+            {
+                stepFailure = "no area transition in the scene";
+                return StepStatus.Failed;
+            }
+
+            var units = game.Player.GetPartyCharactersForGroupCommand(exit.transform.position, true);
+            var group = new Kingmaker.UnitLogic.Commands.AreaTransitionGroupCommand(units, exit);
+            Vector3 point = Kingmaker.View.ObstacleAnalyzer.GetDeepNavmeshPoint(exit.transform.position, 1.5f);
+            foreach (UnitEntityData member in units)
+            {
+                Kingmaker.UI.MapObjectOvertip.AreaTransitionController.RunUnitTransitionCommand(group, member, point, null);
+            }
+
+            recorder.Event("areaTransition", exit.name + " at " + Vector3.Distance(exit.transform.position, unit.Position).ToString("0.0", CultureInfo.InvariantCulture) + "m");
+            return StepStatus.Done;
+        }
 
         private StepStatus SelectAnswer(Game game, int index)
         {

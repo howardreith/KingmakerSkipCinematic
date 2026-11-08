@@ -1,0 +1,10 @@
+{
+  "description": "Discovery: load Manual_296_Jamandi_Aldori_s_Mansion___14_Gozran__IV__4710___12_16_03 and record what plays until free control.",
+  "save": "Manual_296_Jamandi_Aldori_s_Mansion___14_Gozran__IV__4710___12_16_03.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "snapshot", "label": "loaded" },
+    { "op": "autoplayUntilControl", "seconds": 4, "timeoutSeconds": 200 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

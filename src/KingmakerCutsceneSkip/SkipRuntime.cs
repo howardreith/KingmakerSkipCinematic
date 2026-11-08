@@ -49,6 +49,8 @@ namespace KingmakerCutsceneSkip
 
         public bool ShouldSuppressVoice => enabled && Controller.IsSkipping;
 
+        public bool IsAccelerating => enabled && Controller.Phase == SkipPhase.Advancing;
+
         public string Status
         {
             get

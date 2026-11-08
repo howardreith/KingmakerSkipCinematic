@@ -24,6 +24,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="Assembly-CSharp"><HintPath>$(KingmakerManagedDir)\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(KingmakerManagedDir)\Assembly-CSharp-firstpass.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="0Harmony12"><HintPath>$(UnityModManagerDir)\0Harmony12.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityModManager"><HintPath>$(UnityModManagerDir)\UnityModManager.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(KingmakerManagedDir)\UnityEngine.dll</HintPath><Private>False</Private></Reference>

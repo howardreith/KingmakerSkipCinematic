@@ -1,0 +1,1 @@
+{ "description": "Discovery: load Manual_297_Jamandi_Aldori_s_Mansion___14_Gozran__IV__4710___12_16_04 and snapshot.", "save": "Manual_297_Jamandi_Aldori_s_Mansion___14_Gozran__IV__4710___12_16_04.zks", "captureEveryFrames": 0, "steps": [ { "op": "wait", "seconds": 2 }, { "op": "snapshot", "label": "loaded" } ] }

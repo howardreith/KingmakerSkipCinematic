@@ -1,0 +1,10 @@
+{
+  "description": "V1/V2/V5 baseline: the whole prologue opening (3 cinematic segments, 4 dialogues, tutorial) played normally to free control.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "snapshot", "label": "pre" },
+    { "op": "autoplayUntilControl", "seconds": 3, "timeoutSeconds": 400 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

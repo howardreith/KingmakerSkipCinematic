@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Reflection;
 using Harmony12;
 using Kingmaker.AreaLogic.Cutscenes;
+using Kingmaker.Controllers;
+using Kingmaker.Controllers.Units;
 using Kingmaker.EntitySystem.Persistence;
 using Kingmaker.Localization;
 using Kingmaker.UI;
+using Kingmaker.UnitLogic.Commands.Base;
+using Kingmaker.View;
 using KingmakerCutsceneSkip.Logging;
 using UnityEngine;
 
@@ -38,6 +42,11 @@ namespace KingmakerCutsceneSkip.Patches
             MethodInfo inputMatched = Require(typeof(KeyboardAccess.Binding), "InputMatched", Type.EmptyTypes, missing);
             MethodInfo commandRun = Require(typeof(CommandBase), "Run", new[] { typeof(CutscenePlayerData) }, missing);
             MethodInfo playVoiceOver = Require(typeof(LocalizedString), "PlayVoiceOver", new[] { typeof(MonoBehaviour) }, missing);
+            MethodInfo cutsceneTick = Require(typeof(CutsceneController), "Tick", Type.EmptyTypes, missing);
+            MethodInfo movementTick = Require(typeof(UnitMoveController), "Tick", Type.EmptyTypes, missing);
+            MethodInfo pathTo = Require(typeof(UnitMovementAgent), "PathTo",
+                new[] { typeof(UnitCommand), typeof(Vector3), typeof(float), typeof(float), typeof(UnitMovementAgentBase) }, missing);
+            if (SynchronousPathPatch.RequestedPathField == null) missing.Add("UnitMovementAgent.m_RequestedPath");
             MethodInfo stopAll = Require(typeof(LoadingProcess), "StopAll", Type.EmptyTypes, missing);
             MethodInfo resetManual = Require(typeof(LoadingProcess), "ResetManualLoadingScreen", Type.EmptyTypes, missing);
             MethodInfo cheatResetManual = Require(typeof(LoadingProcess), "CheatRestManualLoadingScreen", Type.EmptyTypes, missing);
@@ -55,6 +64,9 @@ namespace KingmakerCutsceneSkip.Patches
                 instance.Patch(inputMatched, Method(typeof(BindingInputMatchedPatch), "Prefix"), null);
                 instance.Patch(commandRun, Method(typeof(CommandRunPatch), "Prefix"), Method(typeof(CommandRunPatch), "Postfix"));
                 instance.Patch(playVoiceOver, null, Method(typeof(VoiceOverPatch), "Postfix"));
+                instance.Patch(cutsceneTick, Method(typeof(ControllerSubstepPatch), "CutscenePrefix"), null);
+                instance.Patch(movementTick, Method(typeof(ControllerSubstepPatch), "MovementPrefix"), null);
+                instance.Patch(pathTo, null, Method(typeof(SynchronousPathPatch), "Postfix"));
                 HarmonyMethod resetPostfix = Method(typeof(ManualScreenResetPatch), "Postfix");
                 instance.Patch(stopAll, null, resetPostfix);
                 instance.Patch(resetManual, null, resetPostfix);

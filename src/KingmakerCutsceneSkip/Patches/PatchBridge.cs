@@ -12,6 +12,8 @@ namespace KingmakerCutsceneSkip.Patches
 
         bool ShouldSuppressVoice { get; }
 
+        bool IsAccelerating { get; }
+
         void PollInput();
 
         bool IsKeyClaimed(KeyCode key);
@@ -85,6 +87,35 @@ namespace KingmakerCutsceneSkip.Patches
             IPatchTarget current = target;
             if (current == null) return;
             Guard("exit cutscene command", () => current.ExitCommand(command, player));
+        }
+
+        /// <summary>Largest engine delta one substepped controller tick may consume while accelerating (a 30 fps frame).</summary>
+        public const float MaximumSubstepSeconds = 1f / 30f;
+
+        public static bool IsAccelerating
+        {
+            get
+            {
+                IPatchTarget current = target;
+                return current != null && current.IsAccelerating;
+            }
+        }
+
+        /// <summary>Number of controller ticks for this frame: 1 unless accelerating with a frame delta above one substep.</summary>
+        public static int ControllerSubsteps()
+        {
+            try
+            {
+                if (!IsAccelerating) return 1;
+                float delta = Kingmaker.Game.Instance.TimeController.DeltaTime;
+                int substeps = (int)System.Math.Ceiling(delta / MaximumSubstepSeconds);
+                return substeps < 1 ? 1 : (substeps > 16 ? 16 : substeps);
+            }
+            catch (Exception exception)
+            {
+                Report("plan controller substeps", exception);
+                return 1;
+            }
         }
 
         public static bool ShouldSuppressVoice
