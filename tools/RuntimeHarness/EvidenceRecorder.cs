@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Kingmaker;
 using Kingmaker.AreaLogic.Cutscenes;
 using Kingmaker.EntitySystem.Persistence;
@@ -70,12 +71,41 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 });
             }
 
+            RecordStoryChanges(game, phase);
             if (!ProductAccess.IsIdle) ExtendCapture(CaptureTailSeconds);
             if (captureEveryFrames > 0 && Time.realtimeSinceStartup <= captureUntil && Time.frameCount - lastCaptureFrame >= captureEveryFrames)
             {
                 Screenshot("f" + Time.frameCount.ToString("D6") + "_" + phase);
             }
         }
+
+        /// <summary>
+        /// Story-state signature (quests, objectives, flags, units in game). A change is logged with the skip phase it
+        /// happened in, attributing quest updates and NPC spawns to accelerated segments.
+        /// </summary>
+        private void RecordStoryChanges(Game game, string phase)
+        {
+            if (game.Player == null || game.State == null) return;
+            var quests = game.Player.QuestBook.Quests.ToList();
+            int objectives = quests.Sum(quest => quest.Objectives.Count(objective => objective.State != Kingmaker.AreaLogic.QuestSystem.QuestObjectiveState.None));
+            int unitsInGame = game.State.Units.Count(unit => unit != null && unit.IsInGame);
+            string signature = quests.Count + "/" + objectives + "/" + game.Player.UnlockableFlags.UnlockedFlags.Count + "/" + unitsInGame;
+            if (signature == lastStorySignature) return;
+            if (lastStorySignature != null)
+            {
+                Event("story", new JObject
+                {
+                    ["skipPhase"] = phase,
+                    ["mode"] = game.CurrentMode.ToString(),
+                    ["quests/objectives/flags/units"] = lastStorySignature + " -> " + signature,
+                    ["gameTimeSeconds"] = game.Player.GameTime.TotalSeconds
+                });
+            }
+
+            lastStorySignature = signature;
+        }
+
+        private string lastStorySignature;
 
         public void ExtendCapture(double seconds)
         {
