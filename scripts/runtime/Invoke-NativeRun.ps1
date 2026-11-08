@@ -99,9 +99,10 @@ try {
     foreach ($item in $deploy) {
         $target = Join-Path $game.ModsDir $item.Name
         if (Test-Path -LiteralPath $target) { throw "Refusing to overwrite an existing mod folder: $target" }
-        New-Item -ItemType Directory -Path $target | Out-Null
+        # Journal the staged folder before creating it; recovery tolerates a recorded folder that was never created.
         $journal.staged += $target
         Save-Journal $lab $journal
+        New-Item -ItemType Directory -Path $target | Out-Null
         Copy-Item -LiteralPath (Join-Path $item.Source ($(if ($item.Name -eq 'KingmakerCutsceneSkip') { 'KingmakerCutsceneSkip.dll' } else { 'KingmakerCutsceneSkip.RuntimeHarness.dll' }))) -Destination $target
         Copy-Item -LiteralPath $item.Info -Destination (Join-Path $target 'Info.json')
     }

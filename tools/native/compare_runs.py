@@ -9,7 +9,7 @@ the initiative cooldown: which unit acts first is decided by d20 rolls (UnityEng
 differs between two normal runs too); the initiative schedule (sorted values across combatants) must match and the
 per-unit order is reported as a note.
 
-Timed buffs: the remaining duration may differ only by the measured game-time difference between the runs (the
+Timed buffs: durations are paired within the same blueprint and suppression state; the remaining duration may differ only by the measured game-time difference between the runs (the
 documented cost of a skip) plus 0.25 s; anything larger is a difference. Every remaining-duration delta is reported.
 
 Presentation after the boundary (debug and Unity time scale, fade, manual loading screen, audio, pause) must match, so
@@ -72,15 +72,29 @@ def compare_buffs(name, normal_buffs, skipped_buffs, allowed_delta, failures, no
         only_skipped = sorted(set(skipped_ids) - set(normal_ids)) or "(counts differ)"
         failures.append("{0} buffs differ: normal only {1}; skipped only {2}".format(name, only_normal, only_skipped))
         return
-    timed_normal = sorted((b["buff"], b["timeLeft"]) for b in normal_buffs if b.get("timeLeft", -1) >= 0)
-    timed_skipped = sorted((b["buff"], b["timeLeft"]) for b in skipped_buffs if b.get("timeLeft", -1) >= 0)
-    for (buff, left_normal), (_, left_skipped) in zip(timed_normal, timed_skipped):
-        delta = left_skipped - left_normal
-        text = "{0} buff {1} time left: normal {2:.2f}s, skipped {3:.2f}s ({4:+.2f}s)".format(name, buff, left_normal, left_skipped, delta)
-        if abs(delta) > allowed_delta:
-            failures.append(text + " exceeds the game-time difference allowance {0:.2f}s".format(allowed_delta))
-        elif abs(delta) > 0.001:
-            notes.append(text)
+    # Durations are paired only within the same complete identity (blueprint and suppression state), so a duration
+    # can never be matched against another instance's.
+    def timed_by_identity(buffs):
+        groups = {}
+        for b in buffs:
+            if b.get("timeLeft", -1) >= 0:
+                groups.setdefault(buff_identity(b), []).append(b["timeLeft"])
+        return {identity: sorted(values) for identity, values in groups.items()}
+
+    timed_normal, timed_skipped = timed_by_identity(normal_buffs), timed_by_identity(skipped_buffs)
+    for identity in sorted(timed_normal):
+        for left_normal, left_skipped in zip(timed_normal[identity], timed_skipped[identity]):
+            compare_buff_time(name, identity, left_normal, left_skipped, allowed_delta, failures, notes)
+
+
+def compare_buff_time(name, identity, left_normal, left_skipped, allowed_delta, failures, notes):
+    buff = identity[0] + (" (suppressed)" if identity[2] else "")
+    delta = left_skipped - left_normal
+    text = "{0} buff {1} time left: normal {2:.2f}s, skipped {3:.2f}s ({4:+.2f}s)".format(name, buff, left_normal, left_skipped, delta)
+    if abs(delta) > allowed_delta:
+        failures.append(text + " exceeds the game-time difference allowance {0:.2f}s".format(allowed_delta))
+    elif abs(delta) > 0.001:
+        notes.append(text)
 
 
 def compare_cooldowns(name, normal, skipped, failures):

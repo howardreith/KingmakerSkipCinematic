@@ -19,7 +19,7 @@ Machine DATA (Windows 10 19045), Pathfinder: Kingmaker 2.1.7b Steam build 675752
 | `KingmakerCutsceneSkip.dll` SHA-256 | `39852adfb02bfe3c83aa573ad3fb0dfa73e59f2cef50d3285fca1fb3eea6cebe` (deterministic; identical in every run below and in the build receipt) |
 | Package | see the PR description (built with `scripts/Package.ps1`, which verifies the build receipt) |
 | Unit tests | 48/48 (`scripts/Test.ps1`), including `FrameSubstepSchedulerTests` (review counterexample) |
-| Comparator self-test | 11/11 (`python -I tools/native/test_compare_runs.py`) |
+| Comparator self-test | 12/12 (`python -I tools/native/test_compare_runs.py`) |
 
 ## Method
 
@@ -31,12 +31,13 @@ Machine DATA (Windows 10 19045), Pathfinder: Kingmaker 2.1.7b Steam build 675752
   request exercises the same skip lifecycle, scope, fade, acceleration and boundaries, but not the input gate.
 * Assertions are bound to operations: every skip-key press or direct request records the product's started-operation
   counter; `waitSkipIdle` requires exactly one new operation that finished with the expected end reason; `expectNoSkip`
-  requires that no operation started since the mark; autoplay requires one started operation per press and fails if a
-  press could not be sent.
+  requires that no operation started since the mark; an autoplay step that requests skips fails unless the product is
+  loaded, at least one request was made, every press reached the game and each request started exactly one operation.
 * Snapshots: quests, objectives, flags, inventory, money, party, every area unit (presence, death, HP, combat flag,
   faction, position, buffs with remaining duration, ability resources, active toggles, action cooldowns), dialogue
   position, presentation (debug and Unity time scale, fade, manual loading screen, audio, pause).
-* `tools/native/compare_runs.py` compares those fields (rules in its header). Initiative order is dice-dependent
+* `tools/native/compare_runs.py` compares those fields (rules in its header). Timed buff durations are paired only
+  within the same blueprint and suppression state. Initiative order is dice-dependent
   (`UnityEngine.Random`, unseeded per launch): it differed between two **normal** runs too (below), so the initiative
   schedule must match and the per-unit order is reported as a note.
 * Timer fixture: StartGame and night-attack scenarios apply, identically in normal and skipped runs, `BlessBuff` (3 s /

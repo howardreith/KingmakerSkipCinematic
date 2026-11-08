@@ -69,6 +69,16 @@ class CompareRunsTests(unittest.TestCase):
         pre = {"gameTimeSeconds": 90.0, "realtime": 0.0}
         self.assertIn("exceeds", self.assertDifferent(skipped, normal, pre)[0])
 
+    def test_durations_are_paired_within_suppression_state(self):
+        # Review case: active 40 s / suppressed 1 s in the normal run, swapped in the skipped run.
+        normal, skipped = snapshot(), snapshot()
+        for snap, (active, suppressed) in ((normal, (40.0, 1.0)), (skipped, (1.0, 40.0))):
+            snap["party"][0]["buffs"] = [{"buff": "Bless", "timeLeft": active, "suppressed": False},
+                                         {"buff": "Bless", "timeLeft": suppressed, "suppressed": True}]
+        failures = self.assertDifferent(skipped, normal)
+        self.assertTrue(all("exceeds" in failure for failure in failures))
+        self.assertTrue(any("(suppressed)" in failure for failure in failures))
+
     def test_resource_change_is_reported(self):
         skipped = snapshot()
         skipped["party"][0]["resources"] = ["Ki=2"]

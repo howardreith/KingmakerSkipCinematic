@@ -510,12 +510,15 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             {
                 ["skipPresses"] = autoplaySkipPresses, ["skipPressesRefused"] = autoplaySkipRefused, ["skipsStarted"] = started
             };
-            if (step.SkipAfterSeconds >= 0 && autoplaySkipRefused > 0)
-            {
-                return Fail(true, autoplaySkipRefused + " skip presses could not be sent (game not foreground)");
-            }
+            if (step.SkipAfterSeconds < 0) return StepStatus.Done;
 
-            return Fail(step.SkipAfterSeconds >= 0 && ProductAccess.IsLoaded && started != autoplaySkipPresses,
+            // A scenario that requests skips is only evidence of skipping when the product is loaded, every request
+            // reached the game, at least one was made, and each started exactly one operation. Mod-absent baselines do
+            // not request skips.
+            if (!ProductAccess.IsLoaded) return Fail(true, "skips requested but Cutscene Skip is not loaded");
+            if (autoplaySkipRefused > 0) return Fail(true, autoplaySkipRefused + " skip presses could not be sent (game not foreground)");
+            if (autoplaySkipPresses == 0) return Fail(true, "no skip was requested during autoplay");
+            return Fail(started != autoplaySkipPresses,
                 autoplaySkipPresses + " skip presses but " + started + " operations started");
         }
 
