@@ -1,4 +1,6 @@
-# Cutscene Skip for Pathfinder: Kingmaker
+# Mr. Bard's Kingmaker Cutscene Skip
+
+A cutscene skip mod for Pathfinder: Kingmaker.
 
 Press **Enter** during a cinematic. The screen fades to black, the cinematic plays out at high speed with every story
 action still happening, and the screen fades back at the next dialogue, choice or the moment you regain control —
@@ -14,7 +16,7 @@ the way Wrath of the Righteous skips cinematics.
 
 1. Open Unity Mod Manager, select Pathfinder: Kingmaker, open the **Mods** tab.
 2. Drag `KingmakerCutsceneSkip-<version>.zip` onto the window (or click **Install Mod** and choose the ZIP).
-3. Start the game. **Cutscene Skip** appears in the mod list (Ctrl+F10) with a green status.
+3. Start the game. **Mr. Bard's Kingmaker Cutscene Skip** appears in the mod list (Ctrl+F10) with a green status.
 
 Manual alternative: extract the ZIP so that `Mods\KingmakerCutsceneSkip\Info.json` sits inside the game folder.
 
@@ -40,7 +42,7 @@ or choice that appears next. Outside cinematics Enter and Escape behave exactly 
   are cut.
 * Nothing is written to your saves. Saves made after skipping load normally with the mod removed.
 
-## Settings (Ctrl+F10 → Cutscene Skip)
+## Settings (Ctrl+F10 → Mr. Bard's Kingmaker Cutscene Skip)
 
 * **Mute game audio while skipping** (on by default).
 * **Write detailed skip diagnostics to the log** (off by default). Every skip is summarised in the Unity Mod Manager
