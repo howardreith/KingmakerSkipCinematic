@@ -41,6 +41,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         [JsonProperty("enabled")] public bool Enabled;
         [JsonProperty("save")] public string Save;
 
+        /// <summary>Negative control: the step must fail with a message containing this text, and passes only then.</summary>
+        [JsonProperty("expectFailure")] public string ExpectFailure;
+
+        /// <summary>Negative control: loadLastSave suppresses the load request; ummPanel makes the settings render throw.</summary>
+        [JsonProperty("injectFault")] public bool InjectFault;
+
         /// <summary>probeBlueprint: blueprint class short name.</summary>
         [JsonProperty("type")] public string Type;
 

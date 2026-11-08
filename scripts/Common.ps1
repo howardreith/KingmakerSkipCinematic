@@ -37,24 +37,14 @@ function Get-Sha256([string] $Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-# Loader assemblies the product compiles against. They are pinned to the oldest supported loader so that updating UMM on
-# the build machine cannot silently change the build contract. Fetched from upstream, verified by SHA-256 and cached in
-# artifacts\references (never committed or packaged).
-$script:PinnedReferences = @(
-    [pscustomobject]@{
-        Name = 'UnityModManager'; File = 'UnityModManager.dll'; Version = '0.31.1'
-        Url = 'https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.31.1/unitymodmanager.0.31.1.nupkg'
-        ArchiveSha256 = '05a82b66bc44d56d1246f146d16e9fa8f9a42c450c5bc334bcfa9efddbdb53c9'
-        ArchiveEntry = 'lib/net35/UnityModManager.dll'
-        Sha256 = '2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4'
-    },
-    [pscustomobject]@{
-        Name = '0Harmony12'; File = '0Harmony12.dll'; Version = '1.2.0.1'
-        Url = 'https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/Harmony/1.2/0Harmony12.dll'
-        ArchiveSha256 = $null
-        ArchiveEntry = $null
-        Sha256 = 'aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292'
-    })
+# Loader assemblies the product compiles against: scripts\reference-pins.json, a tracked product input.
+$script:ReferencePinsPath = Join-Path $script:RepositoryRoot 'scripts\reference-pins.json'
+
+function Get-PinnedReferenceDefinitions([string] $Path = $script:ReferencePinsPath) {
+    Assert-FileExists $Path 'Reference pin manifest'
+    $document = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    return @($document.references)
+}
 
 function Get-PinnedReferenceDirectory { return (Join-Path $script:RepositoryRoot 'artifacts\references') }
 
@@ -64,7 +54,7 @@ function Initialize-PinnedReferences {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $directory = Get-PinnedReferenceDirectory
     [IO.Directory]::CreateDirectory($directory) | Out-Null
-    foreach ($reference in $script:PinnedReferences) {
+    foreach ($reference in (Get-PinnedReferenceDefinitions)) {
         $target = Join-Path $directory $reference.File
         if ((Test-Path -LiteralPath $target) -and (Get-Sha256 $target) -eq $reference.Sha256) { continue }
         $download = Join-Path $directory ($reference.Name + '.download')
@@ -100,7 +90,7 @@ function Get-AssemblyIdentity([string] $Path, [string] $Role) {
 function Get-BuildReferenceIdentities($Game) {
     $identities = @()
     $pinnedDirectory = Get-PinnedReferenceDirectory
-    foreach ($reference in $script:PinnedReferences) {
+    foreach ($reference in (Get-PinnedReferenceDefinitions)) {
         $identity = Get-AssemblyIdentity (Join-Path $pinnedDirectory $reference.File) 'pinned loader reference'
         $identity.source = $reference.Url
         $identities += $identity
@@ -141,7 +131,9 @@ function Get-GitMetadata {
 
 # Repository paths whose content determines the product DLL or the packaged mod identity. Changes anywhere else
 # (documentation, tests, native tooling) do not require rebuilding the validated binary.
-$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json')
+$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json')
+
+function Get-ProductInputPaths { return $script:ProductInputPaths }
 
 function Invoke-Git([string[]] $Arguments) {
     $previous = $ErrorActionPreference
@@ -167,6 +159,28 @@ function Get-ProductChangesBetween([string] $FromCommit, [string] $ToCommit) {
     $diff = Invoke-Git (@('diff', '--name-only', $FromCommit, $ToCommit, '--') + $script:ProductInputPaths)
     if ($diff.ExitCode -ne 0) { throw "git diff failed: $($diff.Output -join ' ')" }
     return @($diff.Output | Where-Object { $_ })
+}
+
+# Differences between a build receipt's loader references and the configured pins (empty when they agree).
+function Get-ReferencePinProblems($Receipt, $Pins, [string] $ManagerVersion) {
+    $problems = @()
+    $recorded = @()
+    if ($Receipt.PSObject.Properties['references']) {
+        $recorded = @($Receipt.references | Where-Object { $_.role -eq 'pinned loader reference' })
+    }
+    foreach ($pin in $Pins) {
+        $matches = @($recorded | Where-Object { $_.file -eq $pin.File })
+        if ($matches.Count -ne 1) { $problems += "the build receipt has $($matches.Count) identities for pinned reference $($pin.File)"; continue }
+        if ($matches[0].sha256 -ne $pin.Sha256) { $problems += "$($pin.File) was built with SHA-256 $($matches[0].sha256), but the pin is $($pin.Sha256)" }
+        if ($matches[0].source -ne $pin.Url) { $problems += "$($pin.File) was built from $($matches[0].source), but the pin is $($pin.Url)" }
+    }
+    foreach ($identity in $recorded) {
+        if (@($Pins | Where-Object { $_.File -eq $identity.file }).Count -eq 0) { $problems += "the build receipt records an unpinned loader reference: $($identity.file)" }
+    }
+    $loader = @($Pins | Where-Object { $_.Name -eq 'UnityModManager' })
+    if ($loader.Count -ne 1) { $problems += 'the pins do not name exactly one UnityModManager reference' }
+    elseif ($loader[0].Version -ne $ManagerVersion) { $problems += "Info.json declares ManagerVersion $ManagerVersion, but the pinned loader is $($loader[0].Version)" }
+    return $problems
 }
 
 function Write-JsonFile([string] $Path, [object] $Value) {

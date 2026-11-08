@@ -144,6 +144,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 keyEventsSent = 0;
                 stepFailure = null;
                 operationsAtStepBegin = ProductAccess.StartedOperations;
+                loadObserver = null;
                 autoplaySkipPresses = 0;
                 autoplaySkipRefused = 0;
                 recorder.Event("stepBegin", step.ToString());
@@ -167,6 +168,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             if (status == StepStatus.Running) return;
+            status = ApplyExpectedFailure(step, status);
             if (status == StepStatus.Failed)
             {
                 recorder.Event("stepFailed", step + ": " + stepFailure);
@@ -185,6 +187,21 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
             stepIndex++;
             stepBegun = false;
+        }
+
+        /// <summary>A negative control passes only when the verifier rejected the injected fault with the expected message.</summary>
+        private StepStatus ApplyExpectedFailure(HarnessStep step, StepStatus status)
+        {
+            if (string.IsNullOrEmpty(step.ExpectFailure)) return status;
+            if (status == StepStatus.Failed && stepFailure != null && stepFailure.IndexOf(step.ExpectFailure, StringComparison.Ordinal) >= 0)
+            {
+                recorder.Event("expectedFailure", step + ": " + stepFailure);
+                result["negativeControl_" + stepIndex] = stepFailure;
+                return StepStatus.Done;
+            }
+
+            stepFailure = "negative control did not report '" + step.ExpectFailure + "': " + (stepFailure ?? "the step succeeded");
+            return StepStatus.Failed;
         }
 
         private StepStatus Poll(HarnessStep step)
@@ -261,6 +278,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     {
                         conditionMetAt = Now;
                         saveCompleted = false;
+                        savedMoney = game.Player.Money;
                         SaveInfo created = game.SaveManager.CreateNewSave(step.Label);
                         lastSave = created;
                         recorder.Event("saveGame", created.FolderName);
@@ -293,9 +311,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     return StepStatus.Done;
 
                 case "cmiVerify":
-                    if (cmiGuid == null) return Fail(true, "no custom item was crafted in this run");
-                    CoexistenceOps.CraftMagicItemsVerify(cmiGuid, Kingmaker.Blueprints.ResourcesLibrary.GetBlueprints<Kingmaker.Blueprints.Items.Ecnchantments.BlueprintWeaponEnchantment>()
-                        .First(candidate => candidate != null && candidate.name == cmiEnchantmentName).AssetGuid, result, step.Label ?? "cmiVerified");
+                    // In a fresh process the item comes from the loaded save: the scenario names it ("expect", "match").
+                    string verifyGuid = cmiGuid ?? step.Expect;
+                    string verifyEnchantment = cmiEnchantmentName ?? step.Match;
+                    if (verifyGuid == null || verifyEnchantment == null) return Fail(true, "no custom item was crafted in this run or named by the step");
+                    CoexistenceOps.CraftMagicItemsVerify(verifyGuid, Kingmaker.Blueprints.ResourcesLibrary.GetBlueprints<Kingmaker.Blueprints.Items.Ecnchantments.BlueprintWeaponEnchantment>()
+                        .First(candidate => candidate != null && candidate.name == verifyEnchantment).AssetGuid, result, step.Label ?? "cmiVerified");
                     recorder.Event("cmiVerified", step.Label);
                     return StepStatus.Done;
 
@@ -309,28 +330,31 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 case "ummPanel":
                     if (panelProbe == null)
                     {
-                        panelProbe = CoexistenceOps.BeginPanelCheck();
+                        panelProbe = CoexistenceOps.BeginPanelCheck(step.InjectFault);
                         return StepStatus.Running;
                     }
 
                     if (Now - stepStartedAt < (step.Seconds > 0 ? step.Seconds : 1.0)) return StepStatus.Running;
-                    result["ummPanel"] = CoexistenceOps.FinishPanelCheck(panelProbe);
-                    recorder.Event("ummPanel", result["ummPanel"]);
+                    SettingsDrawProbe finishedProbe = panelProbe;
                     panelProbe = null;
+                    result["ummPanel"] = CoexistenceOps.FinishPanelCheck(finishedProbe);
+                    recorder.Event("ummPanel", result["ummPanel"]);
                     return StepStatus.Done;
 
                 case "loadLastSave":
-                    if (double.IsNaN(conditionMetAt))
+                    if (loadObserver == null)
                     {
                         if (lastSave == null) return Fail(true, "no save was made in this run");
-                        conditionMetAt = Now;
-                        recorder.Event("loadLastSave", lastSave.FolderName);
-                        game.LoadGame(lastSave);
+                        loadObserver = new LoadObserver(Now, game.Player, savedMoney);
+
+                        // Only loading the save can undo this marker; if the request does nothing it stays and the step fails.
+                        game.Player.GainMoney(LoadMarkerMoney);
+                        recorder.Event("loadLastSave", lastSave.FolderName + (step.InjectFault ? " (request suppressed)" : string.Empty));
+                        if (!step.InjectFault) game.LoadGame(lastSave);
                         return StepStatus.Running;
                     }
 
-                    return Now - conditionMetAt > 1.0 && !LoadingProcess.Instance.IsLoadingInProcess && game.CurrentlyLoadedArea != null
-                        ? StepStatus.Done : StepStatus.Running;
+                    return PollLoad(game);
 
                 case "toggleMod":
                     UnityModManager.FindMod(ProductAccess.ProductId).Active = step.Enabled;
@@ -343,22 +367,40 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     return StepStatus.Done;
 
                 case "loadSave":
-                    if (!stepBegun || double.IsNaN(conditionMetAt))
+                    if (loadObserver == null)
                     {
-                        conditionMetAt = Now;
                         SaveInfo save = game.SaveManager.LoadZipSave(Path.Combine(game.SaveManager.SavePath, step.Save));
+                        if (save == null) return Fail(true, "save could not be read: " + step.Save);
+                        loadObserver = new LoadObserver(Now, game.Player, null);
                         recorder.Event("loadSaveInGame", step.Save);
                         game.LoadGame(save);
                         return StepStatus.Running;
                     }
 
-                    return Now - conditionMetAt > 1.0 && !LoadingProcess.Instance.IsLoadingInProcess && game.CurrentlyLoadedArea != null
-                        ? StepStatus.Done : StepStatus.Running;
+                    return PollLoad(game);
 
                 default:
                     stepFailure = "unknown op " + step.Op;
                     return StepStatus.Failed;
             }
+        }
+
+        private StepStatus PollLoad(Game game)
+        {
+            LoadProgress progress = loadObserver.Observe(Now, LoadingProcess.Instance.IsLoadingInProcess, game.Player,
+                game.CurrentlyLoadedArea != null, game.CurrentMode != Kingmaker.GameModes.GameModeType.None, game.Player?.Money ?? -1);
+            if (progress == LoadProgress.Waiting) return StepStatus.Running;
+            result["load_" + stepIndex] = new JObject
+            {
+                ["began"] = loadObserver.Began, ["playerReplaced"] = loadObserver.PlayerReplaced, ["money"] = loadObserver.LastMoney, ["verdict"] = progress.ToString()
+            };
+            if (progress == LoadProgress.Complete)
+            {
+                recorder.Event("loadCompleted", game.CurrentlyLoadedArea.name);
+                return StepStatus.Done;
+            }
+
+            return Fail(true, loadObserver.Describe(progress));
         }
 
         private StepStatus Settled(bool condition, double settleSeconds)
@@ -595,8 +637,11 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             return true;
         }
 
+        private const long LoadMarkerMoney = 1234;
         private bool saveCompleted;
         private SaveInfo lastSave;
+        private long savedMoney;
+        private LoadObserver loadObserver;
         private string cmiGuid;
         private string cmiEnchantmentName;
         private SettingsDrawProbe panelProbe;

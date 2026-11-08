@@ -22,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="**\*.cs" Exclude="bin\**;obj\**" />
+    <Compile Include="..\..\tools\RuntimeHarness\LoadObserver.cs" Link="Linked\LoadObserver.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\KingmakerCutsceneSkip\KingmakerCutsceneSkip.csproj">

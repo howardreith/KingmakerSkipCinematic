@@ -68,6 +68,56 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             if (IsLoaded) InstallFaultInjectionCore(harmony);
         }
 
+        public static void InstallPanelFaultWatch(HarmonyInstance harmony)
+        {
+            if (IsLoaded) InstallPanelFaultWatchCore(harmony);
+        }
+
+        /// <summary>Changes a real setting, saves it through the product's callback and reads the file back, twice.</summary>
+        public static string VerifySettingsRoundTrip(UnityModManagerNet.UnityModManager.ModEntry product)
+        {
+            if (!IsLoaded) throw new InvalidOperationException("Cutscene Skip is not loaded");
+            return VerifySettingsRoundTripCore(product);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void InstallPanelFaultWatchCore(HarmonyInstance harmony)
+        {
+            const BindingFlags Private = BindingFlags.Static | BindingFlags.NonPublic;
+            MethodInfo logException = typeof(UnityModManagerNet.UnityModManager.ModEntry.ModLogger).GetMethod("LogException", new[] { typeof(string), typeof(Exception) });
+            MethodInfo draw = typeof(KingmakerCutsceneSkip.UI.SettingsView).GetMethod("Draw", BindingFlags.Static | BindingFlags.Public);
+            harmony.Patch(logException, new HarmonyMethod(typeof(PanelFaultWatch).GetMethod("LogExceptionPrefix", Private)), null);
+            harmony.Patch(draw, new HarmonyMethod(typeof(PanelFaultWatch).GetMethod("DrawPrefix", Private)), null);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string VerifySettingsRoundTripCore(UnityModManagerNet.UnityModManager.ModEntry product)
+        {
+            FieldInfo field = typeof(KingmakerCutsceneSkip.Main).GetField("settings", BindingFlags.Static | BindingFlags.NonPublic);
+            Settings live = (Settings)field.GetValue(null);
+            if (live == null) throw new InvalidOperationException("the product has no settings object");
+            bool original = live.MuteAudioWhileSkipping;
+            try
+            {
+                foreach (bool value in new[] { !original, original })
+                {
+                    live.MuteAudioWhileSkipping = value;
+                    product.OnSaveGUI(product);
+                    Settings reloaded = UnityModManagerNet.UnityModManager.ModSettings.Load<Settings>(product);
+                    if (reloaded == null || reloaded.MuteAudioWhileSkipping != value)
+                    {
+                        throw new InvalidOperationException("settings round trip failed: saved MuteAudioWhileSkipping=" + value + ", read " + (reloaded == null ? "nothing" : reloaded.MuteAudioWhileSkipping.ToString()));
+                    }
+                }
+            }
+            finally
+            {
+                live.MuteAudioWhileSkipping = original;
+            }
+
+            return "MuteAudioWhileSkipping saved and read back as " + !original + " then " + original;
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static CutsceneSkipController ControllerCore() => KingmakerCutsceneSkip.Main.Runtime?.Controller;
 

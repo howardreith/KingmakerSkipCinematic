@@ -90,8 +90,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         /// <summary>
         /// Opens the UMM window, draws the product's registered settings GUI in a real IMGUI pass, and saves its settings.
         /// </summary>
-        public static SettingsDrawProbe BeginPanelCheck()
+        public static SettingsDrawProbe BeginPanelCheck(bool injectRenderFault)
         {
+            PanelFaultWatch.Begin(injectRenderFault);
             UnityModManager.UI.Instance?.ToggleWindow(true);
             GameObject holder = new GameObject("KmcsSettingsDrawProbe");
             UnityEngine.Object.DontDestroyOnLoad(holder);
@@ -101,23 +102,73 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         public static string FinishPanelCheck(SettingsDrawProbe probe)
         {
             UnityModManager.ModEntry product = UnityModManager.FindMod(ProductAccess.ProductId);
-            string failure = probe.Failure;
+            string failure = probe.Failure ?? PanelFaultWatch.LoggedFailure;
             int draws = probe.Draws;
+            int repaints = probe.Repaints;
             UnityEngine.Object.Destroy(probe.gameObject);
             UnityModManager.UI.Instance?.ToggleWindow(false);
-            if (failure != null) throw new InvalidOperationException("settings GUI failed: " + failure);
-            if (draws == 0) throw new InvalidOperationException("settings GUI never drew");
-            product.OnSaveGUI(product);
-            string settings = Path.Combine(product.Path, "Settings.xml");
-            if (!File.Exists(settings)) throw new InvalidOperationException("settings were not written: " + settings);
-            return "draws=" + draws + "; settings=" + new FileInfo(settings).Length + " bytes";
+            try
+            {
+                if (failure != null) throw new InvalidOperationException("settings GUI failed: " + failure);
+                if (draws == 0 || repaints == 0) throw new InvalidOperationException("settings GUI never completed a repaint (draws " + draws + ", repaints " + repaints + ")");
+                string roundTrip = ProductAccess.VerifySettingsRoundTrip(product);
+                if (PanelFaultWatch.LoggedFailure != null) throw new InvalidOperationException("saving settings failed: " + PanelFaultWatch.LoggedFailure);
+                string settings = Path.Combine(product.Path, "Settings.xml");
+                if (!File.Exists(settings)) throw new InvalidOperationException("settings were not written: " + settings);
+                return "draws=" + draws + "; repaints=" + repaints + "; " + roundTrip;
+            }
+            finally
+            {
+                PanelFaultWatch.End();
+            }
         }
     }
 
-    /// <summary>Draws the product's OnGUI on an ordinary IMGUI layout pass and records any exception.</summary>
+    /// <summary>
+    /// The product's GUI callbacks catch and log their own exceptions, so a failure never reaches the caller. While a panel
+    /// check runs this records what the product logs for its settings callbacks, and can make the render throw on purpose.
+    /// Installed by the harness only; the product's own handling is unchanged.
+    /// </summary>
+    internal static class PanelFaultWatch
+    {
+        private static bool watching;
+        private static bool throwOnDraw;
+
+        public static string LoggedFailure { get; private set; }
+
+        public static void Begin(bool injectRenderFault)
+        {
+            LoggedFailure = null;
+            watching = true;
+            throwOnDraw = injectRenderFault;
+        }
+
+        public static void End()
+        {
+            watching = false;
+            throwOnDraw = false;
+        }
+
+        private static void LogExceptionPrefix(string __0, Exception __1)
+        {
+            if (watching && LoggedFailure == null && __0 != null && __0.IndexOf("Cutscene Skip settings", StringComparison.Ordinal) >= 0)
+            {
+                LoggedFailure = __0 + ": " + __1;
+            }
+        }
+
+        private static void DrawPrefix()
+        {
+            if (throwOnDraw) throw new InvalidOperationException("harness injected settings render failure");
+        }
+    }
+
+    /// <summary>Draws the product's OnGUI on an ordinary IMGUI pass. A pass counts only if the product logged no failure during it.</summary>
     internal sealed class SettingsDrawProbe : MonoBehaviour
     {
         public int Draws { get; private set; }
+
+        public int Repaints { get; private set; }
 
         public string Failure { get; private set; }
 
@@ -135,7 +186,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 GUILayout.BeginArea(new Rect(20, 20, 600, 200));
                 product.OnGUI(product);
                 GUILayout.EndArea();
+                if (PanelFaultWatch.LoggedFailure != null) return;
                 Draws++;
+                if (Event.current.type == EventType.Repaint) Repaints++;
             }
             catch (Exception exception)
             {

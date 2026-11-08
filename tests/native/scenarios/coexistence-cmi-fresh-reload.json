@@ -1,0 +1,21 @@
+{
+  "description": "Fresh-process persistence: load the save written by coexistence-cmi-bugfixes in a new game process, so the custom item must be rebuilt by Craft Magic Items from the save.",
+  "save": "KMCS_CMI_PERSIST.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "wait",
+      "seconds": 2.0
+    },
+    {
+      "op": "cmiVerify",
+      "label": "cmiAfterFreshProcess",
+      "match": "Enhancement1",
+      "expect": "8bdfa4f81bbc7b540919d770095720be#CraftMagicItems(enchantments=(d42fc23b92c640846ac137dc26e000d4))"
+    },
+    {
+      "op": "snapshot",
+      "label": "fresh"
+    }
+  ]
+}
