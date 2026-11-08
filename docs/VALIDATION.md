@@ -1,5 +1,87 @@
 # Validation record — Mr. Bard's Kingmaker Cutscene Skip
 
+## Candidate 0.1.2 (UMM compatibility and cinematic safety)
+
+Status: **partial.** Compatibility, story-fidelity, cancellation and reload rows are done. Most real-key rows are blocked
+(below); none of them is claimed.
+
+| Item | Value |
+|---|---|
+| `KingmakerCutsceneSkip.dll` SHA-256 | `a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba` (deterministic) |
+| Final `KingmakerCutsceneSkip-0.1.2.zip` SHA-256 | `13321f927be2e32a971cb839627452b6fa88b24b1293f335fd36cec6c488e8c2`, built and packaged at `81195f9` |
+| ZIP used for the native runs | `ec60d96aa956b4d362c087e95f0d5ab8d557a1a6f7d7b0065dca36d35160e24d`, built at `69fefdb`. Same DLL and `Info.json`; only `README.md` differs |
+| Change from 0.1.1 | version strings, `ManagerVersion` 0.31.1, pinned build references. No behaviour change: `git diff a7ecb13 -- src` touches only the project references and version strings |
+| Unit tests / comparator | 48/48; 12/12 |
+| Environment | machine DATA, Kingmaker 2.1.7b build 6757524, disposable full game copy (`-GameCopy`), runs 2026-11-08 (ids below are `20261108T…`) |
+
+Loader and coexistence matrix: `COMPATIBILITY.md`.
+
+### Story state: matched runs from identical copies of a save
+
+`compare_runs.py`, tolerances unchanged. UMM 0.33.0 unless noted.
+
+| Comparison | Runs | Result |
+|---|---|---|
+| Normal, mod absent vs present | 160733Z / 160846Z (StartGame); 161227Z / 161429Z (chain) | MATCH; game time -0.04 s, +0.01 s |
+| Normal vs completed skip, direct | 160846Z / 161118Z (StartGame); 161429Z / 161632Z (3-segment chain) | MATCH; +0.56 s, +0.88 s |
+| Same on UMM 0.31.1 | 165511Z / 165714Z (chain) | MATCH; +1.29 s |
+| Normal vs real-Enter skip | 160846Z / 180653Z | MATCH; +0.58 s; `MageArmorBuff` -0.55 s, the game-time difference |
+| Normal vs skip cancelled while advancing, direct | 161429Z / 161813Z | MATCH at free control; -0.18 s |
+| Normal vs skip cancelled during fade-out, direct | 161429Z / 171301Z | MATCH at free control; -0.19 s; 0 s advanced |
+| Normal vs normal control, night attack | 170838Z / 171011Z (owner mods) | MATCH; +0.03 s |
+| Normal vs skip, night attack, direct | 170838Z and 171011Z / 171137Z | MATCH; -0.00 s, -0.03 s; second skip ended `ControlReturned` |
+| Menu pause and resume, mod absent vs present (API-driven native handler) | 164839Z / 165357Z | MATCH; +0.03 s |
+| Save after direct skips, reload with the mod removed | 165855Z, 171503Z (mod-only); 170038Z, 171607Z (owner mods, others kept) | loaded; all state equal except two NPC positions, below |
+
+Reload positions: `StartAdventurer_3` and `_8` differ by about 4.5 m between the pre-save snapshot and the snapshot 2 s
+after load. A control from a normal playthrough with the mod absent (174432Z save, 174636Z reload) shows the same movement,
+and the normal-origin and skip-origin reloads MATCH each other (one NPC 0.61 m, within tolerance). These NPCs walk during the
+wait; it is not skip-related. No tolerance was changed.
+
+Two earlier results are test errors, not findings: `Auto_1120` in a profile without the owner's mods never finishes loading
+(162116Z, 163023Z, 163932Z; the save depends on those mods), and 1.5 s into StartGame the screen is still black, so the
+mod's fade finishes in a frame and the fade-cancel step missed it (162010Z, 175020Z).
+
+### Real keys
+
+| Case | Run | Result |
+|---|---|---|
+| Enter starts exactly one skip, stops at dialogue, no answer chosen | 180653Z | pass, operation 1 `InteractionBoundary`, state MATCH |
+| Escape while advancing cancels; no menu; a fresh Escape opens the native menu and the next closes it; no further skip | 174739Z | pass, operation 1 `Cancelled`, state MATCH vs 164839Z |
+| Escape during the reveal | 175256Z | mod does not claim the key; `EscMenuWindow` refuses while a loading screen is active, so the mode stayed Dialog and nothing changed. The scenario expected the menu and failed; expectation corrected, corrected scenario not re-run |
+
+**Blocked, not passed.** From about 17:56Z the game window was intermittently not in the foreground (cause not determined),
+and at 18:36Z the owner was connected and active, so further runs were stopped rather than forced. Each needs an idle,
+unlocked session on the packaged candidate:
+
+* `input-escape-fade` (scenario corrected, not re-run), `input-escape-reveal` (corrected), `input-keypad-held-repeat`,
+  `input-outside-cinematics` (fixture corrected; 175745Z used a save the profile could not load)
+* `prologue-chain-skip`, `prologue-chain-skip-immediate`, `chain-lifecycle` (held Enter across a boundary, Escape, fault mid-skip)
+* `firstroom-skip`, `firstroom-lifecycle` (`-ModProfile owner`; disable and save-load during a skip, combat handoff)
+* `startgame-skip-enter` with Craft Magic Items and Bugfixes on 0.31.1, 0.32.4 and 0.33.0
+* `reload-without-mod -NoProduct` (Enter in exploration with the mod absent)
+* Any re-smoke of the final ZIP. It differs from the tested ZIP only in `README.md`.
+
+Runs 175640Z, 181200Z, 181403Z, 181604Z, 181711Z, 181844Z, 182012Z, 182236Z, 182343Z failed with the harness refusing
+to send keys to a window that was not foreground. They are not evidence in either direction. Key handling is unchanged
+since 0.1.1, so the earlier real-key results below remain relevant but are not re-verified here.
+
+### Not covered
+
+* Voiced barks, `CommandCustomLoadingScreen`, global-map scenes, turn-based mode and movement-dependent scripted triggers
+  were not reached. The chain covers unit movement, parallel tracks and waits, animations and dialogue starts; the night
+  attack covers a scene that starts during an area transition.
+* Combat handoff with auto-pause turned off was not separately run.
+* Later content: `Auto_1076/1077/1079/1080` (DLC dungeon) and `Auto_1082` load into exploration with no cinematic, so they
+  add no coverage (171715Z-172144Z). `Auto_1116` fails with `LoadGameException` under the owner's current mod set
+  (172250Z); the cause was not investigated and it is not attributed to this mod. The save is preserved unchanged.
+* No synthetic cinematic fixture was built: starting scenes outside their scripted context would not represent real triggers.
+
+### Owner environment
+
+Every run above reports the owner's installation and 95 saves unchanged and its copy restored. Runs execute only in the
+disposable copy; the candidate and harness were never installed in the owner's game.
+
 ## Release 0.1.1
 
 | Item | Value |
@@ -127,5 +209,5 @@ run: `scripts\runtime\Invoke-NativeRun.ps1 -RecoverOnly`.
 
 ## Resume point
 
-Run the real-key scenarios listed above on `39852adf…` and record them here; then the owner's manual test list in the
-PR.
+Run the blocked real-key rows under "Candidate 0.1.2" on the packaged candidate in an idle, unlocked session and record
+them here; then the owner's manual test list in the PR. `Auto_1120` scenarios need `-ModProfile owner`.
