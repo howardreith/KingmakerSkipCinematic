@@ -30,16 +30,59 @@ namespace KingmakerCutsceneSkip.Tests
             AssertEx.Equal(1, f.Scope.PrepareCount, "running commands prepared once");
         }
 
-        public static void FadeTimeoutAdvancesAnywayAndRecordsIt()
+        public static void FadeTimeoutRevealsWithoutEverAccelerating()
         {
             ControllerFixture f = new ControllerFixture();
             f.Controller.TryStart();
-            f.Clock.Advance(f.Tuning.FadeOutTimeoutSeconds + 0.01);
+            f.Clock.Advance(f.Tuning.FadeOutTimeoutSeconds - 0.01);
             f.Controller.Tick();
-            AssertEx.Equal(SkipPhase.Advancing, f.Controller.Phase, "advancing after timeout");
-            f.Probe.Boundary = SkipBoundary.Of(SkipEndReason.InteractionBoundary, "Dialog");
+            AssertEx.Equal(SkipPhase.FadingOut, f.Controller.Phase, "still waiting for black before the timeout");
+            f.Clock.Advance(0.02);
             f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "revealing after the timeout");
+            AssertEx.Equal(SkipEndReason.FadeTimeout, f.Controller.LastReport.Reason, "reason");
             AssertEx.False(f.Controller.LastReport.ReachedFullBlack, "report says full black was not reached");
+            AssertEx.Equal(0, f.TimeHost.SetCalls, "time scale never touched while the scene could be visible");
+            AssertEx.Equal(0, f.Scope.PrepareCount, "no command prepared for acceleration");
+            f.AssertAllOverridesReleased();
+        }
+
+        public static void ContinueAdvancingIsTrueUntilABoundaryThenEndsTheSkip()
+        {
+            ControllerFixture f = new ControllerFixture();
+            AssertEx.False(f.Controller.ContinueAdvancing(), "idle: nothing to continue");
+            f.Controller.TryStart();
+            AssertEx.False(f.Controller.ContinueAdvancing(), "fading out: not accelerating yet");
+            f.FadeHost.State = FadeVisualState.Shown;
+            f.Clock.Advance(0.3);
+            f.Controller.Tick();
+            AssertEx.True(f.Controller.ContinueAdvancing(), "advancing without a boundary");
+            f.Probe.Boundary = SkipBoundary.Of(SkipEndReason.InteractionBoundary, "Dialog");
+            AssertEx.False(f.Controller.ContinueAdvancing(), "boundary stops the frame");
+            AssertEx.Equal(SkipEndReason.InteractionBoundary, f.Controller.LastReport.Reason, "ended at the boundary");
+            f.AssertAllOverridesReleased();
+        }
+
+        public static void ContinueAdvancingProbeExceptionEndsWithError()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.Probe.ThrowOnBoundary = new InvalidOperationException("probe");
+            AssertEx.False(f.Controller.ContinueAdvancing(), "stops");
+            AssertEx.Equal(SkipEndReason.Error, f.Controller.LastReport.Reason, "error reason");
+            f.AssertAllOverridesReleased();
+        }
+
+        public static void StartedOperationsCountsOnlyAcceptedStarts()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.Probe.Blocker = SkipStartBlocker.NotInCutsceneMode;
+            f.Controller.TryStart();
+            AssertEx.Equal(0, f.Controller.StartedOperations, "declined request not counted");
+            f.Probe.Blocker = SkipStartBlocker.None;
+            f.Controller.TryStart();
+            f.Controller.TryStart();
+            AssertEx.Equal(1, f.Controller.StartedOperations, "overlapping request not counted");
         }
 
         public static void SecondStartWhileActiveIsRejected()

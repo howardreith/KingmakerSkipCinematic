@@ -22,6 +22,7 @@ namespace KingmakerCutsceneSkip.Integration
             if (game.CurrentMode != GameModeType.Cutscene) return SkipStartBlocker.NotInCutsceneMode;
             if (CombatController.IsInTurnBasedCombat()) return SkipStartBlocker.TurnBasedCombat;
             if (!CutsceneScope.AnyControllingCutscene()) return SkipStartBlocker.NoControllingCutscene;
+            if (CutsceneScope.ControllingCutsceneBoundaryCommand() != null) return SkipStartBlocker.BoundaryCommandPlaying;
             return SkipStartBlocker.None;
         }
 

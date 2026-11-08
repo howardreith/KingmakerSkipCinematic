@@ -6,10 +6,14 @@
     Safety model (shared-machine aware):
       * refuses to start while Kingmaker runs or another lab holds a runtime lock; holds its own lock for the run;
       * requires Steam Cloud sync to be disabled/offline for App 640820;
-      * hashes the owner's real "Saved Games" before and after and fails loudly on any change;
+      * hashes the owner's real "Saved Games" before and after; any change fails the run;
       * the harness redirects all persistent data to a disposable per-run profile (saves and area cache);
       * backs up UMM Params.xml and the game's registry settings, stages mods transactionally, and restores all of
         it in a finally block, driven by a recovery journal that -RecoverOnly can replay after an interruption.
+        Every change to the installation is recorded in the journal before it is made. The journal is kept until every
+        restoration step succeeded; a failed restoration also keeps the run lock and fails the run.
+      * the run passes only when the scenario passed, the installation was restored and the owner's saves are unchanged;
+        otherwise the script exits with an error.
 
 .PARAMETER Scenario
     Path to a scenario JSON: { "save": "<file in fixture dir or owner saves>", "steps": [ ... ], "captureEveryFrames": 4 }.
@@ -54,7 +58,7 @@ $evidence = Join-Path $lab.Evidence $runId
 $backup = Join-Path $lab.Backups $runId
 New-Item -ItemType Directory -Force -Path $evidence, $backup | Out-Null
 $summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started' }
-$journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null }
+$journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
 $savesBefore = $null
 try {
     $savesBefore = Get-SaveManifest $lab.OwnerSaves
@@ -65,20 +69,28 @@ try {
 
     # Configuration backups (restored in finally).
     $params = Join-Path $game.UnityModManagerDir 'Params.xml'
-    Copy-Item -LiteralPath $params -Destination (Join-Path $backup 'Params.xml')
-    $journal.paramsBackup = Join-Path $backup 'Params.xml'
+    # A backup is recorded in the journal only once it exists, so recovery never restores from a missing file.
+    $paramsBackup = Join-Path $backup 'Params.xml'
+    Copy-Item -LiteralPath $params -Destination $paramsBackup
+    $journal.paramsBackup = $paramsBackup
     $journal.paramsTarget = $params
-    $journal.registryBackup = Join-Path $backup 'game-settings.reg'
-    $export = Invoke-NativeTool 'reg.exe' @('export', $lab.RegistryKey, $journal.registryBackup, '/y')
+    Save-Journal $lab $journal
+    $registryBackup = Join-Path $backup 'game-settings.reg'
+    $export = Invoke-NativeTool 'reg.exe' @('export', $lab.RegistryKey, $registryBackup, '/y')
     if ($export.ExitCode -ne 0) { throw "Registry export of the game settings failed: $($export.Output)" }
+    $journal.registryBackup = $registryBackup
     Save-Journal $lab $journal
 
     # Mod staging.
     if ($ModProfile -eq 'isolated') {
+        # Persist the planned move first: recovery inspects both locations, so an interruption on either side of the
+        # move is recoverable.
         $original = $game.ModsDir + '.kmcs-' + $runId + '.original'
+        if (Test-Path -LiteralPath $original) { throw "Refusing to overwrite an existing Mods backup: $original" }
+        $journal.modsOriginal = $original
+        Save-Journal $lab $journal
         Move-Item -LiteralPath $game.ModsDir -Destination $original
         $journal.modsMoved = $true
-        $journal.modsOriginal = $original
         Save-Journal $lab $journal
         New-Item -ItemType Directory -Path $game.ModsDir | Out-Null
     }
@@ -130,18 +142,47 @@ catch {
     throw
 }
 finally {
-    Restore-RunJournal $lab $journal
-    Copy-RunLogs $lab $game $evidence
+    $restored = $false
+    try {
+        Restore-RunJournal $lab $journal
+        $restored = $true
+    }
+    catch {
+        $summary.restorationError = $_.Exception.Message
+        Write-Warning ("INSTALLATION RESTORATION FAILED: " + $_.Exception.Message)
+    }
+    $summary.restored = $restored
+    try { Copy-RunLogs $lab $game $evidence } catch { Write-Warning "Could not copy run logs: $($_.Exception.Message)" }
+
+    $integrityFailures = @()
+    if (-not $restored) { $integrityFailures += 'installation restoration failed' }
     if ($null -ne $savesBefore) {
-        $diff = Compare-SaveManifest $savesBefore (Get-SaveManifest $lab.OwnerSaves)
-        $summary.ownerSavesUnchanged = ($diff.Count -eq 0)
-        if ($diff.Count -gt 0) {
-            $summary.ownerSaveChanges = $diff
-            Write-Warning ("OWNER SAVES CHANGED DURING RUN: " + ($diff -join '; '))
+        try {
+            $diff = Compare-SaveManifest $savesBefore (Get-SaveManifest $lab.OwnerSaves)
+            $summary.ownerSavesUnchanged = ($diff.Count -eq 0)
+            if ($diff.Count -gt 0) {
+                $summary.ownerSaveChanges = $diff
+                $integrityFailures += 'owner saves changed'
+                Write-Warning ("OWNER SAVES CHANGED DURING RUN: " + ($diff -join '; '))
+            }
+        }
+        catch {
+            $summary.ownerSavesUnchanged = $null
+            $integrityFailures += "owner save verification failed: $($_.Exception.Message)"
         }
     }
+
+    $summary.scenarioStatus = $summary.status
+    if ($integrityFailures.Count -gt 0) {
+        $summary.status = 'integrity-failed'
+        $summary.integrityFailures = $integrityFailures
+    }
     Write-JsonFile (Join-Path $evidence 'host-summary.json') $summary
-    Exit-RuntimeLock $lab $lock
-    Write-Host "Run $runId finished: $($summary.status) $($summary.failure)"
+    if ($restored) { Exit-RuntimeLock $lab $lock }
+    else { Write-Warning "Run lock and recovery journal kept; run '$PSCommandPath -RecoverOnly' after resolving the error." }
+    Write-Host "Run $runId finished: $($summary.status) $($summary.failure) $(if ($integrityFailures.Count -gt 0) { '[' + ($integrityFailures -join '; ') + ']' })"
     Write-Host "Evidence: $evidence"
 }
+
+# Reached only when no exception escaped; a host error has already been rethrown above.
+if ($summary.status -ne 'passed') { throw "Run $runId did not pass: $($summary.status)." }

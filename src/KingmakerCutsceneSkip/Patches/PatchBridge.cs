@@ -1,5 +1,6 @@
 using System;
 using Kingmaker.AreaLogic.Cutscenes;
+using Kingmaker.GameModes;
 using KingmakerCutsceneSkip.Logging;
 using UnityEngine;
 
@@ -21,6 +22,9 @@ namespace KingmakerCutsceneSkip.Patches
         bool EnterCommand(CutscenePlayerData player);
 
         void ExitCommand(CommandBase command, CutscenePlayerData player);
+
+        /// <summary>Runs the mode's frame as accelerated substeps; false when the native tick must run instead.</summary>
+        bool TryRunAcceleratedFrame(GameMode mode);
     }
 
     /// <summary>
@@ -89,9 +93,6 @@ namespace KingmakerCutsceneSkip.Patches
             Guard("exit cutscene command", () => current.ExitCommand(command, player));
         }
 
-        /// <summary>Largest engine delta one substepped controller tick may consume while accelerating (a 30 fps frame).</summary>
-        public const float MaximumSubstepSeconds = 1f / 30f;
-
         public static bool IsAccelerating
         {
             get
@@ -101,20 +102,22 @@ namespace KingmakerCutsceneSkip.Patches
             }
         }
 
-        /// <summary>Number of controller ticks for this frame: 1 unless accelerating with a frame delta above one substep.</summary>
-        public static int ControllerSubsteps()
+        /// <summary>
+        /// GameMode.Tick prefix body. Returns true when the frame was run by the mod (the native tick must be skipped).
+        /// An exception before any substep ran falls back to the native tick.
+        /// </summary>
+        public static bool TryRunAcceleratedFrame(GameMode mode)
         {
+            IPatchTarget current = target;
+            if (current == null || !current.IsAccelerating) return false;
             try
             {
-                if (!IsAccelerating) return 1;
-                float delta = Kingmaker.Game.Instance.TimeController.DeltaTime;
-                int substeps = (int)System.Math.Ceiling(delta / MaximumSubstepSeconds);
-                return substeps < 1 ? 1 : (substeps > 16 ? 16 : substeps);
+                return current.TryRunAcceleratedFrame(mode);
             }
             catch (Exception exception)
             {
-                Report("plan controller substeps", exception);
-                return 1;
+                Report("run accelerated frame", exception);
+                return false;
             }
         }
 

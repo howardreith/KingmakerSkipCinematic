@@ -1,5 +1,6 @@
 using System;
 using Kingmaker.AreaLogic.Cutscenes;
+using Kingmaker.GameModes;
 using KingmakerCutsceneSkip.Core;
 using KingmakerCutsceneSkip.Input;
 using KingmakerCutsceneSkip.Integration;
@@ -21,6 +22,7 @@ namespace KingmakerCutsceneSkip
         private readonly CutsceneScope scope;
         private readonly GameEventListener listener;
         private readonly SkipInputGate inputGate;
+        private readonly AcceleratedFrameDriver frameDriver;
         private bool enabled;
 
         public SkipRuntime(Settings settings, IModLogger logger)
@@ -40,6 +42,7 @@ namespace KingmakerCutsceneSkip
                 new SkipTuning(),
                 logger);
             listener = new GameEventListener(Controller.NotifyBoundary);
+            frameDriver = new AcceleratedFrameDriver(() => enabled && Controller.ContinueAdvancing());
             inputGate = new SkipInputGate(new UnityKeyboardState(), Controller, SkipKeys, CancelKey, () => enabled);
         }
 
@@ -107,6 +110,24 @@ namespace KingmakerCutsceneSkip
         public void ExitCommand(CommandBase command, CutscenePlayerData player)
         {
             scope.ExitCommand(command, player, Controller.Phase == SkipPhase.Advancing);
+        }
+
+        public bool TryRunAcceleratedFrame(GameMode mode)
+        {
+            if (!IsAccelerating) return false;
+            try
+            {
+                return frameDriver.TryRunFrame(mode);
+            }
+            catch (Exception exception)
+            {
+                // The driver only throws outside the per-controller isolation (engine time bookkeeping). Whatever part of
+                // the frame already ran stays run; the skip ends so the next frame is an ordinary native tick.
+                logger.Exception("Run accelerated frame", exception);
+                bool consumed = frameDriver.FrameInProgress;
+                Controller.Abort(SkipEndReason.Error, exception.GetType().Name);
+                return consumed;
+            }
         }
     }
 }

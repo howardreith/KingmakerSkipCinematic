@@ -65,6 +65,36 @@ function Get-GitMetadata {
     return [pscustomobject]@{ Commit = ([string] $commit).Trim(); Dirty = [bool] $status }
 }
 
+# Repository paths whose content determines the product DLL or the packaged mod identity. Changes anywhere else
+# (documentation, tests, native tooling) do not require rebuilding the validated binary.
+$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json')
+
+function Invoke-Git([string[]] $Arguments) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $output = & git -C $script:RepositoryRoot @Arguments 2>&1 | ForEach-Object { "$_" } }
+    finally { $ErrorActionPreference = $previous }
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = @($output) }
+}
+
+# Uncommitted (staged, unstaged or untracked) changes to product inputs.
+function Get-UncommittedProductChanges {
+    $status = Invoke-Git (@('status', '--porcelain', '--untracked-files=all', '--') + $script:ProductInputPaths)
+    if ($status.ExitCode -ne 0) { throw "git status failed: $($status.Output -join ' ')" }
+    return @($status.Output | Where-Object { $_ })
+}
+
+# Product inputs that differ between two commits. Throws when either commit is unknown to the repository.
+function Get-ProductChangesBetween([string] $FromCommit, [string] $ToCommit) {
+    foreach ($commit in @($FromCommit, $ToCommit)) {
+        $verify = Invoke-Git @('cat-file', '-e', "$commit^{commit}")
+        if ($verify.ExitCode -ne 0) { throw "Commit $commit is not in this repository." }
+    }
+    $diff = Invoke-Git (@('diff', '--name-only', $FromCommit, $ToCommit, '--') + $script:ProductInputPaths)
+    if ($diff.ExitCode -ne 0) { throw "git diff failed: $($diff.Output -join ' ')" }
+    return @($diff.Output | Where-Object { $_ })
+}
+
 function Write-JsonFile([string] $Path, [object] $Value) {
     $parent = Split-Path -Parent $Path
     if ($parent) { [IO.Directory]::CreateDirectory($parent) | Out-Null }

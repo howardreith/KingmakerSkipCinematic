@@ -35,7 +35,13 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
         public static bool IsSkipping => IsLoaded && IsSkippingCore();
 
-        public static object LastReportIdentity => IsLoaded ? LastReportCore() : null;
+        /// <summary>Operations the product has started since it loaded (0 when absent).</summary>
+        public static int StartedOperations => IsLoaded ? StartedOperationsCore() : 0;
+
+        /// <summary>Operation id of the most recent finished operation (0 when none).</summary>
+        public static int LastReportOperationId => IsLoaded ? LastReportOperationIdCore() : 0;
+
+        public static string LastReportReason => IsLoaded ? LastReportReasonCore() : null;
 
         public static JObject LastReportJson => IsLoaded ? LastReportJsonCore() : null;
 
@@ -72,7 +78,13 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private static bool IsSkippingCore() => ControllerCore()?.IsSkipping ?? false;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static object LastReportCore() => ControllerCore()?.LastReport;
+        private static int StartedOperationsCore() => ControllerCore()?.StartedOperations ?? 0;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int LastReportOperationIdCore() => ControllerCore()?.LastReport?.OperationId ?? 0;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string LastReportReasonCore() => ControllerCore()?.LastReport?.Reason.ToString();
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static JObject LastReportJsonCore()

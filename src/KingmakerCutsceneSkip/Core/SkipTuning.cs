@@ -9,7 +9,7 @@ namespace KingmakerCutsceneSkip.Core
         /// <summary>Engine time multiplier while the screen is black (applied through TimeController.DebugTimeScale).</summary>
         public float TimeScale { get; set; } = 10f;
 
-        /// <summary>Upper bound on waiting for the native fade to reach full black before acceleration begins anyway.</summary>
+        /// <summary>Upper bound on waiting for the native fade to reach full black; past it the skip ends without accelerating.</summary>
         public double FadeOutTimeoutSeconds { get; set; } = 1.0;
 
         /// <summary>Abandon the skip when no owned track has changed command for this long.</summary>

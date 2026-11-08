@@ -9,6 +9,9 @@ namespace KingmakerCutsceneSkip.Core
         NotInCutsceneMode,
         TurnBasedCombat,
         NoControllingCutscene,
+
+        /// <summary>A controlling cutscene is showing a real-time loading card (CommandCustomLoadingScreen).</summary>
+        BoundaryCommandPlaying,
         FadeUnavailable
     }
 }

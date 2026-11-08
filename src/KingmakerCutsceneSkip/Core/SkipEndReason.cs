@@ -27,6 +27,9 @@ namespace KingmakerCutsceneSkip.Core
         /// <summary>The operation exceeded its maximum real-time budget; normal playback is revealed.</summary>
         Watchdog,
 
+        /// <summary>The screen never reported full black; the scene is revealed without having been accelerated.</summary>
+        FadeTimeout,
+
         /// <summary>An exception occurred inside the mod; normal playback is revealed.</summary>
         Error,
 

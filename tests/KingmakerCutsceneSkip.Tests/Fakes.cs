@@ -130,9 +130,21 @@ namespace KingmakerCutsceneSkip.Tests
 
     internal sealed class FakeTimeScaleHost : ITimeScaleHost
     {
+        private float scale = 1f;
+
+        public int SetCalls;
+
         public object Identity { get; set; } = new object();
 
-        public float Scale { get; set; } = 1f;
+        public float Scale
+        {
+            get => scale;
+            set
+            {
+                SetCalls++;
+                scale = value;
+            }
+        }
     }
 
     internal sealed class FakeVolumeHost : IMasterVolumeHost

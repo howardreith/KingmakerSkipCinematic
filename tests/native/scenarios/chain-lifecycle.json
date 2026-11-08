@@ -8,6 +8,7 @@
     { "op": "wait", "seconds": 2.5 },
     { "op": "pressKey", "key": "Return", "holdMs": 1800 },
     { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 30 },
+    { "op": "waitSkipIdle", "mode": "InteractionBoundary", "timeoutSeconds": 5 },
     { "op": "wait", "seconds": 1.0 },
     { "op": "snapshot", "label": "held-boundary" },
 
@@ -17,7 +18,7 @@
     { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
     { "op": "wait", "seconds": 0.3 },
     { "op": "pressKey", "key": "Escape", "holdMs": 60 },
-    { "op": "waitSkipIdle", "timeoutSeconds": 10 },
+    { "op": "waitSkipIdle", "mode": "Cancelled", "timeoutSeconds": 10 },
     { "op": "snapshot", "label": "cancelled" },
     { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 60 },
     { "op": "snapshot", "label": "after-cancel" },
@@ -27,7 +28,7 @@
     { "op": "pressKey", "key": "Return", "holdMs": 60 },
     { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
     { "op": "armFault" },
-    { "op": "waitSkipIdle", "timeoutSeconds": 10 },
+    { "op": "waitSkipIdle", "mode": "Error", "timeoutSeconds": 10 },
     { "op": "snapshot", "label": "after-fault" },
     { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 60 },
 

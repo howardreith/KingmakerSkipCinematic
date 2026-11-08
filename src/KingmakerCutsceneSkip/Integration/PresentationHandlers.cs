@@ -30,7 +30,7 @@ namespace KingmakerCutsceneSkip.Integration
         /// Returns the command type name when the command is a boundary the skip must not cross.
         /// CommandCustomLoadingScreen shows a loading card for a real-time duration and runs its actions behind it.
         /// </summary>
-        public string GetBoundaryName(CommandBase command)
+        public static string GetBoundaryName(CommandBase command)
         {
             return command is CommandCustomLoadingScreen ? nameof(CommandCustomLoadingScreen) : null;
         }

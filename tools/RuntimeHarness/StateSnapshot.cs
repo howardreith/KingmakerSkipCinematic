@@ -15,8 +15,10 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 {
     /// <summary>
     /// Semantic game state for comparing a normal run with a skipped run from the same save: story progress (quests,
-    /// objectives, flags), party, inventory, units present in the area, dialogue position and control state.
-    /// Presentation values (time scale, fade, audio) are recorded separately to verify restoration.
+    /// objectives, flags), party, inventory, units present in the area (life, HP, combat, faction, position) and their
+    /// timing-sensitive state (buffs with remaining duration, ability resources, active toggles, action cooldowns),
+    /// dialogue position and control state. Presentation values (time scales, fade, audio) are recorded separately to
+    /// verify restoration.
     /// </summary>
     internal static class StateSnapshot
     {
@@ -119,7 +121,54 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 ["hp"] = unit.HPLeft,
                 ["position"] = string.Format(CultureInfo.InvariantCulture, "{0:0.0},{1:0.0},{2:0.0}", position.x, position.y, position.z),
                 ["inCombat"] = unit.IsInCombat,
-                ["faction"] = unit.Descriptor.Faction != null ? unit.Descriptor.Faction.name : null
+                ["faction"] = unit.Descriptor.Faction != null ? unit.Descriptor.Faction.name : null,
+                ["buffs"] = Buffs(unit),
+                ["resources"] = Resources(unit),
+                ["activeToggles"] = new JArray(unit.Descriptor.ActivatableAbilities.Enumerable
+                    .Where(ability => ability.IsOn)
+                    .Select(ability => ability.Blueprint.name)
+                    .OrderBy(text => text, StringComparer.Ordinal)),
+                ["cooldowns"] = Cooldowns(unit)
+            };
+        }
+
+        /// <summary>Every buff with its remaining game-time duration in seconds (-1 = permanent).</summary>
+        private static JArray Buffs(UnitEntityData unit)
+        {
+            return new JArray(unit.Descriptor.Buffs.Enumerable
+                .OrderBy(buff => buff.Blueprint.name, StringComparer.Ordinal)
+                .ThenBy(buff => buff.EndTime)
+                .Select(buff => new JObject
+                {
+                    ["buff"] = buff.Blueprint.name,
+                    ["timeLeft"] = buff.IsPermanent ? -1.0 : Math.Round(buff.TimeLeft.TotalSeconds, 3),
+                    ["suppressed"] = buff.IsSuppressed
+                }));
+        }
+
+        private static JArray Resources(UnitEntityData unit)
+        {
+            System.Collections.Generic.List<string> amounts = new System.Collections.Generic.List<string>();
+            foreach (var resource in unit.Descriptor.Resources)
+            {
+                amounts.Add(resource.name + "=" + unit.Descriptor.Resources.GetResourceAmount(resource));
+            }
+
+            amounts.Sort(StringComparer.Ordinal);
+            return new JArray(amounts);
+        }
+
+        private static JObject Cooldowns(UnitEntityData unit)
+        {
+            var cooldown = unit.CombatState?.Cooldown;
+            if (cooldown == null) return null;
+            return new JObject
+            {
+                ["initiative"] = Math.Round(cooldown.Initiative, 3),
+                ["standard"] = Math.Round(cooldown.StandardAction, 3),
+                ["move"] = Math.Round(cooldown.MoveAction, 3),
+                ["swift"] = Math.Round(cooldown.SwiftAction, 3),
+                ["attackOfOpportunity"] = Math.Round(cooldown.AttackOfOpportunity, 3)
             };
         }
 

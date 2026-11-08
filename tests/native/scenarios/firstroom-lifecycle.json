@@ -10,6 +10,7 @@
     { "op": "pressKey", "key": "Return", "holdMs": 60 },
     { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
     { "op": "toggleMod", "enabled": false },
+    { "op": "waitSkipIdle", "mode": "Disabled", "timeoutSeconds": 5 },
     { "op": "snapshot", "label": "disabled" },
     { "op": "pressKey", "key": "Return", "holdMs": 60 },
     { "op": "wait", "seconds": 0.5 },
@@ -21,10 +22,12 @@
     { "op": "pressKey", "key": "Return", "holdMs": 60 },
     { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
     { "op": "loadSave", "save": "Auto_1069.zks", "timeoutSeconds": 120 },
+    { "op": "waitSkipIdle", "mode": "Loading", "timeoutSeconds": 10 },
     { "op": "wait", "seconds": 2.0 },
     { "op": "snapshot", "label": "after-load" },
     { "op": "pressKey", "key": "Return", "holdMs": 60 },
     { "op": "wait", "seconds": 1.0 },
+    { "op": "expectNoSkip" },
     { "op": "snapshot", "label": "after-load-enter" }
   ]
 }

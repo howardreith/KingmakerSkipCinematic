@@ -33,7 +33,10 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private double stepStartedAt;
         private double conditionMetAt;
         private int keyEventsSent;
-        private object reportAtStepBegin;
+        /// <summary>StartedOperations when input was last sent (pressKey, skipDirect, markOperations).</summary>
+        private int operationsAtMark;
+        private int operationsAtStepBegin;
+        private int autoplaySkipPresses;
         private string stepFailure;
         private int quitCountdown = -1;
 
@@ -134,7 +137,8 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 conditionMetAt = double.NaN;
                 keyEventsSent = 0;
                 stepFailure = null;
-                reportAtStepBegin = ProductAccess.LastReportIdentity;
+                operationsAtStepBegin = ProductAccess.StartedOperations;
+                autoplaySkipPresses = 0;
                 recorder.Event("stepBegin", step.ToString());
             }
 
@@ -197,22 +201,31 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     return PressKey(step);
 
                 case "skipDirect":
+                    MarkOperations("skipDirect");
                     return Fail(!ProductAccess.TryStart(out string declineReason), "skip declined: " + declineReason);
+
+                case "applyBuff":
+                    return ApplyBuff(game, step);
+
+                case "markOperations":
+                    MarkOperations(step.Label);
+                    return StepStatus.Done;
 
                 case "cancelDirect":
                     return Fail(!ProductAccess.TryCancel(), "nothing to cancel");
 
                 case "waitSkipActive":
-                    return ProductAccess.IsSkipping ? StepStatus.Done : StepStatus.Running;
+                    return ProductAccess.IsSkipping && ProductAccess.StartedOperations > operationsAtMark ? StepStatus.Done : StepStatus.Running;
 
                 case "waitSkipPhase":
                     return string.Equals(ProductAccess.Phase, step.Mode, StringComparison.Ordinal) ? StepStatus.Done : StepStatus.Running;
 
                 case "waitSkipIdle":
-                    return ProductAccess.IsIdle && ProductAccess.LastReportIdentity != null ? StepStatus.Done : StepStatus.Running;
+                    return WaitSkipIdle(step);
 
                 case "expectNoSkip":
-                    return Fail(!ProductAccess.IsIdle || !ReferenceEquals(ProductAccess.LastReportIdentity, reportAtStepBegin), "a skip started unexpectedly");
+                    return Fail(!ProductAccess.IsIdle || ProductAccess.StartedOperations != operationsAtMark,
+                        "a skip started after the last input mark (started " + (ProductAccess.StartedOperations - operationsAtMark) + ")");
 
                 case "snapshot":
                     WriteSnapshot(step.Label);
@@ -308,6 +321,51 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         }
 
         /// <summary>Sends count presses (down, hold, up) spaced by intervalMs, as real OS key events.</summary>
+        /// <summary>
+        /// Exactly one operation started after the last skip-key mark, has finished, and (when "mode" lists reasons,
+        /// separated by "|") ended for one of them. An earlier operation's report never satisfies this step.
+        /// </summary>
+        private StepStatus WaitSkipIdle(HarnessStep step)
+        {
+            int started = ProductAccess.StartedOperations - operationsAtMark;
+            if (started > 1) return Fail(true, started + " operations started after the last input mark (expected one)");
+            if (started == 0 || !ProductAccess.IsIdle || ProductAccess.LastReportOperationId <= operationsAtMark) return StepStatus.Running;
+            string reason = ProductAccess.LastReportReason;
+            bool expected = string.IsNullOrEmpty(step.Mode) || Array.IndexOf(step.Mode.Split('|'), reason) >= 0;
+            return Fail(!expected, "skip ended with " + reason + ", expected " + step.Mode);
+        }
+
+        /// <summary>
+        /// Gives the main character a timed buff (blueprint name in "match"; "|" separates fallbacks) lasting "seconds" of
+        /// game time, so a fixture carries a real expiring timer through the skipped scene. Applied identically in normal
+        /// and skipped scenarios.
+        /// </summary>
+        private StepStatus ApplyBuff(Game game, HarnessStep step)
+        {
+            string[] names = (step.Match ?? string.Empty).Split('|');
+            Kingmaker.UnitLogic.Buffs.Blueprints.BlueprintBuff blueprint = null;
+            foreach (string name in names)
+            {
+                blueprint = Kingmaker.Blueprints.ResourcesLibrary.GetBlueprints<Kingmaker.UnitLogic.Buffs.Blueprints.BlueprintBuff>()
+                    .FirstOrDefault(candidate => candidate != null && string.Equals(candidate.name, name, StringComparison.Ordinal));
+                if (blueprint != null) break;
+            }
+
+            if (blueprint == null) return Fail(true, "no buff blueprint named " + step.Match);
+            UnitEntityData unit = game.Player.MainCharacter.Value;
+            var buff = unit.Descriptor.Buffs.AddBuff(blueprint, unit, TimeSpan.FromSeconds(step.Seconds));
+            if (buff == null) return Fail(true, "buff " + blueprint.name + " was not applied");
+            recorder.Event("buffApplied", blueprint.name + " for " + step.Seconds.ToString(CultureInfo.InvariantCulture) +
+                "s at game time " + game.Player.GameTime.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture));
+            return StepStatus.Done;
+        }
+
+        private void MarkOperations(string why)
+        {
+            operationsAtMark = ProductAccess.StartedOperations;
+            recorder.Event("operationMark", (why ?? "?") + "@" + operationsAtMark);
+        }
+
         private StepStatus PressKey(HarnessStep step)
         {
             if (keyEventsSent == 0 && !NativeKeyboard.EnsureForeground())
@@ -315,6 +373,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 stepFailure = "game window is not in the foreground; refusing to send input";
                 return StepStatus.Failed;
             }
+
+            // Only skip-key presses are input attempts that may start an operation; Escape (cancel) keeps the mark.
+            if (keyEventsSent == 0 && (step.Key == "Return" || step.Key == "KeypadEnter")) MarkOperations("pressKey " + step.Key);
 
             double elapsedMs = (Now - stepStartedAt) * 1000.0;
             while (keyEventsSent < step.Count * 2)
@@ -410,7 +471,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 if (step.SkipAfterSeconds >= 0 && !skipPressedThisEpisode && Now - cinematicSince >= step.SkipAfterSeconds)
                 {
                     skipPressedThisEpisode = true;
-                    PressOnce(step.Key ?? "Return");
+                    if (PressOnce(step.Key ?? "Return")) autoplaySkipPresses++;
                 }
 
                 return StepStatus.Running;
@@ -425,21 +486,28 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             if (double.IsNaN(controlSince)) controlSince = Now;
-            return Now - controlSince >= step.Seconds ? StepStatus.Done : StepStatus.Running;
+            if (Now - controlSince < step.Seconds) return StepStatus.Running;
+
+            // Every skip press must have started exactly one operation, and nothing else may have started one.
+            int started = ProductAccess.StartedOperations - operationsAtStepBegin;
+            result["autoplay_" + stepIndex] = new JObject { ["skipPresses"] = autoplaySkipPresses, ["skipsStarted"] = started };
+            return Fail(step.SkipAfterSeconds >= 0 && ProductAccess.IsLoaded && started != autoplaySkipPresses,
+                autoplaySkipPresses + " skip presses but " + started + " operations started");
         }
 
         /// <summary>One real key press (down now, up a few frames later), only while the game is foreground.</summary>
-        private void PressOnce(string key)
+        private bool PressOnce(string key)
         {
             if (!NativeKeyboard.EnsureForeground() || !NativeKeyboard.Send(key, true))
             {
                 recorder.Event("keyRefused", key + ": game not foreground");
-                return;
+                return false;
             }
 
             recorder.Event("keyDown", key);
             pendingKeyUp = key;
             pendingKeyUpAt = Now + 0.08;
+            return true;
         }
 
         private bool saveCompleted;

@@ -79,6 +79,13 @@ namespace KingmakerCutsceneSkip.Integration
                 if (player.Exclusive) owned.Add(player);
             }
 
+            // A boundary command (loading card) already running when the skip begins is classified exactly like one that
+            // starts during the skip.
+            for (int index = 0; index < owned.Count && BoundaryCommand == null; index++)
+            {
+                BoundaryCommand = PlayingBoundaryCommand(owned[index]);
+            }
+
             EventBus.Subscribe(this);
         }
 
@@ -144,7 +151,7 @@ namespace KingmakerCutsceneSkip.Integration
             if (ownedCommandDepth > 0) ownedCommandDepth--;
             if (!IsActive) return;
 
-            string boundary = handlers.GetBoundaryName(command);
+            string boundary = PresentationHandlers.GetBoundaryName(command);
             if (boundary != null && BoundaryCommand == null) BoundaryCommand = boundary;
             if (accelerating) handlers.PrepareForAcceleration(command, player);
         }
@@ -183,6 +190,32 @@ namespace KingmakerCutsceneSkip.Integration
             }
 
             return false;
+        }
+
+        /// <summary>Name of a boundary command (loading card) playing in a live control-locking cutscene, or null.</summary>
+        public static string ControllingCutsceneBoundaryCommand()
+        {
+            foreach (CutscenePlayerData player in LiveCutscenes())
+            {
+                if (!player.Exclusive) continue;
+                string boundary = PlayingBoundaryCommand(player);
+                if (boundary != null) return boundary;
+            }
+
+            return null;
+        }
+
+        private static string PlayingBoundaryCommand(CutscenePlayerData player)
+        {
+            if (!IsLive(player)) return null;
+            foreach (CutscenePlayerData.TrackData track in CutsceneInternals.ActiveTracks(player))
+            {
+                if (!track.IsPlaying) continue;
+                string boundary = PresentationHandlers.GetBoundaryName(SafeCommand(track));
+                if (boundary != null) return boundary;
+            }
+
+            return null;
         }
 
         private static List<CutscenePlayerData> LiveCutscenes()

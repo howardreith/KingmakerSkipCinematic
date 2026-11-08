@@ -64,6 +64,9 @@ namespace KingmakerCutsceneSkip.Core
 
         public SkipStartBlocker LastDeclineReason { get; private set; }
 
+        /// <summary>Number of operations started since the mod loaded (diagnostics and native test assertions).</summary>
+        public int StartedOperations => operationId;
+
         /// <summary>Starts one operation if the game is in an eligible cinematic. Never overlaps operations.</summary>
         public bool TryStart()
         {
@@ -134,6 +137,25 @@ namespace KingmakerCutsceneSkip.Core
             if (IsSkipping && boundary.IsReached) End(boundary.Reason.Value, boundary.Detail);
         }
 
+        /// <summary>
+        /// Called between the game ticks of an accelerated frame: re-evaluates every boundary so acceleration stops at the
+        /// same game tick at which normal playback would hand over. Returns false once the operation is no longer advancing.
+        /// </summary>
+        public bool ContinueAdvancing()
+        {
+            if (Phase != SkipPhase.Advancing) return false;
+            try
+            {
+                return !EndIfBoundaryReached();
+            }
+            catch (Exception exception)
+            {
+                logger.Exception("Check cutscene skip boundary", exception);
+                if (IsSkipping) End(SkipEndReason.Error, exception.GetType().Name);
+                return false;
+            }
+        }
+
         /// <summary>Called once per rendered frame.</summary>
         public void Tick()
         {
@@ -166,12 +188,15 @@ namespace KingmakerCutsceneSkip.Core
 
             double elapsed = clock.RealTimeSeconds - phaseStartedAt;
             bool faded = fade.IsFullyFaded;
-            if (!faded && elapsed < tuning.FadeOutTimeoutSeconds) return;
+            if (!faded)
+            {
+                // Never accelerate a scene the player can still see: reveal it and let it continue normally.
+                if (elapsed >= tuning.FadeOutTimeoutSeconds) End(SkipEndReason.FadeTimeout, "screen not black after " + tuning.FadeOutTimeoutSeconds + "s");
+                return;
+            }
 
-            reachedFullBlack = faded;
+            reachedFullBlack = true;
             fadeOutSeconds = elapsed;
-            if (!faded) logger.Warning("Native fade did not report full black within " + tuning.FadeOutTimeoutSeconds + "s; advancing anyway.");
-
             scope.PrepareActiveCommandsForAcceleration();
             timeScale.Apply(tuning.TimeScale);
             watchdog.Reset(clock.RealTimeSeconds, scope.ProgressFingerprint);
@@ -229,7 +254,8 @@ namespace KingmakerCutsceneSkip.Core
 
             EnterPhase(SkipPhase.Revealing);
             LastReport = report;
-            if (reason == SkipEndReason.Error || reason == SkipEndReason.Stalled || reason == SkipEndReason.Watchdog)
+            if (reason == SkipEndReason.Error || reason == SkipEndReason.Stalled || reason == SkipEndReason.Watchdog ||
+                reason == SkipEndReason.FadeTimeout)
             {
                 logger.Warning(report.ToString());
             }
