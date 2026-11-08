@@ -67,8 +67,9 @@ mod.
   engine paths but were not individually tested, so a problem in a particular later scene cannot be ruled out. Keep a
   save from before an important scene, as you would with any mod. If you see a problem, please report the quest and
   location, your Unity Mod Manager and mod versions, and a save from before the scene.
-* If a cinematic cannot be skipped safely, the mod reveals normal playback within about 10 seconds and logs which
-  command it waited on. If the screen does not go black, the skip is abandoned and the scene simply continues.
+* If acceleration stalls or exceeds its time limit, the mod stops accelerating and returns to visible playback, logging
+  which command it waited on. This does not guarantee that every cinematic is free of scene-specific problems. If the
+  screen does not go black, the skip is abandoned and the scene simply continues.
 
 ## Removal
 

@@ -18,12 +18,15 @@ screen, loading screen or area change, at playable combat, and whenever you rega
 If your newer Unity Mod Manager already works with your other mods, there is no need to downgrade.
 
 **What has been tested.** Identical saves were played normally and with skips through the prologue and the opening of the
-night attack. Quests, flags, inventory, party and NPC state matched. Craft Magic Items and Kingmaker Bugfixes were checked
-alongside it.
+night attack, and skip cancellation was compared in the prologue. Quests, flags, inventory, party and NPC state matched.
+Craft Magic Items and Kingmaker Bugfixes were checked while installed alongside it; skipping with those two mods has not
+been tested separately.
 
 **Limitations.**
 * Other cinematics use the same engine paths but were not individually tested, so a problem in a later scene cannot be
   ruled out. Keep a save from before an important scene, as with any mod.
+* If acceleration stalls or exceeds its time limit, the mod stops accelerating and returns to visible playback. This does
+  not guarantee that every cinematic is free of scene-specific problems.
 * A skipped cinematic uses up to about a second more in-game time per segment. Timed effects count that time, so a buff
   about to expire can run out during a skipped scene when it would not have during a watched one.
 * Skips are not available on the global map or in turn-based mode.
@@ -42,8 +45,10 @@ Drafted against the current test state. Update them if the blocked real-key rows
 ### Compatibility request
 
 > Thanks for the request. The next version (0.1.2) lowers the minimum to Unity Mod Manager 0.31.1. I tested it on 0.31.1,
-> 0.32.4 and 0.33.0, and on each of those it loaded alongside Craft Magic Items and Kingmaker Bugfixes, with an item crafted
-> and kept through a save and reload. I couldn't get hold of 0.27.10, so I'm not claiming anything older than 0.31.1.
+> 0.32.4 and 0.33.0, using loaders assembled from the upstream UMM and Harmony components rather than the original Nexus
+> installers. On each it ran alongside Craft Magic Items and Kingmaker Bugfixes, with an item crafted and kept through a
+> save and reload, though that check didn't include skipping a scene. I couldn't get hold of 0.27.10, so I'm not claiming
+> anything older than 0.31.1.
 >
 > On the 0.32+ reports: Harmony 2.3.5 did break Craft Magic Items in a test setup, and Harmony 2.3.6, used by UMM 0.32.4,
 > has the fix, so it doesn't apply to all of 0.32+. I couldn't test the original 0.32.0-0.32.3 downloads. If your UMM
@@ -55,9 +60,10 @@ Drafted against the current test state. Update them if the blocked real-key rows
 > keeps running, only faster behind the black screen. Pressing Escape during a skip just stops the speed-up, and the scene
 > carries on normally. That's separate from the Escape menu, which pauses the game as usual.
 >
-> I compared identical saves played normally, skipped, and skipped then cancelled, through the prologue and the start of the
-> night attack, and quests, flags, inventory, party and NPCs matched. One known difference is up to about a second of extra
-> game time per segment, so a buff about to expire can end sooner. I haven't tested every scene, especially later chapters.
+> I compared identical saves played normally and skipped through the prologue and the start of the night attack, and
+> skipped then cancelled in the prologue. Quests, flags, inventory, party and NPCs matched. One known difference is up to
+> about a second of extra game time per segment, so a buff about to expire can end sooner. I haven't tested every scene,
+> especially later chapters.
 >
 > If you've seen a quest break, could you share a save from before the scene, the quest and location, your UMM and mod
 > versions, and the steps to reproduce it? I'd like to look into it.
