@@ -31,7 +31,8 @@ or choice that appears next. Outside cinematics Enter and Escape behave exactly 
 ## What a skip does — and does not do
 
 * The game's own cutscene engine keeps running, only faster and out of sight: quest updates, items, party changes,
-  NPCs appearing or leaving, fights staged inside the cinematic — everything happens, in the original order.
+  NPCs appearing or leaving, fights staged inside the cinematic all happen. Game logic runs in the same normal-sized
+  steps and order as when watching; only animation timing is coarser (see limitations).
 * It **stops** at every dialogue (even one with a single *Continue*), book/story event, rest screen or other window
   that needs you, at playable combat, when you regain control, and at loading screens or area transitions.
   It never picks an answer or makes a choice for you. Press Enter again to skip the next part.
@@ -49,12 +50,14 @@ or choice that appears next. Outside cinematics Enter and Escape behave exactly 
 
 * Cinematics on the global map are not skipped (Enter does nothing there).
 * No skipping while turn-based combat mode is active.
-* Animations finish on whole frames at high speed, so a skipped cinematic uses up to about a second more in-game time
-  than watching it. Story results are the same.
+* Animations finish on whole frames at high speed, so a skipped cinematic uses a little more in-game time than
+  watching it (about 0.2–1 s per segment in testing). Timed effects count that extra time, so a buff with less than
+  about a second to spare can run out during a skipped cinematic but not during a watched one.
 * If Bag of Tricks' game-speed multiplier is set to anything other than 1, skips run at that speed instead.
 * Validated in the prologue and the opening of the night attack (see `docs/VALIDATION.md`). Other cinematics use the
   same engine paths but were not individually tested. If one cannot be skipped safely, the mod reveals normal playback
-  within about 10 seconds and logs which command it waited on.
+  within about 10 seconds and logs which command it waited on. If the screen does not go black, the skip is abandoned
+  and the scene simply continues.
 
 ## Removal
 

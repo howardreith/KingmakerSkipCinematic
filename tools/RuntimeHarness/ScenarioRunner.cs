@@ -37,6 +37,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private int operationsAtMark;
         private int operationsAtStepBegin;
         private int autoplaySkipPresses;
+        private int autoplaySkipRefused;
         private string stepFailure;
         private int quitCountdown = -1;
 
@@ -139,6 +140,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 stepFailure = null;
                 operationsAtStepBegin = ProductAccess.StartedOperations;
                 autoplaySkipPresses = 0;
+                autoplaySkipRefused = 0;
                 recorder.Event("stepBegin", step.ToString());
             }
 
@@ -471,7 +473,21 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 if (step.SkipAfterSeconds >= 0 && !skipPressedThisEpisode && Now - cinematicSince >= step.SkipAfterSeconds)
                 {
                     skipPressedThisEpisode = true;
-                    if (PressOnce(step.Key ?? "Return")) autoplaySkipPresses++;
+                    // key "direct" requests the skip through the product's API instead of a key event (labelled
+                    // as such in the evidence; used only where real input is unavailable).
+                    if (step.Key == "direct")
+                    {
+                        recorder.Event("skipDirect", ProductAccess.TryStart(out string declined) ? "started" : "declined: " + declined);
+                        autoplaySkipPresses++;
+                    }
+                    else if (PressOnce(step.Key ?? "Return"))
+                    {
+                        autoplaySkipPresses++;
+                    }
+                    else
+                    {
+                        autoplaySkipRefused++;
+                    }
                 }
 
                 return StepStatus.Running;
@@ -490,7 +506,15 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
             // Every skip press must have started exactly one operation, and nothing else may have started one.
             int started = ProductAccess.StartedOperations - operationsAtStepBegin;
-            result["autoplay_" + stepIndex] = new JObject { ["skipPresses"] = autoplaySkipPresses, ["skipsStarted"] = started };
+            result["autoplay_" + stepIndex] = new JObject
+            {
+                ["skipPresses"] = autoplaySkipPresses, ["skipPressesRefused"] = autoplaySkipRefused, ["skipsStarted"] = started
+            };
+            if (step.SkipAfterSeconds >= 0 && autoplaySkipRefused > 0)
+            {
+                return Fail(true, autoplaySkipRefused + " skip presses could not be sent (game not foreground)");
+            }
+
             return Fail(step.SkipAfterSeconds >= 0 && ProductAccess.IsLoaded && started != autoplaySkipPresses,
                 autoplaySkipPresses + " skip presses but " + started + " operations started");
         }

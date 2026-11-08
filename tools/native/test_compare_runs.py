@@ -84,6 +84,20 @@ class CompareRunsTests(unittest.TestCase):
         skipped["party"][0]["activeToggles"] = ["PowerAttack"]
         self.assertIn("activeToggles", self.assertDifferent(skipped)[0])
 
+    def test_initiative_order_swap_is_a_note_but_schedule_change_is_reported(self):
+        normal, skipped = snapshot(), snapshot()
+        for snap, (hero, npc) in ((normal, (1.0, 6.0)), (skipped, (6.0, 1.0))):
+            snap["party"][0]["inCombat"] = snap["areaUnits"][0]["inCombat"] = True
+            snap["party"][0]["cooldowns"]["initiative"] = hero
+            snap["areaUnits"][0]["cooldowns"]["initiative"] = npc
+        for snap in (normal, skipped):
+            snap["inCombat"] = True
+        failures, notes = compare_runs.compare(normal, skipped)
+        self.assertEqual([], failures)
+        self.assertTrue(any("initiative order" in note for note in notes))
+        skipped["areaUnits"][0]["cooldowns"]["initiative"] = 3.0
+        self.assertIn("initiative schedule", self.assertDifferent(skipped, normal)[0])
+
     def test_spawned_unit_pairs_by_blueprint(self):
         normal, skipped = snapshot(), copy.deepcopy(snapshot())
         skipped["areaUnits"][0]["id"] = "random-spawn-id"

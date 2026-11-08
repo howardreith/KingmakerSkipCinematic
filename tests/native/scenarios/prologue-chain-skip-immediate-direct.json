@@ -1,0 +1,22 @@
+{
+  "description": "[skip requested via product API, not key input] V1/V2/V5/V6: same chain, real Enter pressed the moment every cinematic episode begins (story actions then run under acceleration); must stop at every dialogue and reach identical state at free control.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 4,
+  "steps": [
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "skipAfterSeconds": 0.0,
+      "key": "direct",
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

@@ -11,6 +11,8 @@
     { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 90 },
     { "op": "wait", "seconds": 1.0 },
     { "op": "snapshot", "label": "pre" },
+    { "op": "applyBuff", "match": "BlessBuff|Bless", "seconds": 4.0 },
+    { "op": "applyBuff", "match": "MageArmorBuff|MageArmor", "seconds": 600 },
     { "op": "waitMode", "mode": "Pause", "timeoutSeconds": 90 },
     { "op": "snapshot", "label": "boundary" }
   ]

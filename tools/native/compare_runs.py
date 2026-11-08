@@ -4,7 +4,10 @@ Usage: python -I compare_runs.py <normal-evidence-dir> <skipped-evidence-dir> [l
 
 Must match exactly: mode, area, control lock, combat flag, money, quests and objectives, flags, inventory, dialogue
 position; for every party and area unit: presence, death, HP, combat flag, faction, ability resources, active toggles
-and the set of buffs. Positions are compared within a tolerance. Action cooldowns are compared within 0.05 s.
+and the set of buffs. Positions are compared within a tolerance. Action cooldowns are compared within 0.05 s, except
+the initiative cooldown: which unit acts first is decided by d20 rolls (UnityEngine.Random, unseeded per launch, so it
+differs between two normal runs too); the initiative schedule (sorted values across combatants) must match and the
+per-unit order is reported as a note.
 
 Timed buffs: the remaining duration may differ only by the measured game-time difference between the runs (the
 documented cost of a skip) plus 0.25 s; anything larger is a difference. Every remaining-duration delta is reported.
@@ -86,10 +89,29 @@ def compare_cooldowns(name, normal, skipped, failures):
     if normal is None or skipped is None:
         failures.append("{0} cooldowns: normal={1} skipped={2}".format(name, normal, skipped))
         return
-    for key in sorted(set(normal) | set(skipped)):
+    for key in sorted((set(normal) | set(skipped)) - {"initiative"}):
         a, b = normal.get(key), skipped.get(key)
         if a is None or b is None or abs(a - b) > COOLDOWN_TOLERANCE:
             failures.append("{0} cooldown {1}: normal={2} skipped={3}".format(name, key, a, b))
+
+
+def initiative_by_unit(snapshot):
+    result = []
+    for group in ("party", "areaUnits"):
+        for unit in snapshot.get(group, []):
+            cooldowns = unit.get("cooldowns") or {}
+            if unit.get("inCombat") and cooldowns.get("initiative") is not None:
+                result.append((unit["unit"], cooldowns["initiative"]))
+    return sorted(result)
+
+
+def compare_initiative(normal, skipped, failures, notes):
+    a, b = initiative_by_unit(normal), initiative_by_unit(skipped)
+    schedule_a, schedule_b = sorted(v for _, v in a), sorted(v for _, v in b)
+    if len(schedule_a) != len(schedule_b) or any(abs(x - y) > COOLDOWN_TOLERANCE for x, y in zip(schedule_a, schedule_b)):
+        failures.append("initiative schedule differs: normal={0} skipped={1}".format(a, b))
+    elif any(ua != ub or abs(va - vb) > COOLDOWN_TOLERANCE for (ua, va), (ub, vb) in zip(a, b)):
+        notes.append("initiative order differs (d20 rolls, varies between normal runs too): normal={0} skipped={1}".format(a, b))
 
 
 def compare(normal, skipped, normal_pre=None, skipped_pre=None, tolerance=1.5, label="boundary"):
@@ -130,6 +152,8 @@ def compare(normal, skipped, normal_pre=None, skipped_pre=None, tolerance=1.5, l
                 failures.append("{0} position differs by {1:.1f}m: normal={2} skipped={3}".format(name, moved, ua["position"], ub["position"]))
             elif moved > 0.25:
                 notes.append("{0} position differs by {1:.2f}m (within tolerance)".format(name, moved))
+
+    compare_initiative(normal, skipped, failures, notes)
 
     normal_presentation, skipped_presentation = normal.get("presentation", {}), skipped.get("presentation", {})
     for key in PRESENTATION_KEYS:

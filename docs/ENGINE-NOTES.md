@@ -7,6 +7,11 @@ assembly (decompiled locally with ilspycmd 9.1; decompiled sources are never com
 
 ## How Kingmaker plays a cutscene
 
+* Each frame `Game.Tick` runs the deferred start-of-frame actions (`m_BeforeTickActions`: game-mode starts/stops,
+  dialogue starts, control-lock changes requested during the previous tick) and then `GameMode.Tick` of the top mode,
+  which ticks that mode's controller list in a fixed order (`GameModesFactory`). The Cutscene mode's list starts
+  `UnitGroupsController, TimeController, KeyboardAccess, CutsceneController, …, UnitMoveController, …,
+  UnitActionController, …, ScriptZoneController, …, UnitAnimationController, …` (40 controllers).
 * A cutscene is a `CutscenePlayerData` entity. `CutsceneController.Tick` (one per frame in Cutscene, Dialog, Rest and
   global-map modes) calls `TickScene`, which ticks the tracks of every activated `GateData`.
 * `TrackData.Tick`: `PlayTime += TimeController.DeltaTime`, then `command.SetTime(PlayTime)`; a non-continuous command
@@ -35,11 +40,17 @@ assembly (decompiled locally with ilspycmd 9.1; decompiled sources are never com
 ## Decision: accelerate the engine, never complete commands
 
 A skip runs the cinematic **through the engine's own code at `DebugTimeScale = 10` behind the native black fade**,
-until a real interaction boundary. Every condition, gate, signal, branch and `CommandAction` executes exactly as in
-normal playback and in the same order; nothing is marked finished, teleported or removed. This is the same mechanism
-Wrath uses (`DebugTimeScale` + fade + audio), minus Wrath's `Interrupt` that teleports movers: teleporting changes
-cross-track ordering and skips script zones a mover would cross, and the native comparisons below show that faithful
-acceleration already reaches identical state.
+until a real interaction boundary. Nothing is marked finished, teleported or removed. This is the same mechanism Wrath
+uses (`DebugTimeScale` + fade + audio), minus Wrath's `Interrupt` that teleports movers (teleporting changes cross-track
+ordering and skips script zones a mover would cross).
+
+Keeping the commands is not by itself enough to keep their order: at ×10 a rendered frame carries ten frames of engine
+time, and how that time is divided between controllers decides which of two parallel tracks observes the other's
+effect first. The mod therefore runs each accelerated rendered frame as **complete Cutscene-mode ticks of at most
+1/30 game-s** — the whole controller list, in native order, per substep (below). Game logic thus follows the same
+tick schedule as normal playback at 30 fps. What it does **not** make equivalent: Unity-driven systems
+(Animator/`AnimationManager`, physics, coroutines, A* worker threads, MonoBehaviour updates) still advance once per
+rendered frame by ×10 time, so logic waiting on them observes coarser steps (measured below as extra game time).
 
 Lifecycle (`CutsceneSkipController`, single owner of every override):
 `Idle → FadingOut (fade + audio ramp, normal speed) → Advancing (time scale applied once the screen reports covered)
@@ -58,8 +69,14 @@ so acceleration stops in the same tick:
 | Escape during the skip | `Cancelled` |
 | no owned track changed command for 10 s real time | `Stalled` |
 | 60 s real time spent advancing | `Watchdog` |
+| the native fade did not report full black within 1 s (nothing was accelerated) | `FadeTimeout` |
 | exception inside the mod | `Error` |
 | mod disabled/unloaded | `Disabled` |
+
+Boundaries are also re-evaluated between the substeps of an accelerated frame, so acceleration stops at the game tick
+at which normal playback would hand over. A request is declined (`BoundaryCommandPlaying`) while a controlling
+cutscene is already showing a loading card; a card already running when a skip begins is classified like one that
+starts during it.
 
 A staged fight inside a cinematic keeps the Cutscene mode and is skipped; playable combat only begins when the lock is
 released, which is a boundary. Scope: the operation owns every live `Exclusive` cutscene at start, plus cutscenes that
@@ -70,7 +87,7 @@ start while an owned command executes (child scenes) or that themselves lock con
 | Category (commands) | Behaviour while accelerating |
 |---|---|
 | Timed: `CommandDelay`, `CommandLockControls` (timed), `CommandFadeout`, `CommandCameraShake`, `CommandSkipTime`, unvoiced `CommandBark` | engine time ×10 |
-| Movement: `CommandMoveUnit`, `CommandMoveParty`, `CommandMoveByPath`, `CommandMoveUnitInCamp` | units walk their real paths ×10; movement ticks substepped; paths computed synchronously (below) |
+| Movement: `CommandMoveUnit`, `CommandMoveParty`, `CommandMoveByPath`, `CommandMoveUnitInCamp` | units walk their real paths in normal-sized substeps; paths computed synchronously (below) |
 | Animation/staging: `CommandUnitPlayCutsceneAnimation`, `CommandPlayAnimationSequence`, `CommandUnitLookAt`, `CommandSetCombatMode`, `CommandCrossfadeToIdle`, `CommandPlayTimeline` | Unity/Animator time ×10 |
 | Camera: `CommandMoveCamera` (timed scroll uses scaled `Time.time`; rubber band ×min(scale,4); 20 s game-time timeout), `CommandCameraFollow` | engine |
 | Story/gameplay: `CommandAction`, `CommandActivateGate`, `CommandAddFact`, `CommandMarkUnitControlled`, `CommandUnitAttack`, `CommandUnitCastSpell`, `CommandEndCombat`, `CommandIgnoreCombat`, `CommandResolveRankUp`, `CommandTeleportParty`, `CommandInstantiatePrefab` | executed by the engine, unchanged |
@@ -79,24 +96,48 @@ start while an owned command executes (child scenes) or that themselves lock con
 | `CommandCustomLoadingScreen` (real-time card) | boundary (`Loading`) |
 | Unknown/new command types | ordinary execution under acceleration; the stall watchdog reveals normal playback if one waits on something that does not accelerate |
 
-## Fidelity fixes found by native measurement
+## Accelerated frames: whole-tick substepping
 
-Comparing command start times (game time) between normal and skipped runs exposed three step-size effects, each
-fixed without changing semantics:
+`GameMode.Tick` prefix, active only while a skip is advancing and the top mode is Cutscene
+(`Integration/AcceleratedFrameDriver`, scheduling in `Core/FrameSubstepScheduler`, unit-tested):
 
-1. **Discarded frame remainder.** `TrackData.Tick` restarts `PlayTime` at 0 for the next command, discarding the rest of
-   the frame's delta. At ×10 and ~30 fps a frame is ~0.33 game-s, so each sequential command lost ~0.17 s.
-   → While advancing, `CutsceneController.Tick` is substepped with `TimeController.SetDeltaTime` into steps ≤ 1/30 s.
-2. **Movement step size.** `UnitMovementAgent.TickMovement` brakes on the final approach (`sqrt(2·a·d)`); large steps
-   overshoot. → `UnitMoveController.Tick` is substepped the same way.
-3. **Asynchronous pathfinding.** A* returns paths a few rendered frames after `UnitMovementAgent.PathTo`; at ×10 each
-   frame of latency is ten times the game time. → While advancing, `AstarPath.WaitForPath` (the library's blocking call)
-   completes the just-queued path immediately. Same path, no latency.
+* The frame's engine delta is `TimeController.Tick`'s own formula, `min(PlayerTimeScale·DebugTimeScale/12,
+  Time.deltaTime)`; it is divided into `n = ceil(delta / (1/30))` equal substeps, at most 25 (the formula's cap at ×10).
+  Frames that need no division, the frame a mode was just activated, and turn-based combat use the native tick.
+* Each substep ticks the mode's controller list in native order. `TimeController` is replaced by its own Cutscene-mode
+  bookkeeping for one substep (`DeltaTime` and `GameDeltaTime` = step, `Player.GameTime += step`, `Time.timeScale`
+  re-derived). Each controller is isolated with try/catch as in `GameMode.Tick`.
+* Controllers that read per-rendered-frame state instead of engine time tick once, in the first substep, at their
+  native position: `KeyboardAccess` (key-down edges would fire per substep), the cutscene `CameraController`,
+  `WeatherController` (`Time.deltaTime`), `RealtimeLightsController` and `DungeonLeaderboardController`
+  (`Time.unscaledDeltaTime`), `CutsceneUIHideController`.
+* Between complete substeps the frame ends early when normal playback would have ended it first: the game scheduled
+  start-of-frame work (`m_BeforeTickActions` non-empty — e.g. a dialogue start or mode change requested during the
+  tick), a load began, or the skip's boundary probe reports a boundary (the skip then ends in that tick, restoring the
+  time scale). Unsimulated time is not consumed and no controller receives a partial or stale step.
+* After the substeps `DeltaTime`/`GameDeltaTime` are set to the engine time actually simulated this frame, which is
+  what code outside the mode tick (unit views, barks, camera rig) reads later in the frame.
+
+Review counterexample, kept as a regression test (`FrameSubstepSchedulerTests`): track A sets a flag when a unit
+arrives (0.05 s away), a parallel track B branches on that flag after a 0.15 s delay. Ten normal frames observe the
+flag; the previous design (each controller's substeps batched separately) did not; whole-tick substepping matches
+normal playback in both controller orders.
+
+## Other fidelity fixes found by native measurement
+
+* **Asynchronous pathfinding.** A* returns paths a few rendered frames after `UnitMovementAgent.PathTo`; at ×10 each
+  frame of latency is ten times the game time. → While advancing, `AstarPath.WaitForPath` (the library's blocking call)
+  completes the just-queued path immediately. Same path, no latency.
+* **Covered-screen detection** uses the screen `LoadingProcess` actually displays (see Overrides).
 
 Remaining measured difference: animation completion is evaluated once per rendered frame (Unity drives
-`AnimationManager` with `Time.deltaTime`), so a skipped segment consumes ~0.2–1.1 s more game time than normal playback
-(prologue chain of three segments: 32.1 s vs 28.9 s; night attack: 8.6 s vs 8.0 s). Story state is identical.
-Substepping Unity's animation graph was judged too invasive for this bounded effect.
+`AnimationManager` with `Time.deltaTime`), so a skipped segment consumes more game time than normal playback (figures
+in `VALIDATION.md`). Substepping Unity's animation graph was judged too invasive for this bounded effect.
+
+Consequence for timers: `UnitBuffsController` does not run in the Cutscene mode, but `Player.GameTime` advances there,
+so buffs whose end time passed are removed at the next Dialog/Default tick. A buff whose end time falls inside the
+extra game time of a skip therefore expires at the boundary in the skipped run but not in the normal run; remaining
+durations of all other timed buffs differ by exactly the extra game time (measured, `VALIDATION.md`).
 
 ## Overrides and ownership
 
@@ -114,8 +155,7 @@ is disabled but are inert; UMM unload removes them.
 ## Patched methods (Harmony 1.2, owner `howardreith.kingmaker.cutsceneskip`)
 
 `KeyboardAccess.Tick` (prefix), `KeyboardAccess.Binding.InputMatched` (prefix), `CommandBase.Run(CutscenePlayerData)`
-(prefix/postfix), `CutsceneController.Tick` and `UnitMoveController.Tick` (substep prefixes, active only while
-advancing), `UnitMovementAgent.PathTo(...)` (postfix, active only while advancing), `LocalizedString.PlayVoiceOver`
+(prefix/postfix), `GameMode.Tick` (prefix; runs the frame substepped only while advancing in the Cutscene mode), `UnitMovementAgent.PathTo(...)` (postfix, active only while advancing), `LocalizedString.PlayVoiceOver`
 (postfix, active only while skipping), `LoadingProcess.StopAll` / `ResetManualLoadingScreen` /
 `CheatRestManualLoadingScreen` (postfix). All are resolved by exact signature before anything is patched; a missing
 contract leaves the game untouched and the mod reports itself inactive.
@@ -128,3 +168,7 @@ contract leaves the game untouched and the mod reports itself inactive.
   speed (ownership rules leave Bag of Tricks' value in place).
 * A cutscene that waits on something else that does not follow engine time would stall; the 10 s stall watchdog then
   reveals normal playback with the playing commands logged.
+* Logic coupled to Unity-driven systems (animation events, physics, coroutines) sees ×10 steps per rendered frame;
+  only engine-time logic keeps normal granularity.
+* Mods that patch `TimeController.Tick` do not see the substeps of an accelerated frame (the mod performs the
+  Cutscene-mode time bookkeeping itself).

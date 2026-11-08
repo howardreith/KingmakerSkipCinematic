@@ -14,6 +14,8 @@
     { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 90 },
     { "op": "wait", "seconds": 1.0 },
     { "op": "snapshot", "label": "pre" },
+    { "op": "applyBuff", "match": "BlessBuff|Bless", "seconds": 4.0 },
+    { "op": "applyBuff", "match": "MageArmorBuff|MageArmor", "seconds": 600 },
     { "op": "pressKey", "key": "Return", "holdMs": 80 },
     { "op": "waitSkipIdle", "mode": "SceneComplete|ControlReturned", "timeoutSeconds": 60 },
     { "op": "waitMode", "mode": "Pause", "timeoutSeconds": 30 },
