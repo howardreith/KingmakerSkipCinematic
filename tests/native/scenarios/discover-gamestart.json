@@ -1,0 +1,14 @@
+{
+  "description": "Discovery: load the time-zero prologue autosave and record the opening sequence without skipping.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "snapshot", "label": "loaded" },
+    { "op": "wait", "seconds": 5 },
+    { "op": "screenshot", "label": "t5" },
+    { "op": "wait", "seconds": 10 },
+    { "op": "screenshot", "label": "t15" },
+    { "op": "waitMode", "mode": "Dialog", "seconds": 0.5, "timeoutSeconds": 90, "optional": true },
+    { "op": "snapshot", "label": "dialog-or-timeout" }
+  ]
+}

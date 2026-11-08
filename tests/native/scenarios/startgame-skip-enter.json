@@ -1,0 +1,15 @@
+{
+  "description": "V1/V2/V6: real Enter pressed 2.5s into StartGame_cutscene (mid-scene); must stop at the dialogue without choosing an answer.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 240 },
+    { "op": "wait", "seconds": 2.5 },
+    { "op": "snapshot", "label": "pre" },
+    { "op": "pressKey", "key": "Return", "holdMs": 90 },
+    { "op": "waitSkipIdle", "timeoutSeconds": 60 },
+    { "op": "waitMode", "mode": "Dialog", "seconds": 0.0, "timeoutSeconds": 30 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "boundary" }
+  ]
+}

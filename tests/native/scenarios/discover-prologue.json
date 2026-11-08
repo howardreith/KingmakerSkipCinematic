@@ -1,0 +1,18 @@
+{
+  "description": "Discovery: load the prologue autosave and record cutscene, dialogue and mode events without skipping.",
+  "save": "Auto_1120.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "snapshot", "label": "loaded" },
+    { "op": "waitCutscene", "seconds": 0.5, "timeoutSeconds": 45, "optional": true },
+    { "op": "snapshot", "label": "first-cutscene" },
+    { "op": "wait", "seconds": 8 },
+    { "op": "screenshot", "label": "t8" },
+    { "op": "wait", "seconds": 8 },
+    { "op": "screenshot", "label": "t16" },
+    { "op": "waitNotMode", "mode": "Cutscene", "seconds": 0.5, "timeoutSeconds": 120, "optional": true },
+    { "op": "snapshot", "label": "after-cutscene" },
+    { "op": "wait", "seconds": 5 },
+    { "op": "snapshot", "label": "end" }
+  ]
+}

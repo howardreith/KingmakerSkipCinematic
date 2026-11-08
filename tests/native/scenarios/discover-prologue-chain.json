@@ -1,0 +1,13 @@
+{
+  "description": "Discovery: from the time-zero autosave, progress dialogues deterministically until the first cinematic, then record it unskipped.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 240 },
+    { "op": "snapshot", "label": "cutscene-start" },
+    { "op": "wait", "seconds": 4 },
+    { "op": "screenshot", "label": "cs4" },
+    { "op": "waitNotMode", "mode": "Cutscene", "seconds": 0.3, "timeoutSeconds": 180 },
+    { "op": "snapshot", "label": "after-cutscene" }
+  ]
+}
