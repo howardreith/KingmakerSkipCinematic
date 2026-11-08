@@ -194,3 +194,11 @@ contract leaves the game untouched and the mod reports itself inactive.
   only engine-time logic keeps normal granularity.
 * Mods that patch `TimeController.Tick` do not see the substeps of an accelerated frame (the mod performs the
   Cutscene-mode time bookkeeping itself).
+
+## Observed by the native harness
+
+* `Game.CreateNewSave` returns a `SaveInfo` that is not marked as saved. `SaveManager.LoadRoutine` ignores such an object with
+  a log warning while the rest of the area reload still runs, so the player state is not replaced. A verifier has to load
+  the written file (`LoadZipSave`) and observe the state change.
+* `Tutorial_1_cutscene` holds Cutscene mode for one frame. A real key press sent in that frame arrives after the mode has
+  ended and starts nothing; a player cannot skip that episode, and nothing is left to skip.

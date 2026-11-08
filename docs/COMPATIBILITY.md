@@ -23,7 +23,7 @@ coexistence. A user whose newer Unity Mod Manager already works does not need to
 
 `scripts/Build.ps1` downloads `UnityModManager.dll` 0.31.1 (author's NuGet package) and `0Harmony12.dll` (UMM repository
 at the 0.31.1 commit `10cfb1cc`) into `artifacts/references`, verifies them against the SHA-256 values in
-`scripts/Common.ps1`, and records them in `artifacts/qualification/build.json`. A local loader update cannot change the
+`scripts/reference-pins.json` (a tracked product input, so changing a pin invalidates the build's provenance), and records them in `artifacts/qualification/build.json`. A local loader update cannot change the
 build. Neither file enters the package or source control, and the mod does not replace the shared loader or Harmony.
 
 Member audit (metadata, `private/contract-tool` in the lab): the mod binds only `ModEntry` (`Logger`, `OnGUI`,
@@ -52,28 +52,44 @@ profile is a byte copy of the owner's installation. In-process versions come fro
 
 ## Results
 
-Mods: Craft Magic Items 2.1.0, Kingmaker Bugfixes 1.3.3. Tested ZIP `ec60d96a…` (same DLL as the final ZIP). CMI behaviour:
-upgrade a Standard Flail with Enhancement 1 through CMI's own code, save, reload, confirm the custom item persists.
-Bugfixes behaviour: its Dart `IsLight` blueprint change is present.
+Mods: Craft Magic Items 2.1.0, Kingmaker Bugfixes 1.3.3. Runs on the final ZIP `c1be6ae2…` unless a row says otherwise;
+every ZIP has the same DLL. CMI behaviour: upgrade a Standard Flail with Enhancement 1 through CMI's own code, save, load
+the written file, confirm the custom item persists. Bugfixes behaviour: its Dart `IsLight` blueprint change is present.
+The panel check needs repaints with no logged failure and a settings value that survives save and load.
 
 | Loader / Harmony | Profile | Behaviour | Outcome | Run |
 |---|---|---|---|---|
-| 0.31.1 / 2.3.1.1 | mod alone | panel draws, settings save, disable/enable, direct skip to dialogue, save, reload | pass | 155655Z |
-| 0.32.4 / 2.3.6 | mod alone | same | pass | 155903Z |
-| 0.33.0 / 2.3.6 | mod alone | same | pass | 160110Z |
-| 0.27.12 / 2.3.1.1 | mod alone, `ManagerVersion` override | same | pass, not a supported target | 160525Z |
-| synthetic 0.32.3 / 2.3.5 | mod alone | same | pass | 160318Z |
-| 0.31.1 / 2.3.1.1 | CMI + Bugfixes, mod absent | CMI and Bugfixes behaviour | pass | 151727Z |
-| 0.31.1 / 2.3.1.1 | CMI + Bugfixes + mod | same, no skip run | pass | 151939Z |
-| 0.32.4 / 2.3.6 | CMI + Bugfixes, mod absent | same | pass | 152949Z |
-| 0.32.4 / 2.3.6 | CMI + Bugfixes + mod | same, no skip run | pass | 153157Z |
-| 0.33.0 / 2.3.6 | CMI + Bugfixes, mod absent | same | pass | 153406Z |
-| 0.33.0 / 2.3.6 | CMI + Bugfixes + mod | same, no skip run | pass | 153614Z |
-| 0.33.0 / 2.3.6 | owner's 16 mods + mod | direct skips, prologue chain, save | pass | 170038Z |
-| 0.33.0 / 2.3.6 | owner's 16 mods + mod | direct skips, night attack | pass, state MATCH | 171137Z |
+| 0.31.1 / 2.3.1.1 | mod alone | panel, settings round trip, disable/enable, direct skip to dialogue, save, load written file | pass | 204707Z |
+| 0.32.4 / 2.3.6 | mod alone | same | pass | 205234Z |
+| 0.33.0 / 2.3.6 | mod alone | same | pass | 205800Z |
+| 0.31.1 / 2.3.1.1 | CMI + Bugfixes + mod | crafted item survives load in the same process; no skip | pass | 204917Z |
+| 0.31.1 / 2.3.1.1 | CMI + Bugfixes + mod | crafted item present after a new game process loads the save | pass | 205128Z |
+| 0.32.4 / 2.3.6 | CMI + Bugfixes + mod | same process; no skip | pass | 205443Z |
+| 0.32.4 / 2.3.6 | CMI + Bugfixes + mod | new game process | pass | 205655Z |
+| 0.33.0 / 2.3.6 | CMI + Bugfixes + mod | same process; no skip | pass | 210008Z |
+| 0.33.0 / 2.3.6 | CMI + Bugfixes + mod | new game process | pass | 210219Z |
+| 0.31.1 / 2.3.1.1 | CMI + Bugfixes + mod | real-Enter skip of the first StartGame cinematic, state vs same-mods normal run | pass, MATCH | 203241Z vs 210702Z |
+| 0.32.4 / 2.3.6 | CMI + Bugfixes + mod | same | pass, MATCH | 203550Z vs 210815Z |
+| 0.33.0 / 2.3.6 | CMI + Bugfixes + mod | same | pass, MATCH | 203858Z vs 210927Z |
+| 0.33.0 / 2.3.6 | owner's 16 mods + mod | direct skips, prologue chain, save (ZIP `ec60d96a…`) | pass | 170038Z |
+| 0.33.0 / 2.3.6 | owner's 16 mods + mod | direct skips, night attack (ZIP `ec60d96a…`) | pass, state MATCH | 171137Z |
+| 0.33.0 / 2.3.6 | owner's 16 mods + mod | real-Enter night attack | pass, state MATCH | 202541Z |
 | synthetic 0.32.3 / 2.3.5 | CMI + Bugfixes, mod absent | CMI load | **reproduced failure** | 153823Z |
-| 0.31.1, 0.32.4, 0.33.0 | CMI + Bugfixes + mod | real-Enter skip | **blocked, not run** | see `VALIDATION.md` |
 | 0.27.10, published 0.32.0-0.32.3 | any | any | **untested** | - |
+
+Earlier runs, whose same-process "save, reload" step did not prove persistence (`VALIDATION.md`, "Correction"). What they
+still show is that the components loaded and the panel, settings file, toggle and direct skip ran:
+
+| Loader / Harmony | Profile | Run |
+|---|---|---|
+| 0.31.1, 0.32.4, 0.33.0 | mod alone | 155655Z, 155903Z, 160110Z |
+| 0.27.12 / 2.3.1.1 | mod alone, `ManagerVersion` override, not a supported target | 160525Z |
+| synthetic 0.32.3 / 2.3.5 | mod alone | 160318Z |
+| 0.31.1, 0.32.4, 0.33.0 | CMI + Bugfixes, mod absent (CMI and Bugfixes loaded and crafted; persistence not rerun) | 151727Z, 152949Z, 153406Z |
+| 0.31.1, 0.32.4, 0.33.0 | CMI + Bugfixes + mod, no skip | 151939Z, 153157Z, 153614Z |
+
+A character in the CMI + Bugfixes runs carries a `GlitterdustBlindnessBuff` in the fixture before any skip. It is present
+on both sides of a matched comparison and absent without those mods, so it comes from the mod set and not from skipping.
 
 A log line from Kingmaker Bugfixes about deserializing `SaveInfo` appears in every run, including those without this mod.
 

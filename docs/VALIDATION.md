@@ -2,17 +2,21 @@
 
 ## Candidate 0.1.2 (UMM compatibility and cinematic safety)
 
-Status: **partial.** Compatibility, story-fidelity, cancellation and reload rows are done. Most real-key rows are blocked
-(below); none of them is claimed.
+Status: **the listed checks are complete; not yet accepted by the owner.** A `MATCH` below means the compared fields
+matched for the named sequences. It is not a claim about other scenes; see "Not covered".
 
 | Item | Value |
 |---|---|
 | `KingmakerCutsceneSkip.dll` SHA-256 | `a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba` (deterministic) |
-| Final `KingmakerCutsceneSkip-0.1.2.zip` SHA-256 | `13321f927be2e32a971cb839627452b6fa88b24b1293f335fd36cec6c488e8c2`, built and packaged at `81195f9` |
-| ZIP used for the native runs | `ec60d96aa956b4d362c087e95f0d5ab8d557a1a6f7d7b0065dca36d35160e24d`, built at `69fefdb`. Same DLL and `Info.json`; only `README.md` differs |
+| Final `KingmakerCutsceneSkip-0.1.2.zip` SHA-256 | `c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`, built and packaged at `8fb95da` |
+| Earlier ZIPs | `ec60d96a…` (built at `69fefdb`, used for the story-state rows and the original loader matrix) and `13321f92…`. Same DLL and `Info.json`; only `README.md` differs |
 | Change from 0.1.1 | version strings, `ManagerVersion` 0.31.1, pinned build references. No behaviour change: `git diff a7ecb13 -- src` touches only the project references and version strings |
-| Unit tests / comparator | 48/48; 12/12 |
+| Unit tests / provenance tests / comparator | 55/55; 11/11; 12/12 |
 | Environment | machine DATA, Kingmaker 2.1.7b build 6757524, disposable full game copy (`-GameCopy`), runs 2026-11-08 (ids below are `20261108T…`) |
+
+Every real-key, negative-control, smoke and persistence row below ran on the final ZIP, with a clean tree at the harness
+commit in its `host-summary.json`, except the Escape-menu run 174739Z, which used `ec60d96a…` (same DLL). Run 202141Z
+repeated Escape cancel while advancing on the final ZIP. Later commits change only the harness, scenarios and documentation.
 
 Loader and coexistence matrix: `COMPATIBILITY.md`.
 
@@ -25,7 +29,10 @@ Loader and coexistence matrix: `COMPATIBILITY.md`.
 | Normal, mod absent vs present | 160733Z / 160846Z (StartGame); 161227Z / 161429Z (chain) | MATCH; game time -0.04 s, +0.01 s |
 | Normal vs completed skip, direct | 160846Z / 161118Z (StartGame); 161429Z / 161632Z (3-segment chain) | MATCH; +0.56 s, +0.88 s |
 | Same on UMM 0.31.1 | 165511Z / 165714Z (chain) | MATCH; +1.29 s |
-| Normal vs real-Enter skip | 160846Z / 180653Z | MATCH; +0.58 s; `MageArmorBuff` -0.55 s, the game-time difference |
+| Normal vs real-Enter skip | 160846Z / 180653Z; final ZIP 195903Z | MATCH; +0.58 s both; `MageArmorBuff` -0.55 s, the game-time difference |
+| Normal vs real-Enter chain (3 skips) | 161429Z / 201437Z; pressed one frame after each episode is seen 210512Z | MATCH at free control; +1.01 s, +1.20 s |
+| Normal vs real-Enter night attack | 170838Z and 171011Z / 202541Z (owner mods) | MATCH; -0.05 s, -0.08 s; second skip ended `ControlReturned` |
+| Normal vs real-Enter skip with Craft Magic Items and Bugfixes, same mods and loader on both sides | 0.31.1 210702Z / 203241Z; 0.32.4 210815Z / 203550Z; 0.33.0 210927Z / 203858Z | MATCH; +0.37 s, +0.48 s, +0.45 s |
 | Normal vs skip cancelled while advancing, direct | 161429Z / 161813Z | MATCH at free control; -0.18 s |
 | Normal vs skip cancelled during fade-out, direct | 161429Z / 171301Z | MATCH at free control; -0.19 s; 0 s advanced |
 | Normal vs normal control, night attack | 170838Z / 171011Z (owner mods) | MATCH; +0.03 s |
@@ -46,25 +53,53 @@ mod's fade finishes in a frame and the fade-cancel step missed it (162010Z, 1750
 
 | Case | Run | Result |
 |---|---|---|
-| Enter starts exactly one skip, stops at dialogue, no answer chosen | 180653Z | pass, operation 1 `InteractionBoundary`, state MATCH |
+| Enter starts exactly one skip, stops at dialogue, no answer chosen | 195903Z | pass, operation 1 `InteractionBoundary`, state MATCH |
 | Escape while advancing cancels; no menu; a fresh Escape opens the native menu and the next closes it; no further skip | 174739Z | pass, operation 1 `Cancelled`, state MATCH vs 164839Z |
-| Escape during the reveal | 175256Z | mod does not claim the key; `EscMenuWindow` refuses while a loading screen is active, so the mode stayed Dialog and nothing changed. The scenario expected the menu and failed; expectation corrected, corrected scenario not re-run |
+| Escape during fade-out | 200211Z | pass, operation 1 `Cancelled` after 0.13 s, before full black |
+| Escape during the reveal | 200517Z | pass, operation 1 `InteractionBoundary`; the key is not claimed and `EscMenuWindow` refuses while a loading screen is active, so no menu opens; a fresh Escape then opens the native menu and the next closes it; no new skip |
+| Keypad Enter, held and repeated Enter | 200824Z | pass, one operation only, `InteractionBoundary` |
+| Enter and Escape outside cinematics | 201133Z | pass, no operation |
+| Enter in exploration with the mod absent | 204206Z | pass, no operation |
+| Key-started chain | 201437Z | pass, three operations, each `InteractionBoundary`, state MATCH |
+| Key-started chain, pressed as soon as each episode can receive a key | 210512Z | pass, three presses, three operations, state MATCH |
+| Held Enter across a boundary, Escape cancel, injected fault mid-skip, then autoplay, Enter in exploration, save | 202141Z | pass, operations `InteractionBoundary`, `Cancelled`, `Error`; no skip from the exploration Enter |
+| Night attack | 202541Z | pass, `InteractionBoundary` then `ControlReturned` at the combat auto-pause, state MATCH |
+| Disable mid-skip, re-enable, load a save mid-skip | 202909Z | pass, `Disabled` then `Loading`; Enter while disabled and after the load started nothing |
+| Enter skip with Craft Magic Items and Bugfixes on 0.31.1, 0.32.4, 0.33.0 | 203241Z, 203550Z, 203858Z | pass, one operation `InteractionBoundary`, state MATCH (above) |
 
-**Blocked, not passed.** From about 17:56Z the game window was intermittently not in the foreground (cause not determined),
-and at 18:36Z the owner was connected and active, so further runs were stopped rather than forced. Each needs an idle,
-unlocked session on the packaged candidate:
+Failed and corrected: 201803Z pressed Enter at the first sight of every episode and reported four presses but three
+operations. `Tutorial_1_cutscene` holds Cutscene mode for a single frame in every chain run, including normal ones. A real
+key arrives at least a frame after it is sent, so that press landed after the mode had ended and correctly started nothing.
+A direct request can land in that frame (034236Z), which is why this was not seen before. The scenario now presses on the
+next frame, so a one-frame episode gets no press. The rule that each press starts exactly one operation is unchanged.
 
-* `input-escape-fade` (scenario corrected, not re-run), `input-escape-reveal` (corrected), `input-keypad-held-repeat`,
-  `input-outside-cinematics` (fixture corrected; 175745Z used a save the profile could not load)
-* `prologue-chain-skip`, `prologue-chain-skip-immediate`, `chain-lifecycle` (held Enter across a boundary, Escape, fault mid-skip)
-* `firstroom-skip`, `firstroom-lifecycle` (`-ModProfile owner`; disable and save-load during a skip, combat handoff)
-* `startgame-skip-enter` with Craft Magic Items and Bugfixes on 0.31.1, 0.32.4 and 0.33.0
-* `reload-without-mod -NoProduct` (Enter in exploration with the mod absent)
-* Any re-smoke of the final ZIP. It differs from the tested ZIP only in `README.md`.
+Runs 175640Z, 181200Z, 181403Z, 181604Z, 181711Z, 181844Z, 182012Z, 182236Z, 182343Z failed with the harness refusing to
+send keys to a window that was not foreground. They are not evidence in either direction.
 
-Runs 175640Z, 181200Z, 181403Z, 181604Z, 181711Z, 181844Z, 182012Z, 182236Z, 182343Z failed with the harness refusing
-to send keys to a window that was not foreground. They are not evidence in either direction. Key handling is unchanged
-since 0.1.1, so the earlier real-key results below remain relevant but are not re-verified here.
+### Verifier controls
+
+`verifier-negative-controls` (204440Z) passes only if each injected fault makes its check fail:
+
+* A render fault injected into the settings view is caught through the product's own exception logging ("settings GUI
+  failed"). `Main.OnGui` keeps its exception handling.
+* A suppressed load request reports "load did not begin within 15s" with `began` false, not a successful reload.
+* The real load in the same run ends `Complete` with the player state replaced.
+
+The panel check now needs repaints that logged no failure (45-47 repaints on 0.31.1, 0.32.4 and 0.33.0) and a settings
+round trip: `MuteAudioWhileSkipping` flipped, saved, read back, flipped again, read back and restored.
+
+### Correction: earlier same-process reloads did not prove persistence
+
+`loadLastSave` originally passed the object returned by `CreateNewSave`, which is not marked as saved. `SaveManager.LoadRoutine`
+silently ignores such an object while the rest of the area reload still runs, so the area reloaded and the running player
+state stayed in place. The check could not tell the difference. Those runs did not prove that anything survived a save.
+The review's negative test exposed this ("loading ran but the player state was not replaced", 194206Z to 195516Z).
+
+`loadLastSave` now loads the file the game wrote, adds a 1234-money marker first, and requires the player state object to
+be replaced and the money to return to its saved value. This affects the "save, reload" part of the smokes and the CMI
+"kept through save and reload" rows from before commit `b2bbded`. They are superseded by 204707Z, 205234Z, 205800Z (smokes)
+and 204917Z, 205443Z, 210008Z (CMI), each `Complete` with the player state replaced. Reloads with the mod removed start a
+new process and load from disk, so they were never affected.
 
 ### Not covered
 
@@ -72,6 +107,8 @@ since 0.1.1, so the earlier real-key results below remain relevant but are not r
   were not reached. The chain covers unit movement, parallel tracks and waits, animations and dialogue starts; the night
   attack covers a scene that starts during an area transition.
 * Combat handoff with auto-pause turned off was not separately run.
+* The Craft Magic Items and Bugfixes skip covers the first StartGame cinematic. The crafting check and the skip check are
+  separate runs; no skip was performed in the crafting scenario.
 * Later content: `Auto_1076/1077/1079/1080` (DLC dungeon) and `Auto_1082` load into exploration with no cinematic, so they
   add no coverage (171715Z-172144Z). `Auto_1116` fails with `LoadGameException` under the owner's current mod set
   (172250Z); the cause was not investigated and it is not attributed to this mod. The save is preserved unchanged.
@@ -79,8 +116,11 @@ since 0.1.1, so the earlier real-key results below remain relevant but are not r
 
 ### Owner environment
 
-Every run above reports the owner's installation and 95 saves unchanged and its copy restored. Runs execute only in the
-disposable copy; the candidate and harness were never installed in the owner's game.
+Every run above reports the owner's installation and 95 saves unchanged and its copy restored (99 runs since 15:00Z, no
+integrity problems). Runs execute only in the disposable copy; the candidate and harness were never installed in the
+owner's game. After the last run there are 95 saves, 16 mods with no candidate or harness, and no recovery journal. Settings and
+log files in the owner's installation were written at 18:33-18:35Z and 19:39-19:41Z. No run of this work was active then: both
+fall inside windows this work held open for another Kingmaker session on this machine.
 
 ## Release 0.1.1
 
@@ -209,5 +249,5 @@ run: `scripts\runtime\Invoke-NativeRun.ps1 -RecoverOnly`.
 
 ## Resume point
 
-Run the blocked real-key rows under "Candidate 0.1.2" on the packaged candidate in an idle, unlocked session and record
-them here; then the owner's manual test list in the PR. `Auto_1120` scenarios need `-ModProfile owner`.
+Candidate 0.1.2 awaits the owner's review and manual checks in the PR. Merge, release, Nexus upload and replies are the
+owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.

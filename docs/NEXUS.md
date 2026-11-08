@@ -19,8 +19,8 @@ If your newer Unity Mod Manager already works with your other mods, there is no 
 
 **What has been tested.** Identical saves were played normally and with skips through the prologue and the opening of the
 night attack, and skip cancellation was compared in the prologue. Quests, flags, inventory, party and NPC state matched.
-Craft Magic Items and Kingmaker Bugfixes were checked while installed alongside it; skipping with those two mods has not
-been tested separately.
+Craft Magic Items and Kingmaker Bugfixes were checked alongside it on all three versions, including a skip of the first
+prologue cinematic.
 
 **Limitations.**
 * Other cinematics use the same engine paths but were not individually tested, so a problem in a later scene cannot be
@@ -40,15 +40,15 @@ scene, and what you did.
 
 ## Proposed replies
 
-Drafted against the current test state. Update them if the blocked real-key rows in `VALIDATION.md` are completed first.
+Drafted against the test state in `VALIDATION.md`. None has been posted.
 
 ### Compatibility request
 
 > Thanks for the request. The next version (0.1.2) lowers the minimum to Unity Mod Manager 0.31.1. I tested it on 0.31.1,
 > 0.32.4 and 0.33.0, using loaders assembled from the upstream UMM and Harmony components rather than the original Nexus
-> installers. On each it ran alongside Craft Magic Items and Kingmaker Bugfixes, with an item crafted and kept through a
-> save and reload, though that check didn't include skipping a scene. I couldn't get hold of 0.27.10, so I'm not claiming
-> anything older than 0.31.1.
+> installers. On each it ran alongside Craft Magic Items and Kingmaker Bugfixes: a crafted item survived saving and
+> reloading, and skipping the first prologue cutscene with both mods installed matched a normal playthrough. I couldn't
+> get hold of 0.27.10, so I'm not claiming anything older than 0.31.1.
 >
 > On the 0.32+ reports: Harmony 2.3.5 did break Craft Magic Items in a test setup, and Harmony 2.3.6, used by UMM 0.32.4,
 > has the fix, so it doesn't apply to all of 0.32+. I couldn't test the original 0.32.0-0.32.3 downloads. If your UMM
