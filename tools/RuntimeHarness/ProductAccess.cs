@@ -78,7 +78,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private static JObject LastReportJsonCore()
         {
             SkipOperationReport report = ControllerCore()?.LastReport;
-            return report == null ? null : JObject.FromObject(report);
+            return report == null ? null : JObject.FromObject(report, new Newtonsoft.Json.JsonSerializer());
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -98,7 +98,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         {
             CutsceneSkipController controller = ControllerCore();
             if (controller == null || ReferenceEquals(controller, subscribedController)) return;
-            controller.OperationEnded += report => onReport(JObject.FromObject(report));
+            controller.OperationEnded += report => onReport(JObject.FromObject(report, new Newtonsoft.Json.JsonSerializer()));
             subscribedController = controller;
         }
 

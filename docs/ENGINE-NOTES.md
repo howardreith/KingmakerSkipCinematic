@@ -94,9 +94,9 @@ fixed without changing semantics:
    completes the just-queued path immediately. Same path, no latency.
 
 Remaining measured difference: animation completion is evaluated once per rendered frame (Unity drives
-`AnimationManager` with `Time.deltaTime`), so skipped scenes consume slightly more game time than normal playback:
-−0.1 s to +0.9 s per sequence in the validated scenes (≈ +3 % on a 26 s chain). Story state is identical. Substepping
-Unity's animation graph was judged too invasive for this bounded effect.
+`AnimationManager` with `Time.deltaTime`), so a skipped segment consumes ~0.2–1.1 s more game time than normal playback
+(prologue chain of three segments: 32.1 s vs 28.9 s; night attack: 8.6 s vs 8.0 s). Story state is identical.
+Substepping Unity's animation graph was judged too invasive for this bounded effect.
 
 ## Overrides and ownership
 
