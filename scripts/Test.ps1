@@ -4,12 +4,13 @@ param([ValidateSet('Debug', 'Release')][string] $Configuration = 'Release')
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $root = Get-RepositoryRoot
 $paths = Get-KingmakerConfiguration
+$pinned = Initialize-PinnedReferences
 Invoke-MSBuildChecked (Join-Path $root 'tests\KingmakerCutsceneSkip.Tests\KingmakerCutsceneSkip.Tests.csproj') $Configuration
 $runner = Join-Path $root "artifacts\tests\$Configuration\KingmakerCutsceneSkip.Tests.exe"
 Assert-FileExists $runner 'Test runner'
 $prior = $env:KMCS_TEST_REFERENCE_DIRS
 try {
-    $env:KMCS_TEST_REFERENCE_DIRS = @($paths.UnityModManagerDir, $paths.ManagedDir) -join [IO.Path]::PathSeparator
+    $env:KMCS_TEST_REFERENCE_DIRS = @($pinned, $paths.UnityModManagerDir, $paths.ManagedDir) -join [IO.Path]::PathSeparator
     $output = & $runner 2>&1
     $exitCode = $LASTEXITCODE
 }

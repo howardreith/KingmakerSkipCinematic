@@ -37,6 +37,80 @@ function Get-Sha256([string] $Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+# Loader assemblies the product compiles against. They are pinned to the oldest supported loader so that updating UMM on
+# the build machine cannot silently change the build contract. Fetched from upstream, verified by SHA-256 and cached in
+# artifacts\references (never committed or packaged).
+$script:PinnedReferences = @(
+    [pscustomobject]@{
+        Name = 'UnityModManager'; File = 'UnityModManager.dll'; Version = '0.31.1'
+        Url = 'https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.31.1/unitymodmanager.0.31.1.nupkg'
+        ArchiveSha256 = '05a82b66bc44d56d1246f146d16e9fa8f9a42c450c5bc334bcfa9efddbdb53c9'
+        ArchiveEntry = 'lib/net35/UnityModManager.dll'
+        Sha256 = '2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4'
+    },
+    [pscustomobject]@{
+        Name = '0Harmony12'; File = '0Harmony12.dll'; Version = '1.2.0.1'
+        Url = 'https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/Harmony/1.2/0Harmony12.dll'
+        ArchiveSha256 = $null
+        ArchiveEntry = $null
+        Sha256 = 'aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292'
+    })
+
+function Get-PinnedReferenceDirectory { return (Join-Path $script:RepositoryRoot 'artifacts\references') }
+
+# Ensures every pinned loader reference is present and byte-exact; a hash mismatch fails the build.
+function Initialize-PinnedReferences {
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $directory = Get-PinnedReferenceDirectory
+    [IO.Directory]::CreateDirectory($directory) | Out-Null
+    foreach ($reference in $script:PinnedReferences) {
+        $target = Join-Path $directory $reference.File
+        if ((Test-Path -LiteralPath $target) -and (Get-Sha256 $target) -eq $reference.Sha256) { continue }
+        $download = Join-Path $directory ($reference.Name + '.download')
+        Invoke-WebRequest -Uri $reference.Url -OutFile $download -UseBasicParsing
+        try {
+            if ($reference.ArchiveEntry) {
+                if ((Get-Sha256 $download) -ne $reference.ArchiveSha256) { throw "Archive hash mismatch for $($reference.Url)" }
+                $archive = [IO.Compression.ZipFile]::OpenRead($download)
+                try { [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry($reference.ArchiveEntry), $target, $true) }
+                finally { $archive.Dispose() }
+            }
+            else { Copy-Item -LiteralPath $download -Destination $target -Force }
+        }
+        finally { Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue }
+        if ((Get-Sha256 $target) -ne $reference.Sha256) {
+            Remove-Item -LiteralPath $target -Force
+            throw "Pinned reference $($reference.File) does not match its expected SHA-256."
+        }
+    }
+    return $directory
+}
+
+function Get-AssemblyIdentity([string] $Path, [string] $Role) {
+    return [ordered]@{
+        role = $Role
+        file = [IO.Path]::GetFileName($Path)
+        assembly_version = [Reflection.AssemblyName]::GetAssemblyName($Path).Version.ToString()
+        sha256 = Get-Sha256 $Path
+    }
+}
+
+# Identity of every assembly the product compiles against, for the build receipt.
+function Get-BuildReferenceIdentities($Game) {
+    $identities = @()
+    $pinnedDirectory = Get-PinnedReferenceDirectory
+    foreach ($reference in $script:PinnedReferences) {
+        $identity = Get-AssemblyIdentity (Join-Path $pinnedDirectory $reference.File) 'pinned loader reference'
+        $identity.source = $reference.Url
+        $identities += $identity
+    }
+    foreach ($name in @('Assembly-CSharp.dll', 'Assembly-CSharp-firstpass.dll', 'UnityEngine.dll', 'UnityEngine.CoreModule.dll', 'UnityEngine.IMGUIModule.dll')) {
+        $identities += Get-AssemblyIdentity (Join-Path $Game.ManagedDir $name) 'local game reference'
+    }
+    return $identities
+}
+
 function Invoke-MSBuildChecked([string] $Project, [string] $Configuration) {
     $arguments = @($Project, '/nologo', '/m', '/t:Rebuild', "/p:Configuration=$Configuration", '/p:Platform=AnyCPU')
     $output = & dotnet msbuild @arguments 2>&1

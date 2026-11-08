@@ -4,7 +4,8 @@ param([ValidateSet('Debug', 'Release')][string] $Configuration = 'Release')
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $root = Get-RepositoryRoot
 Assert-RepositoryHygiene
-Get-KingmakerConfiguration | Out-Null
+$game = Get-KingmakerConfiguration
+Initialize-PinnedReferences | Out-Null
 Invoke-MSBuildChecked (Join-Path $root 'src\KingmakerCutsceneSkip\KingmakerCutsceneSkip.csproj') $Configuration
 $dll = Join-Path $root "artifacts\bin\$Configuration\KingmakerCutsceneSkip\KingmakerCutsceneSkip.dll"
 Assert-FileExists $dll 'Built mod DLL'
@@ -20,6 +21,7 @@ $result = [ordered]@{
     product_input_changes = $productChanges
     dll = $dll
     dll_sha256 = Get-Sha256 $dll
+    references = @(Get-BuildReferenceIdentities $game)
     built_utc = (Get-Date).ToUniversalTime().ToString('o')
 }
 if ($result.product_inputs_dirty) { Write-Warning ('Built with uncommitted product changes; Package.ps1 will refuse this DLL: ' + ($productChanges -join '; ')) }

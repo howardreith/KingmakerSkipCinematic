@@ -14,19 +14,20 @@
     <ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch>true</ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch>
     <OutputPath>..\..\artifacts\bin\$(Configuration)\KingmakerCutsceneSkip\</OutputPath>
     <IntermediateOutputPath>..\..\artifacts\obj\$(Configuration)\KingmakerCutsceneSkip\</IntermediateOutputPath>
+    <PinnedReferenceDir>$(MSBuildThisFileDirectory)..\..\artifacts\references</PinnedReferenceDir>
   </PropertyGroup>
   <Target Name="RequireLocalGamePaths" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(KingmakerManagedDir)\Assembly-CSharp.dll')" Text="GamePath.props must point to the Kingmaker 2.1.7b Managed directory." />
-    <Error Condition="!Exists('$(UnityModManagerDir)\UnityModManager.dll')" Text="UnityModManagerDir must contain UnityModManager.dll." />
-    <Error Condition="!Exists('$(UnityModManagerDir)\0Harmony12.dll')" Text="UnityModManagerDir must contain 0Harmony12.dll." />
+    <Error Condition="!Exists('$(PinnedReferenceDir)\UnityModManager.dll')" Text="Pinned UnityModManager.dll is missing; build with scripts\Build.ps1." />
+    <Error Condition="!Exists('$(PinnedReferenceDir)\0Harmony12.dll')" Text="Pinned 0Harmony12.dll is missing; build with scripts\Build.ps1." />
   </Target>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="Assembly-CSharp"><HintPath>$(KingmakerManagedDir)\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(KingmakerManagedDir)\Assembly-CSharp-firstpass.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="0Harmony12"><HintPath>$(UnityModManagerDir)\0Harmony12.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="UnityModManager"><HintPath>$(UnityModManagerDir)\UnityModManager.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="0Harmony12"><HintPath>$(PinnedReferenceDir)\0Harmony12.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityModManager"><HintPath>$(PinnedReferenceDir)\UnityModManager.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(KingmakerManagedDir)\UnityEngine.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>False</Private></Reference>
