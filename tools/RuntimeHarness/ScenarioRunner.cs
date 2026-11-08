@@ -95,7 +95,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                     break;
                 case Stage.Settling:
-                    if (Now - stageStartedAt >= 1.0) Enter(Stage.Steps);
+                    if (Now - stageStartedAt >= 1.0)
+                    {
+                        recorder.WriteJson("runtime-assemblies.json", LoadedAssemblies());
+                        Enter(Stage.Steps);
+                    }
+
                     break;
                 case Stage.Steps:
                     TickSteps();
@@ -257,6 +262,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                         conditionMetAt = Now;
                         saveCompleted = false;
                         SaveInfo created = game.SaveManager.CreateNewSave(step.Label);
+                        lastSave = created;
                         recorder.Event("saveGame", created.FolderName);
                         result["savedGame"] = created.FolderName;
                         game.SaveGame(created, () => saveCompleted = true);
@@ -273,6 +279,58 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                 case "autoplayUntilControl":
                     return AutoplayUntilControl(game, step);
+
+                case "escMenu":
+                    // The call the native EscPressed key binding makes (API-driven: proves nothing about key delivery).
+                    game.UI.EscManager.OnEscPressed();
+                    recorder.Event("escMenu", game.CurrentMode.ToString());
+                    return StepStatus.Done;
+
+                case "cmiUpgrade":
+                    cmiGuid = CoexistenceOps.CraftMagicItemsUpgrade(step.Match, result);
+                    cmiEnchantmentName = step.Match;
+                    recorder.Event("cmiUpgrade", cmiGuid);
+                    return StepStatus.Done;
+
+                case "cmiVerify":
+                    if (cmiGuid == null) return Fail(true, "no custom item was crafted in this run");
+                    CoexistenceOps.CraftMagicItemsVerify(cmiGuid, Kingmaker.Blueprints.ResourcesLibrary.GetBlueprints<Kingmaker.Blueprints.Items.Ecnchantments.BlueprintWeaponEnchantment>()
+                        .First(candidate => candidate != null && candidate.name == cmiEnchantmentName).AssetGuid, result, step.Label ?? "cmiVerified");
+                    recorder.Event("cmiVerified", step.Label);
+                    return StepStatus.Done;
+
+                case "probeBlueprint":
+                    string probed = CoexistenceOps.ProbeBlueprint(step.Type, step.Match, step.Member);
+                    result["probe_" + (step.Label ?? step.Match)] = probed;
+                    recorder.Event("probeBlueprint", step.Match + "." + step.Member + "=" + probed);
+                    return Fail(step.Expect != null && !string.Equals(step.Expect, probed, StringComparison.OrdinalIgnoreCase),
+                        step.Match + "." + step.Member + " is " + probed + ", expected " + step.Expect);
+
+                case "ummPanel":
+                    if (panelProbe == null)
+                    {
+                        panelProbe = CoexistenceOps.BeginPanelCheck();
+                        return StepStatus.Running;
+                    }
+
+                    if (Now - stepStartedAt < (step.Seconds > 0 ? step.Seconds : 1.0)) return StepStatus.Running;
+                    result["ummPanel"] = CoexistenceOps.FinishPanelCheck(panelProbe);
+                    recorder.Event("ummPanel", result["ummPanel"]);
+                    panelProbe = null;
+                    return StepStatus.Done;
+
+                case "loadLastSave":
+                    if (double.IsNaN(conditionMetAt))
+                    {
+                        if (lastSave == null) return Fail(true, "no save was made in this run");
+                        conditionMetAt = Now;
+                        recorder.Event("loadLastSave", lastSave.FolderName);
+                        game.LoadGame(lastSave);
+                        return StepStatus.Running;
+                    }
+
+                    return Now - conditionMetAt > 1.0 && !LoadingProcess.Instance.IsLoadingInProcess && game.CurrentlyLoadedArea != null
+                        ? StepStatus.Done : StepStatus.Running;
 
                 case "toggleMod":
                     UnityModManager.FindMod(ProductAccess.ProductId).Active = step.Enabled;
@@ -538,6 +596,10 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         }
 
         private bool saveCompleted;
+        private SaveInfo lastSave;
+        private string cmiGuid;
+        private string cmiEnchantmentName;
+        private SettingsDrawProbe panelProbe;
         private string pendingKeyUp;
         private double pendingKeyUpAt;
         private double cinematicSince = double.NaN;
@@ -627,6 +689,40 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             return Game.Instance.State.Cutscenes.ToList().Any(player =>
                 player != null && !player.IsFinished && !player.Destroyed && player.Exclusive && !player.Paused &&
                 (string.IsNullOrEmpty(match) || (player.Cutscene != null && player.Cutscene.name.IndexOf(match, StringComparison.OrdinalIgnoreCase) >= 0)));
+        }
+
+        /// <summary>The loader, Harmony and mod assemblies actually loaded in this process, not what an installer reports.</summary>
+        private static JArray LoadedAssemblies()
+        {
+            JArray list = new JArray();
+            foreach (System.Reflection.Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                string name = assembly.GetName().Name;
+                if (name.StartsWith("System", StringComparison.Ordinal) || name.StartsWith("UnityEngine", StringComparison.Ordinal) ||
+                    name.StartsWith("Mono.", StringComparison.Ordinal) || name == "mscorlib" || name.StartsWith("Assembly-", StringComparison.Ordinal)) continue;
+                string location = string.Empty;
+                try { location = assembly.Location; } catch (Exception) { }
+                string hash = string.Empty;
+                if (!string.IsNullOrEmpty(location) && File.Exists(location))
+                {
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                    using (FileStream stream = File.OpenRead(location))
+                    {
+                        hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
+                    }
+                }
+
+                list.Add(new JObject
+                {
+                    ["name"] = name,
+                    ["version"] = assembly.GetName().Version.ToString(),
+                    ["mvid"] = assembly.ManifestModule.ModuleVersionId.ToString(),
+                    ["location"] = location,
+                    ["sha256"] = hash
+                });
+            }
+
+            return list;
         }
 
         private void WriteSnapshot(string label)

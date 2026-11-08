@@ -41,6 +41,15 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         [JsonProperty("enabled")] public bool Enabled;
         [JsonProperty("save")] public string Save;
 
+        /// <summary>probeBlueprint: blueprint class short name.</summary>
+        [JsonProperty("type")] public string Type;
+
+        /// <summary>probeBlueprint: property or field to read.</summary>
+        [JsonProperty("member")] public string Member;
+
+        /// <summary>probeBlueprint: required value; omitted to record only (control runs).</summary>
+        [JsonProperty("expect")] public string Expect;
+
         /// <summary>autoplayUntilControl: press the key this many seconds into each cinematic episode (-1 = never).</summary>
         [JsonProperty("skipAfterSeconds")] public double SkipAfterSeconds = -1;
 

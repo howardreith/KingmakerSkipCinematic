@@ -1,0 +1,226 @@
+{
+  "description": "Loader file sets for the disposable game copy. Every file comes from an upstream component and is verified by SHA-256. These are component-assembled clean DoorstopProxy installs, not the Nexus ZIP.",
+  "doorstopConfig": "[General]\r\nenabled = true\r\ntarget_assembly = Kingmaker_Data\\Managed\\UnityModManager\\UnityModManager.dll",
+  "profiles": {
+    "umm-0.27.12": {
+      "note": "Nearest upstream build to 0.27.10, which is not available from NuGet or the UMM repository.",
+      "ummVersion": "0.27.12",
+      "harmonyVersion": "2.3.1.1",
+      "ummCommit": "ed8c02d3df49d7641b16b7603a01c3cba511a9b6",
+      "files": {
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.27.12/unitymodmanager.0.27.12.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.dll",
+          "archiveSha256": "a033d2b8ddb30a026b6377854964963058df65de347a09ee947bd80f492cff80",
+          "sha256": "05c6104c1dcddfac95813eabf126d6b30a6d6be256793e785c956dea08f923cf"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.xml": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.27.12/unitymodmanager.0.27.12.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.xml",
+          "archiveSha256": "a033d2b8ddb30a026b6377854964963058df65de347a09ee947bd80f492cff80",
+          "sha256": "bb5d2a7ba6403a84d3b3f26500fcf2b022cf756eee0fec056989e525d4a0f36d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/lib.harmony/2.3.1.1/lib.harmony.2.3.1.1.nupkg",
+          "archiveEntry": "lib/net48/0Harmony.dll",
+          "archiveSha256": "b9096d3e2191ca18b803e2894511a2ee4ec6c92050e53853b46ebfeed46798aa",
+          "sha256": "5f7ad0df1eb08e81f66d4006d3a9e5cb40fc05e381f36d7bd0513f334f6a251f"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony12.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/ed8c02d3df49d7641b16b7603a01c3cba511a9b6/lib/Harmony/1.2/0Harmony12.dll",
+          "sha256": "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony-1.2.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/ed8c02d3df49d7641b16b7603a01c3cba511a9b6/lib/Harmony/1.2/0Harmony-1.2.dll",
+          "sha256": "e6bf807993cace95c4c45d126fe2f85a10346bec4f3ee589cb7e63138072312d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/dnlib.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/dnlib/3.1.0/dnlib.3.1.0.nupkg",
+          "archiveEntry": "lib/net35/dnlib.dll",
+          "archiveSha256": "9ea763c9d9c8ce1346f0ac5d9c9e371cc19c4fe411044a07e5c3293e4dfe9a60",
+          "sha256": "54c7968cfbdda0e9fddfa0f844d2dbef3bb3a5a4d2d7462d5413eac3fd0614ca"
+        },
+        "winhttp.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/ed8c02d3df49d7641b16b7603a01c3cba511a9b6/lib/winhttp_x64.dll",
+          "sha256": "7e90398dd7154b41f76e0524aedb795a7bcbe2ed9a14e4ceee214235aa04e442"
+        }
+      }
+    },
+    "umm-0.31.1": {
+      "note": "Primary compatibility target.",
+      "ummVersion": "0.31.1",
+      "harmonyVersion": "2.3.1.1",
+      "ummCommit": "10cfb1cce51914a5114928c5bc6a06d1d2c31fe2",
+      "files": {
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.31.1/unitymodmanager.0.31.1.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.dll",
+          "archiveSha256": "05a82b66bc44d56d1246f146d16e9fa8f9a42c450c5bc334bcfa9efddbdb53c9",
+          "sha256": "2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.xml": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.31.1/unitymodmanager.0.31.1.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.xml",
+          "archiveSha256": "05a82b66bc44d56d1246f146d16e9fa8f9a42c450c5bc334bcfa9efddbdb53c9",
+          "sha256": "ba4af8d434406d027ff8c4b6abce6898a0dba2f86b668bd242471880e3545d16"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/lib.harmony/2.3.1.1/lib.harmony.2.3.1.1.nupkg",
+          "archiveEntry": "lib/net48/0Harmony.dll",
+          "archiveSha256": "b9096d3e2191ca18b803e2894511a2ee4ec6c92050e53853b46ebfeed46798aa",
+          "sha256": "5f7ad0df1eb08e81f66d4006d3a9e5cb40fc05e381f36d7bd0513f334f6a251f"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony12.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/Harmony/1.2/0Harmony12.dll",
+          "sha256": "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony-1.2.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/Harmony/1.2/0Harmony-1.2.dll",
+          "sha256": "e6bf807993cace95c4c45d126fe2f85a10346bec4f3ee589cb7e63138072312d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/dnlib.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/dnlib/3.1.0/dnlib.3.1.0.nupkg",
+          "archiveEntry": "lib/net35/dnlib.dll",
+          "archiveSha256": "9ea763c9d9c8ce1346f0ac5d9c9e371cc19c4fe411044a07e5c3293e4dfe9a60",
+          "sha256": "54c7968cfbdda0e9fddfa0f844d2dbef3bb3a5a4d2d7462d5413eac3fd0614ca"
+        },
+        "winhttp.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/winhttp_x64.dll",
+          "sha256": "7e90398dd7154b41f76e0524aedb795a7bcbe2ed9a14e4ceee214235aa04e442"
+        }
+      }
+    },
+    "umm-0.32.3": {
+      "note": "Harmony version as pinned by UMM's 0.32.3 project file.",
+      "ummVersion": "0.32.3",
+      "harmonyVersion": "2.3.1.1",
+      "ummCommit": "234caf18472e15958c3aa683067f0b556ea1b6d8",
+      "files": {
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.32.3/unitymodmanager.0.32.3.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.dll",
+          "archiveSha256": "81877a9a9660b92f7ac82750aaab62b52b0a648469469a8da73da3011ad635ed",
+          "sha256": "d364070055161be50b78a60d3d7c16e80f1a9c514231665ad03286f190a6145d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.xml": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.32.3/unitymodmanager.0.32.3.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.xml",
+          "archiveSha256": "81877a9a9660b92f7ac82750aaab62b52b0a648469469a8da73da3011ad635ed",
+          "sha256": "17f3935444d3fa6d95f3754c522062a8a510bbf5682a659c35e1e0c2248c7ba8"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/lib.harmony/2.3.1.1/lib.harmony.2.3.1.1.nupkg",
+          "archiveEntry": "lib/net48/0Harmony.dll",
+          "archiveSha256": "b9096d3e2191ca18b803e2894511a2ee4ec6c92050e53853b46ebfeed46798aa",
+          "sha256": "5f7ad0df1eb08e81f66d4006d3a9e5cb40fc05e381f36d7bd0513f334f6a251f"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony12.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/234caf18472e15958c3aa683067f0b556ea1b6d8/lib/Harmony/1.2/0Harmony12.dll",
+          "sha256": "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony-1.2.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/234caf18472e15958c3aa683067f0b556ea1b6d8/lib/Harmony/1.2/0Harmony-1.2.dll",
+          "sha256": "e6bf807993cace95c4c45d126fe2f85a10346bec4f3ee589cb7e63138072312d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/dnlib.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/dnlib/3.1.0/dnlib.3.1.0.nupkg",
+          "archiveEntry": "lib/net35/dnlib.dll",
+          "archiveSha256": "9ea763c9d9c8ce1346f0ac5d9c9e371cc19c4fe411044a07e5c3293e4dfe9a60",
+          "sha256": "54c7968cfbdda0e9fddfa0f844d2dbef3bb3a5a4d2d7462d5413eac3fd0614ca"
+        },
+        "winhttp.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/234caf18472e15958c3aa683067f0b556ea1b6d8/lib/winhttp_x64.dll",
+          "sha256": "7e90398dd7154b41f76e0524aedb795a7bcbe2ed9a14e4ceee214235aa04e442"
+        }
+      }
+    },
+    "umm-0.32.4": {
+      "note": "Post-fix comparison (Harmony 2.3.6).",
+      "ummVersion": "0.32.4",
+      "harmonyVersion": "2.3.6",
+      "ummCommit": "b566410fbce72db2bdb2eaf16293d9e1b50d516f",
+      "files": {
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.32.4/unitymodmanager.0.32.4.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.dll",
+          "archiveSha256": "a8438e921ca7b0e5805f5a31c196ae65c90f236543885bea0146457d082c9ec9",
+          "sha256": "1387468bc3af41c50fe51859a3bb7af4922891aa8f13a6187e7a348ceaabfd88"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.xml": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.32.4/unitymodmanager.0.32.4.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.xml",
+          "archiveSha256": "a8438e921ca7b0e5805f5a31c196ae65c90f236543885bea0146457d082c9ec9",
+          "sha256": "17f3935444d3fa6d95f3754c522062a8a510bbf5682a659c35e1e0c2248c7ba8"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/lib.harmony/2.3.6/lib.harmony.2.3.6.nupkg",
+          "archiveEntry": "lib/net48/0Harmony.dll",
+          "archiveSha256": "498f99c5ca97cfec0e6cb277d721c242071ea9d9f019312cf9eaf015762de075",
+          "sha256": "df043f05c6e43602fa8e8f38f52a3a2cf962aab7a65a9d85573ea25f01a63e80"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony12.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/b566410fbce72db2bdb2eaf16293d9e1b50d516f/lib/Harmony/1.2/0Harmony12.dll",
+          "sha256": "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony-1.2.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/b566410fbce72db2bdb2eaf16293d9e1b50d516f/lib/Harmony/1.2/0Harmony-1.2.dll",
+          "sha256": "e6bf807993cace95c4c45d126fe2f85a10346bec4f3ee589cb7e63138072312d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/dnlib.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/dnlib/3.1.0/dnlib.3.1.0.nupkg",
+          "archiveEntry": "lib/net35/dnlib.dll",
+          "archiveSha256": "9ea763c9d9c8ce1346f0ac5d9c9e371cc19c4fe411044a07e5c3293e4dfe9a60",
+          "sha256": "54c7968cfbdda0e9fddfa0f844d2dbef3bb3a5a4d2d7462d5413eac3fd0614ca"
+        },
+        "winhttp.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/b566410fbce72db2bdb2eaf16293d9e1b50d516f/lib/winhttp_x64.dll",
+          "sha256": "7e90398dd7154b41f76e0524aedb795a7bcbe2ed9a14e4ceee214235aa04e442"
+        }
+      }
+    },
+    "synthetic-umm-0.32.3-harmony-2.3.5": {
+      "note": "SYNTHETIC: UMM 0.32.3 with Harmony 2.3.5, to observe the 2.3.5 binary-compatibility issue. Not an upstream distribution.",
+      "ummVersion": "0.32.3",
+      "harmonyVersion": "2.3.5",
+      "ummCommit": "234caf18472e15958c3aa683067f0b556ea1b6d8",
+      "files": {
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.32.3/unitymodmanager.0.32.3.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.dll",
+          "archiveSha256": "81877a9a9660b92f7ac82750aaab62b52b0a648469469a8da73da3011ad635ed",
+          "sha256": "d364070055161be50b78a60d3d7c16e80f1a9c514231665ad03286f190a6145d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/UnityModManager.xml": {
+          "url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.32.3/unitymodmanager.0.32.3.nupkg",
+          "archiveEntry": "lib/net35/UnityModManager.xml",
+          "archiveSha256": "81877a9a9660b92f7ac82750aaab62b52b0a648469469a8da73da3011ad635ed",
+          "sha256": "17f3935444d3fa6d95f3754c522062a8a510bbf5682a659c35e1e0c2248c7ba8"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/lib.harmony/2.3.5/lib.harmony.2.3.5.nupkg",
+          "archiveEntry": "lib/net48/0Harmony.dll",
+          "archiveSha256": "1d669c75d69e604dedfa28bf0e2c546ae35e0945216a6e3877466d1f7fcfe050",
+          "sha256": "b5282b59bdb9c4f1e8a96526b102e9dd8d97f11517000117567c8b1e9b9f610c"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony12.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/234caf18472e15958c3aa683067f0b556ea1b6d8/lib/Harmony/1.2/0Harmony12.dll",
+          "sha256": "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/0Harmony-1.2.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/234caf18472e15958c3aa683067f0b556ea1b6d8/lib/Harmony/1.2/0Harmony-1.2.dll",
+          "sha256": "e6bf807993cace95c4c45d126fe2f85a10346bec4f3ee589cb7e63138072312d"
+        },
+        "Kingmaker_Data/Managed/UnityModManager/dnlib.dll": {
+          "url": "https://api.nuget.org/v3-flatcontainer/dnlib/3.1.0/dnlib.3.1.0.nupkg",
+          "archiveEntry": "lib/net35/dnlib.dll",
+          "archiveSha256": "9ea763c9d9c8ce1346f0ac5d9c9e371cc19c4fe411044a07e5c3293e4dfe9a60",
+          "sha256": "54c7968cfbdda0e9fddfa0f844d2dbef3bb3a5a4d2d7462d5413eac3fd0614ca"
+        },
+        "winhttp.dll": {
+          "url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/234caf18472e15958c3aa683067f0b556ea1b6d8/lib/winhttp_x64.dll",
+          "sha256": "7e90398dd7154b41f76e0524aedb795a7bcbe2ed9a14e4ceee214235aa04e442"
+        }
+      }
+    }
+  }
+}

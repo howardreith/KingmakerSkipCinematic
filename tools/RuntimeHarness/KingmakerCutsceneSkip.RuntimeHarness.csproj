@@ -24,6 +24,7 @@
     <Reference Include="UnityModManager"><HintPath>$(UnityModManagerDir)\UnityModManager.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(KingmakerManagedDir)\UnityEngine.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="UnityEngine.ScreenCaptureModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.ScreenCaptureModule.dll</HintPath><Private>False</Private></Reference>
   </ItemGroup>
   <ItemGroup>
