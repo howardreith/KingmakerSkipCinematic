@@ -7,9 +7,10 @@ Machine DATA (Windows 10 19045), Pathfinder: Kingmaker 2.1.7b Steam build 675752
 
 | Item | Value |
 |---|---|
-| Source commit (product unchanged since `8620407`) | `91f3e4f` (branch `feature/cutscene-skip`) |
-| `KingmakerCutsceneSkip.dll` SHA-256 | `9ad4a19617a2e537ba8547d36a8f42205c4b94011f3388096936e76118864708` |
-| `KingmakerCutsceneSkip-0.1.0.zip` SHA-256 | `0602084e6de347a000ab91aa5dc969d6fa6fac8873b6f62d8b98a0ba272cd379` |
+| Product source | unchanged since commit `8620407`; native matrix run on commit `91f3e4f` |
+| Package built from | commit `39371c3` (branch `feature/cutscene-skip`; later commits are documentation only) |
+| `KingmakerCutsceneSkip.dll` SHA-256 | `9ad4a19617a2e537ba8547d36a8f42205c4b94011f3388096936e76118864708` (identical in every validated run and in the ZIP) |
+| `KingmakerCutsceneSkip-0.1.0.zip` SHA-256 | `a1ec9ff7202e5470fb4af1cb7cf419e461c252df3be594dc41800007b73ed927` |
 | Unit tests | 39/39 (`scripts/Test.ps1`) |
 
 Every native run listed below loaded exactly this DLL (hash recorded per run in `host-summary.json`), except the two
