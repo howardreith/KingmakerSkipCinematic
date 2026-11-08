@@ -174,6 +174,17 @@ namespace KingmakerCutsceneSkip.Tests
             f.AssertAllOverridesReleased();
         }
 
+        public static void ShutdownReleasesEverythingAndReturnsToIdle()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.Controller.Shutdown(SkipEndReason.Disabled, "test");
+            AssertEx.Equal(SkipPhase.Idle, f.Controller.Phase, "idle without waiting for a reveal tick");
+            AssertEx.False(f.Controller.ShouldSwallowSkipKey, "no input guard left behind");
+            AssertEx.Equal(SkipEndReason.Disabled, f.Controller.LastReport.Reason, "reported");
+            f.AssertAllOverridesReleased();
+        }
+
         public static void RevealCompletesThenGuardsInputBriefly()
         {
             ControllerFixture f = new ControllerFixture();

@@ -65,7 +65,7 @@ namespace KingmakerCutsceneSkip
         {
             if (!value)
             {
-                Controller.Abort(SkipEndReason.Disabled, "mod disabled");
+                Controller.Shutdown(SkipEndReason.Disabled, "mod disabled");
                 inputGate.ReleaseAll();
                 listener.Unsubscribe();
                 enabled = false;

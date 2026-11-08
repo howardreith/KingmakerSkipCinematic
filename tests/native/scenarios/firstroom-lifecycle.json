@@ -1,0 +1,30 @@
+{
+  "description": "V5/V6: disable the mod mid-skip (segment 1), re-enable, then load a save mid-skip (segment 2); verify release of every override and no skip after load.",
+  "save": "Auto_1120.zks",
+  "extraSaves": [ "Auto_1069.zks" ],
+  "captureEveryFrames": 3,
+  "steps": [
+    { "op": "useAreaTransition" },
+    { "op": "waitMode", "mode": "Cutscene", "timeoutSeconds": 90 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
+    { "op": "toggleMod", "enabled": false },
+    { "op": "snapshot", "label": "disabled" },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "wait", "seconds": 0.5 },
+    { "op": "expectNoSkip" },
+    { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 60 },
+    { "op": "toggleMod", "enabled": true },
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 90 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
+    { "op": "loadSave", "save": "Auto_1069.zks", "timeoutSeconds": 120 },
+    { "op": "wait", "seconds": 2.0 },
+    { "op": "snapshot", "label": "after-load" },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "after-load-enter" }
+  ]
+}

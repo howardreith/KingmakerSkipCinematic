@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Reflection;
 using Harmony12;
-using KingmakerCutsceneSkip.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityModManagerNet;
@@ -32,15 +31,13 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             HarnessRequest request = JsonConvert.DeserializeObject<HarnessRequest>(File.ReadAllText(requestPath));
             Directory.CreateDirectory(request.EvidenceDir);
             result["runId"] = request.RunId;
-            result["productVersion"] = ProductMetadata.Version;
-            result["productAssembly"] = typeof(ProductMetadata).Assembly.Location;
-            result["productMvid"] = typeof(ProductMetadata).Assembly.ManifestModule.ModuleVersionId.ToString();
+            result["product"] = ProductAccess.Identity();
             EvidenceRecorder recorder = new EvidenceRecorder(request.EvidenceDir, request.CaptureEveryFrames);
             try
             {
                 HarmonyInstance harmony = HarmonyInstance.Create("howardreith.kingmaker.cutsceneskip.runtimeharness");
                 result["isolation"] = ProfileIsolation.Apply(harmony, request.ProfileDir);
-                FaultInjection.Install(harmony);
+                ProductAccess.InstallFaultInjection(harmony);
                 CommandTrace.Install(harmony, recorder);
             }
             catch (Exception exception)
@@ -120,13 +117,6 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private static bool armed;
 
         public static void Arm() => armed = true;
-
-        public static void Install(HarmonyInstance harmony)
-        {
-            Type probe = typeof(ProductMetadata).Assembly.GetType("KingmakerCutsceneSkip.Integration.KingmakerGameStateProbe", true);
-            MethodInfo method = probe.GetMethod("GetBoundary", BindingFlags.Instance | BindingFlags.Public);
-            harmony.Patch(method, new HarmonyMethod(typeof(FaultInjection).GetMethod(nameof(Prefix), BindingFlags.Static | BindingFlags.NonPublic)), null);
-        }
 
         private static void Prefix()
         {

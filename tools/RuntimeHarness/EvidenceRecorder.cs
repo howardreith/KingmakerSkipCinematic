@@ -5,7 +5,6 @@ using Kingmaker.AreaLogic.Cutscenes;
 using Kingmaker.EntitySystem.Persistence;
 using Kingmaker.GameModes;
 using Kingmaker.PubSubSystem;
-using KingmakerCutsceneSkip.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -50,11 +49,11 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         }
 
         /// <summary>Called every frame by the scenario runner.</summary>
-        public void Tick(CutsceneSkipController controller)
+        public void Tick()
         {
             Game game = Game.Instance;
             JObject presentation = StateSnapshot.Presentation();
-            string phase = controller != null ? controller.Phase.ToString() : "unavailable";
+            string phase = ProductAccess.Phase;
             string signature = game.CurrentMode + "|" + phase + "|" + presentation["fadeCanvas"] + "|" + presentation["debugTimeScale"] +
                 "|" + presentation["loading"] + "|" + StateSnapshot.Dialog(game)?["cue"] + "|" + string.Join(",", StateSnapshot.Cutscenes(game));
             if (signature != lastSignature)
@@ -71,7 +70,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 });
             }
 
-            if (controller != null && controller.Phase != SkipPhase.Idle) ExtendCapture(CaptureTailSeconds);
+            if (!ProductAccess.IsIdle) ExtendCapture(CaptureTailSeconds);
             if (captureEveryFrames > 0 && Time.realtimeSinceStartup <= captureUntil && Time.frameCount - lastCaptureFrame >= captureEveryFrames)
             {
                 Screenshot("f" + Time.frameCount.ToString("D6") + "_" + phase);

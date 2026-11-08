@@ -1,0 +1,42 @@
+{
+  "description": "V6 on the prologue chain: held Enter across the boundary (segment A), Escape cancel mid-skip (segment B), controlled fault mid-skip (segment C); then autoplay to free control and save (V7).",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    { "op": "snapshot", "label": "pre" },
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 120 },
+    { "op": "wait", "seconds": 2.5 },
+    { "op": "pressKey", "key": "Return", "holdMs": 1800 },
+    { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 30 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "held-boundary" },
+
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 120 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
+    { "op": "wait", "seconds": 0.3 },
+    { "op": "pressKey", "key": "Escape", "holdMs": 60 },
+    { "op": "waitSkipIdle", "timeoutSeconds": 10 },
+    { "op": "snapshot", "label": "cancelled" },
+    { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 60 },
+    { "op": "snapshot", "label": "after-cancel" },
+
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 120 },
+    { "op": "wait", "seconds": 0.5 },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "waitSkipPhase", "mode": "Advancing", "timeoutSeconds": 5 },
+    { "op": "armFault" },
+    { "op": "waitSkipIdle", "timeoutSeconds": 10 },
+    { "op": "snapshot", "label": "after-fault" },
+    { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 60 },
+
+    { "op": "autoplayUntilControl", "seconds": 3, "timeoutSeconds": 300 },
+    { "op": "snapshot", "label": "control" },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "expectNoSkip" },
+    { "op": "snapshot", "label": "enter-in-exploration" },
+    { "op": "saveGame", "label": "KMCS_AFTER_SKIPS", "timeoutSeconds": 60 }
+  ]
+}

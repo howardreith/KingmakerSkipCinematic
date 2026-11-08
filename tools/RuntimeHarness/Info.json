@@ -7,6 +7,7 @@
   "GameVersion": "2.1.7",
   "AssemblyName": "KingmakerCutsceneSkip.RuntimeHarness.dll",
   "EntryMethod": "KingmakerCutsceneSkip.RuntimeHarness.HarnessMain.Load",
-  "Requirements": [ "KingmakerCutsceneSkip" ],
-  "LoadAfter": [ "KingmakerCutsceneSkip" ]
+  "LoadAfter": [
+    "KingmakerCutsceneSkip"
+  ]
 }

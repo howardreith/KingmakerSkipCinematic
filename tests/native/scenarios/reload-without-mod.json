@@ -1,0 +1,12 @@
+{
+  "description": "V7: load the save written after skipped cinematics with Cutscene Skip removed; it must load and match the pre-save state; Enter in exploration does nothing.",
+  "save": "KMCS_AFTER_SKIPS.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "reloaded" },
+    { "op": "pressKey", "key": "Return", "holdMs": 60 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "after-enter" }
+  ]
+}

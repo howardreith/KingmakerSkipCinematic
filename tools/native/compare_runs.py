@@ -1,6 +1,6 @@
 """Compare the semantic state a normal run and a skipped run reached from the same save.
 
-Usage: python -I compare_runs.py <normal-evidence-dir> <skipped-evidence-dir> [snapshot-label=boundary] [--position-tolerance=1.5]
+Usage: python -I compare_runs.py <normal-evidence-dir> <skipped-evidence-dir> [label | normalLabel:skippedLabel] [--position-tolerance=1.5]
 
 Story state (quests, objectives, flags, party, inventory, money, dialogue position, unit presence and life state)
 must match exactly. Positions are compared within a tolerance and reported; game-time elapsed since the "pre"
@@ -53,7 +53,9 @@ def main():
         if arg.startswith("--position-tolerance="):
             tolerance = float(arg.split("=", 1)[1])
 
-    normal, skipped = load(normal_dir, label), load(skipped_dir, label)
+    normal_label, _, skipped_label = label.partition(":")
+    skipped_label = skipped_label or normal_label
+    normal, skipped = load(normal_dir, normal_label), load(skipped_dir, skipped_label)
     failures, notes = [], []
 
     for key in ("mode", "area", "cutsceneLock", "inCombat", "money", "quests", "flags", "inventory", "dialog"):

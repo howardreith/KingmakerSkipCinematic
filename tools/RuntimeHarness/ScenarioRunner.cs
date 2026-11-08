@@ -9,7 +9,6 @@ using Kingmaker.EntitySystem.Entities;
 using Kingmaker.EntitySystem.Persistence;
 using Kingmaker.UnitLogic.Commands;
 using Kingmaker.PubSubSystem;
-using KingmakerCutsceneSkip.Core;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityModManagerNet;
@@ -34,10 +33,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private double stepStartedAt;
         private double conditionMetAt;
         private int keyEventsSent;
-        private SkipOperationReport reportAtStepBegin;
+        private object reportAtStepBegin;
         private string stepFailure;
         private int quitCountdown = -1;
-        private CutsceneSkipController subscribedController;
 
         public ScenarioRunner(HarnessRequest request, EvidenceRecorder recorder, JObject result)
         {
@@ -50,8 +48,6 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         }
 
         public bool IsFinished => stage == Stage.Finished;
-
-        private static CutsceneSkipController Controller => KingmakerCutsceneSkip.Main.Runtime?.Controller;
 
         private double Now => Time.realtimeSinceStartup;
 
@@ -72,7 +68,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             SubscribeToSkipReports();
-            recorder.Tick(Controller);
+            recorder.Tick();
 
             if (Now - startedAt > request.TimeoutSeconds)
             {
@@ -138,7 +134,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 conditionMetAt = double.NaN;
                 keyEventsSent = 0;
                 stepFailure = null;
-                reportAtStepBegin = Controller?.LastReport;
+                reportAtStepBegin = ProductAccess.LastReportIdentity;
                 recorder.Event("stepBegin", step.ToString());
             }
 
@@ -201,23 +197,22 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     return PressKey(step);
 
                 case "skipDirect":
-                    return Fail(!Controller.TryStart(), "skip declined: " + Controller.LastDeclineReason);
+                    return Fail(!ProductAccess.TryStart(out string declineReason), "skip declined: " + declineReason);
 
                 case "cancelDirect":
-                    return Fail(!Controller.TryCancel(), "nothing to cancel");
+                    return Fail(!ProductAccess.TryCancel(), "nothing to cancel");
 
                 case "waitSkipActive":
-                    return Controller.IsSkipping ? StepStatus.Done : StepStatus.Running;
+                    return ProductAccess.IsSkipping ? StepStatus.Done : StepStatus.Running;
 
                 case "waitSkipPhase":
-                    return string.Equals(Controller.Phase.ToString(), step.Mode, StringComparison.Ordinal) ? StepStatus.Done : StepStatus.Running;
+                    return string.Equals(ProductAccess.Phase, step.Mode, StringComparison.Ordinal) ? StepStatus.Done : StepStatus.Running;
 
                 case "waitSkipIdle":
-                    return Controller.Phase == SkipPhase.Idle && !ReferenceEquals(Controller.LastReport, reportAtStepBegin)
-                        ? StepStatus.Done : StepStatus.Running;
+                    return ProductAccess.IsIdle && ProductAccess.LastReportIdentity != null ? StepStatus.Done : StepStatus.Running;
 
                 case "expectNoSkip":
-                    return Fail(Controller.Phase != SkipPhase.Idle || !ReferenceEquals(Controller.LastReport, reportAtStepBegin), "a skip started unexpectedly");
+                    return Fail(!ProductAccess.IsIdle || !ReferenceEquals(ProductAccess.LastReportIdentity, reportAtStepBegin), "a skip started unexpectedly");
 
                 case "snapshot":
                     WriteSnapshot(step.Label);
@@ -241,6 +236,20 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 case "useAreaTransition":
                     return UseNearestAreaTransition(game);
 
+                case "saveGame":
+                    if (double.IsNaN(conditionMetAt))
+                    {
+                        conditionMetAt = Now;
+                        saveCompleted = false;
+                        SaveInfo created = game.SaveManager.CreateNewSave(step.Label);
+                        recorder.Event("saveGame", created.FolderName);
+                        result["savedGame"] = created.FolderName;
+                        game.SaveGame(created, () => saveCompleted = true);
+                    }
+
+                    return saveCompleted && !game.SaveManager.CommitInProgress && !LoadingProcess.Instance.IsLoadingInProcess
+                        ? StepStatus.Done : StepStatus.Running;
+
                 case "answer":
                     return SelectAnswer(game, step.Index);
 
@@ -251,7 +260,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     return AutoplayUntilControl(game, step);
 
                 case "toggleMod":
-                    UnityModManager.FindMod(ProductMetadata.Id).Active = step.Enabled;
+                    UnityModManager.FindMod(ProductAccess.ProductId).Active = step.Enabled;
                     recorder.Event("modToggled", step.Enabled);
                     return StepStatus.Done;
 
@@ -433,6 +442,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             pendingKeyUpAt = Now + 0.08;
         }
 
+        private bool saveCompleted;
         private string pendingKeyUp;
         private double pendingKeyUpAt;
         private double cinematicSince = double.NaN;
@@ -531,10 +541,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
         private void SubscribeToSkipReports()
         {
-            CutsceneSkipController controller = Controller;
-            if (controller == null || ReferenceEquals(controller, subscribedController)) return;
-            controller.OperationEnded += report => recorder.Event("skipEnded", JObject.FromObject(report));
-            subscribedController = controller;
+            ProductAccess.SubscribeReports(report => recorder.Event("skipEnded", report));
         }
 
         private string CurrentStepName()
@@ -558,7 +565,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             result["stepsCompleted"] = stepIndex;
             result["framesCaptured"] = recorder.FramesCaptured;
             result["finishedRealtime"] = Now;
-            result["lastSkipReport"] = Controller?.LastReport != null ? JObject.FromObject(Controller.LastReport) : null;
+            result["lastSkipReport"] = ProductAccess.LastReportJson;
             recorder.Event("finished", passed ? "passed" : "failed: " + failure);
             recorder.Flush();
             recorder.WriteJson("runtime-result.json", result);

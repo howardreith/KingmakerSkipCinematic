@@ -117,6 +117,17 @@ namespace KingmakerCutsceneSkip.Core
             }
         }
 
+        /// <summary>
+        /// Ends the active operation and returns straight to Idle, for when the mod will stop receiving frame updates
+        /// (disable/unload) and so could never observe the reveal finishing.
+        /// </summary>
+        public void Shutdown(SkipEndReason reason, string detail)
+        {
+            Abort(reason, detail);
+            EnterPhase(SkipPhase.Idle);
+            inputGuardUntil = double.NegativeInfinity;
+        }
+
         /// <summary>Immediate notification from the engine's game-mode events, so acceleration stops in the same tick.</summary>
         public void NotifyBoundary(SkipBoundary boundary)
         {
