@@ -1,0 +1,13 @@
+{
+  "Id": "KingmakerCutsceneSkipRuntimeHarness",
+  "DisplayName": "Cutscene Skip Runtime Harness (test only)",
+  "Author": "Howie Reith",
+  "Version": "0.1.0",
+  "ManagerVersion": "0.33.0",
+  "GameVersion": "2.1.7",
+  "AssemblyName": "KingmakerCutsceneSkip.RuntimeHarness.dll",
+  "EntryMethod": "KingmakerCutsceneSkip.RuntimeHarness.HarnessMain.Load",
+  "LoadAfter": [
+    "KingmakerCutsceneSkip"
+  ]
+}

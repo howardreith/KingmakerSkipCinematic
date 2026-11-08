@@ -28,3 +28,6 @@ runtime-evidence/
 
 # Local runtime-test lab material
 requests/
+
+__pycache__/
+*.pyc

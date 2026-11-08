@@ -1,0 +1,1 @@
+{ "description": "Discovery: load Manual_298_KMG_AUTOMATION_BASELINE and snapshot.", "save": "Manual_298_KMG_AUTOMATION_BASELINE.zks", "captureEveryFrames": 0, "steps": [ { "op": "wait", "seconds": 2 }, { "op": "snapshot", "label": "loaded" } ] }

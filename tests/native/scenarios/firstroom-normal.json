@@ -1,0 +1,19 @@
+{
+  "description": "V4/V5 baseline: area transition into the night mansion; FirstRoom_cutscene (starts during loading) -> Linzi dialogue -> second segment -> handoff to playable combat (auto-pause).",
+  "save": "Auto_1120.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "useAreaTransition" },
+    { "op": "waitMode", "mode": "Cutscene", "timeoutSeconds": 90 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "pre1" },
+    { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 90 },
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 90 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "pre" },
+    { "op": "applyBuff", "match": "BlessBuff|Bless", "seconds": 4.0 },
+    { "op": "applyBuff", "match": "MageArmorBuff|MageArmor", "seconds": 600 },
+    { "op": "waitMode", "mode": "Pause", "timeoutSeconds": 90 },
+    { "op": "snapshot", "label": "boundary" }
+  ]
+}

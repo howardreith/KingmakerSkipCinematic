@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildToolsPath)\Microsoft.Common.props" Condition="Exists('$(MSBuildToolsPath)\Microsoft.Common.props')" />
+  <Import Project="..\..\GamePath.props" Condition="Exists('..\..\GamePath.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{C4A1E7B2-3D58-4F69-8A0B-1C2D3E4F5A6B}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>KingmakerCutsceneSkip.RuntimeHarness</RootNamespace>
+    <AssemblyName>KingmakerCutsceneSkip.RuntimeHarness</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch>true</ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch>
+    <OutputPath>..\..\artifacts\bin\$(Configuration)\RuntimeHarness\</OutputPath>
+    <IntermediateOutputPath>..\..\artifacts\obj\$(Configuration)\RuntimeHarness\</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="Assembly-CSharp"><HintPath>$(KingmakerManagedDir)\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(KingmakerManagedDir)\Newtonsoft.Json.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="0Harmony12"><HintPath>$(UnityModManagerDir)\0Harmony12.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityModManager"><HintPath>$(UnityModManagerDir)\UnityModManager.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(KingmakerManagedDir)\UnityEngine.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.ScreenCaptureModule"><HintPath>$(KingmakerManagedDir)\UnityEngine.ScreenCaptureModule.dll</HintPath><Private>False</Private></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="**\*.cs" Exclude="bin\**;obj\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KingmakerCutsceneSkip\KingmakerCutsceneSkip.csproj">
+      <Project>{5B0C8E3A-6D2F-4C1E-9A7B-3E4F2D1C0B9A}</Project>
+      <Name>KingmakerCutsceneSkip</Name>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

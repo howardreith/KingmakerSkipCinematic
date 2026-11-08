@@ -1,0 +1,10 @@
+{
+  "description": "Discovery: deep-campaign save before the mind-controlling fey fight; record what plays until control.",
+  "save": "Manual_302_Before_fight_with_mind_controlling_fey.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "snapshot", "label": "loaded" },
+    { "op": "autoplayUntilControl", "seconds": 5, "timeoutSeconds": 240 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

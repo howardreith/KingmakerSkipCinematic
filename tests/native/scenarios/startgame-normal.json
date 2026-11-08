@@ -1,0 +1,15 @@
+{
+  "description": "V1/V2 baseline: StartGame_cutscene played normally to its dialogue handoff.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 240 },
+    { "op": "wait", "seconds": 2.5 },
+    { "op": "snapshot", "label": "pre" },
+    { "op": "applyBuff", "match": "BlessBuff|Bless", "seconds": 3.0 },
+    { "op": "applyBuff", "match": "MageArmorBuff|MageArmor", "seconds": 600 },
+    { "op": "waitMode", "mode": "Dialog", "seconds": 0.0, "timeoutSeconds": 120 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "boundary" }
+  ]
+}

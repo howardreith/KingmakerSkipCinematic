@@ -1,0 +1,10 @@
+{
+  "description": "V1/V2/V5/V6: same chain, real Enter pressed 1s into every cinematic episode; must stop at every dialogue and reach identical state at free control.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 4,
+  "steps": [
+    { "op": "snapshot", "label": "pre" },
+    { "op": "autoplayUntilControl", "seconds": 3, "skipAfterSeconds": 1.0, "key": "Return", "timeoutSeconds": 400 },
+    { "op": "snapshot", "label": "control" }
+  ]
+}

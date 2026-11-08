@@ -1,0 +1,26 @@
+{
+  "description": "V4/V5/V6: same sequence; real Enter 1s into each segment. Must stop at the Linzi dialogue, then at the combat handoff with identical state and no combat progressed under acceleration.",
+  "save": "Auto_1120.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    { "op": "useAreaTransition" },
+    { "op": "waitMode", "mode": "Cutscene", "timeoutSeconds": 90 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "pre1" },
+    { "op": "pressKey", "key": "Return", "holdMs": 80 },
+    { "op": "waitSkipIdle", "mode": "InteractionBoundary", "timeoutSeconds": 60 },
+    { "op": "waitMode", "mode": "Dialog", "timeoutSeconds": 30 },
+    { "op": "snapshot", "label": "dialog" },
+    { "op": "advanceUntil", "mode": "Cutscene", "seconds": 1.0, "timeoutSeconds": 90 },
+    { "op": "wait", "seconds": 1.0 },
+    { "op": "snapshot", "label": "pre" },
+    { "op": "applyBuff", "match": "BlessBuff|Bless", "seconds": 4.0 },
+    { "op": "applyBuff", "match": "MageArmorBuff|MageArmor", "seconds": 600 },
+    { "op": "pressKey", "key": "Return", "holdMs": 80 },
+    { "op": "waitSkipIdle", "mode": "SceneComplete|ControlReturned", "timeoutSeconds": 60 },
+    { "op": "waitMode", "mode": "Pause", "timeoutSeconds": 30 },
+    { "op": "snapshot", "label": "boundary" },
+    { "op": "wait", "seconds": 1.5 },
+    { "op": "screenshot", "label": "combat" }
+  ]
+}

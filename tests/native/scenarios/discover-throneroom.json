@@ -1,0 +1,17 @@
+{
+  "description": "Discovery: walk from the mansion entrance toward Jamandi's throne and record what the game triggers.",
+  "save": "Auto_1120.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "moveTo", "position": "18.0,1.4,10.0", "timeoutSeconds": 40, "optional": true },
+    { "op": "screenshot", "label": "mid-hall" },
+    { "op": "moveTo", "position": "17.0,1.5,-2.0", "timeoutSeconds": 40, "optional": true },
+    { "op": "screenshot", "label": "near-throne" },
+    { "op": "waitNotMode", "mode": "Default", "seconds": 0.2, "timeoutSeconds": 20, "optional": true },
+    { "op": "snapshot", "label": "triggered" },
+    { "op": "wait", "seconds": 6 },
+    { "op": "screenshot", "label": "t6" },
+    { "op": "wait", "seconds": 6 },
+    { "op": "snapshot", "label": "t12" }
+  ]
+}

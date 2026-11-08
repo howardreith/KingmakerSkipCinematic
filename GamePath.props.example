@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Copy to GamePath.props and replace this symbolic example when needed. -->
+    <KingmakerInstallDir>C:\Games\Pathfinder Kingmaker</KingmakerInstallDir>
+    <KingmakerManagedDir>$(KingmakerInstallDir)\Kingmaker_Data\Managed</KingmakerManagedDir>
+    <UnityModManagerDir>$(KingmakerManagedDir)\UnityModManager</UnityModManagerDir>
+  </PropertyGroup>
+</Project>
