@@ -281,6 +281,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                         savedMoney = game.Player.Money;
                         SaveInfo created = game.SaveManager.CreateNewSave(step.Label);
                         lastSave = created;
+                        lastSaveLabel = step.Label;
                         recorder.Event("saveGame", created.FolderName);
                         result["savedGame"] = created.FolderName;
                         game.SaveGame(created, () => saveCompleted = true);
@@ -345,12 +346,19 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     if (loadObserver == null)
                     {
                         if (lastSave == null) return Fail(true, "no save was made in this run");
+
+                        // The object from CreateNewSave is never marked as saved, and LoadRoutine silently ignores such an
+                        // object while the rest of the area reload still runs. Load the file the game wrote instead.
+                        string writtenFile = FindWrittenSave(game);
+                        if (writtenFile == null) return Fail(true, "the file for save " + lastSaveLabel + " was not found");
+                        SaveInfo written = game.SaveManager.LoadZipSave(writtenFile);
+                        if (written == null) return Fail(true, "the file could not be read: " + writtenFile);
                         loadObserver = new LoadObserver(Now, game.Player, savedMoney);
 
                         // Only loading the save can undo this marker; if the request does nothing it stays and the step fails.
                         game.Player.GainMoney(LoadMarkerMoney);
-                        recorder.Event("loadLastSave", lastSave.FolderName + (step.InjectFault ? " (request suppressed)" : string.Empty));
-                        if (!step.InjectFault) game.LoadGame(lastSave);
+                        recorder.Event("loadLastSave", Path.GetFileName(writtenFile) + (step.InjectFault ? " (request suppressed)" : string.Empty));
+                        if (!step.InjectFault) game.LoadGame(written);
                         return StepStatus.Running;
                     }
 
@@ -383,6 +391,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     stepFailure = "unknown op " + step.Op;
                     return StepStatus.Failed;
             }
+        }
+
+        private string FindWrittenSave(Game game)
+        {
+            return Directory.GetFiles(game.SaveManager.SavePath, "*_" + lastSaveLabel + ".zks")
+                .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
         }
 
         private StepStatus PollLoad(Game game)
@@ -640,6 +654,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         private const long LoadMarkerMoney = 1234;
         private bool saveCompleted;
         private SaveInfo lastSave;
+        private string lastSaveLabel;
         private long savedMoney;
         private LoadObserver loadObserver;
         private string cmiGuid;
