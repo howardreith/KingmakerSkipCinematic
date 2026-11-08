@@ -1,4 +1,16 @@
-# Validation record — Cutscene Skip 0.1.0 (review revision)
+# Validation record — Mr. Bard's Kingmaker Cutscene Skip
+
+## Release 0.1.1
+
+| Item | Value |
+|---|---|
+| Released DLL SHA-256 | `61ca1afb481fafd23bc6f9cefa0269ed74af7e6c23ccecc0f865c6fe0a5a7328` (built and packaged at commit `7ede77f`, provenance verified) |
+| `KingmakerCutsceneSkip-0.1.1.zip` SHA-256 | `ac3db162f48caf9707fa179f4afa5706655714be4f7ba7481b99cef91321cc17` |
+| Relation to the validated candidate | product source identical to the candidate `39852adf…` below except the display name and version strings (`Info.json`, `ProductMetadata.cs`, `AssemblyInfo.cs`) |
+| Native smoke test of the released DLL | `startgame-skip-direct-owner` (045228Z): loaded as "Mr. Bard's Kingmaker Cutscene Skip 0.1.1", ended `InteractionBoundary` at Amiri's dialogue, state MATCH vs normal (+0.35 s game time), installation restored, owner saves unchanged |
+| Accepted by the owner with | the real-key rows below still not re-run on the new scheduling code |
+
+## Review revision (candidate 0.1.0)
 
 Status: **partial.** The review revision (whole-tick substepping, fade-timeout reveal, loading-card classification)
 is validated natively for story fidelity, boundaries and restoration with the skip **requested through the product's
