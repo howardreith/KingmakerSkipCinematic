@@ -10,7 +10,10 @@ the way Wrath of the Righteous skips cinematics.
 
 * Pathfinder: Kingmaker 2.1.7b (Steam). If a different game build lacks any method the mod relies on, the mod stays
   inactive and says so in its settings panel and log.
-* [Unity Mod Manager](https://www.nexusmods.com/site/mods/21) 0.33.0 or later, installed for Pathfinder: Kingmaker.
+* [Unity Mod Manager](https://www.nexusmods.com/site/mods/21) 0.31.1 or later, installed for Pathfinder: Kingmaker.
+  Tested on 0.31.1, 0.32.4 and 0.33.0 (details and limits in `docs/COMPATIBILITY.md`). If your newer Unity Mod Manager
+  already works with your other mods, there is no need to downgrade. Other versions of 0.31.x, and 0.32.0-0.32.3, were
+  not tested.
 
 ## Installation
 
@@ -25,10 +28,13 @@ Manual alternative: extract the ZIP so that `Mods\KingmakerCutsceneSkip\Info.jso
 | Key | When | Effect |
 |---|---|---|
 | Enter / keypad Enter | a cinematic has taken control of the game | fade out and skip ahead |
-| Escape | while the screen is black during a skip | stop skipping; the cinematic continues normally from where it is |
+| Escape | while the screen is fading to black or black during a skip | stop skipping; the cinematic continues normally from where it is, and the menu does not open |
 
 Holding Enter or pressing it repeatedly starts only one skip, and the press that started it never reaches the dialogue
-or choice that appears next. Outside cinematics Enter and Escape behave exactly as without the mod.
+or choice that appears next. Outside a skip Escape is the game's own Escape: it opens the menu, and the cinematic
+pauses and resumes as usual. During the half second while the screen fades back in, the game ignores Escape as it does
+during any loading screen; press it again once the picture is back. Outside cinematics Enter behaves as without the
+mod.
 
 ## What a skip does — and does not do
 
@@ -40,7 +46,8 @@ or choice that appears next. Outside cinematics Enter and Escape behave exactly 
   It never picks an answer or makes a choice for you. Press Enter again to skip the next part.
 * Audio is muted while the screen is black (can be turned off in the settings panel). Voice lines of skipped barks
   are cut.
-* Nothing is written to your saves. Saves made after skipping load normally with the mod removed.
+* The mod adds no data of its own to save files, so a save does not need the mod to load. A skip still runs the
+  game's own scripts, and whatever they change is saved as usual, exactly as if you had watched the scene.
 
 ## Settings (Ctrl+F10 → Mr. Bard's Kingmaker Cutscene Skip)
 
@@ -56,19 +63,22 @@ or choice that appears next. Outside cinematics Enter and Escape behave exactly 
   watching it (about 0.2–1 s per segment in testing). Timed effects count that extra time, so a buff with less than
   about a second to spare can run out during a skipped cinematic but not during a watched one.
 * If Bag of Tricks' game-speed multiplier is set to anything other than 1, skips run at that speed instead.
-* Validated in the prologue and the opening of the night attack (see `docs/VALIDATION.md`). Other cinematics use the
-  same engine paths but were not individually tested. If one cannot be skipped safely, the mod reveals normal playback
-  within about 10 seconds and logs which command it waited on. If the screen does not go black, the skip is abandoned
-  and the scene simply continues.
+* Tested in the prologue and the opening of the night attack (see `docs/VALIDATION.md`). Other cinematics use the same
+  engine paths but were not individually tested, so a problem in a particular later scene cannot be ruled out. Keep a
+  save from before an important scene, as you would with any mod. If you see a problem, please report the quest and
+  location, your Unity Mod Manager and mod versions, and a save from before the scene.
+* If a cinematic cannot be skipped safely, the mod reveals normal playback within about 10 seconds and logs which
+  command it waited on. If the screen does not go black, the skip is abandoned and the scene simply continues.
 
 ## Removal
 
-Uninstall in Unity Mod Manager (or delete `Mods\KingmakerCutsceneSkip`). No save cleanup is needed.
+Uninstall in Unity Mod Manager (or delete `Mods\KingmakerCutsceneSkip`). The mod adds nothing to saves that would need
+cleaning up.
 
 ## Building from source
 
 Requirements: Windows, .NET SDK 8 (for `dotnet msbuild`), the .NET Framework 4.7.2 reference assemblies, and a local
-Kingmaker 2.1.7b installation with UMM.
+Kingmaker 2.1.7b installation.
 
 ```powershell
 Copy-Item GamePath.props.example GamePath.props   # then set KingmakerInstallDir
@@ -77,7 +87,9 @@ powershell -ExecutionPolicy Bypass -File scripts\Test.ps1       # deterministic 
 powershell -ExecutionPolicy Bypass -File scripts\Package.ps1    # artifacts\package\KingmakerCutsceneSkip-<version>.zip
 ```
 
-Game assemblies are referenced from your installation and never copied into the build output or the package.
+Game assemblies are referenced from your installation and never copied into the build output or the package. The
+Unity Mod Manager and Harmony shim references are downloaded by `scripts\Build.ps1` at pinned versions and SHA-256
+hashes and recorded in the build receipt, so a local loader update cannot change what the mod is built against.
 Native test tooling lives in `tools/` and `scripts/runtime/`; see `docs/VALIDATION.md`.
 
 ## License

@@ -1,6 +1,6 @@
 {
   "description": "Real keys: Enter and Escape outside a skip behave as without the mod, in dialogue and in exploration.",
-  "save": "KMCS_AFTER_SKIPS.zks",
+  "save": "KMCS_AFTER_SKIPS_012_MODONLY.zks",
   "captureEveryFrames": 0,
   "steps": [
     {

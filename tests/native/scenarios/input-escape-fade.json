@@ -11,7 +11,7 @@
     },
     {
       "op": "wait",
-      "seconds": 1.5
+      "seconds": 2.5
     },
     {
       "op": "pressKey",
