@@ -1,0 +1,82 @@
+{
+  "description": "Real keys: Escape during the reveal is not claimed by the mod. The game's EscMenuWindow ignores Escape while a loading screen is active, so the menu must not open and nothing may change; a fresh Escape after the reveal opens the native menu and the next closes it.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "pressKey",
+      "key": "Return",
+      "holdMs": 60
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "Revealing",
+      "timeoutSeconds": 60
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "InteractionBoundary",
+      "timeoutSeconds": 5
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "seconds": 0.5,
+      "timeoutSeconds": 3
+    },
+    {
+      "op": "snapshot",
+      "label": "after-reveal-escape"
+    },
+    {
+      "op": "markOperations",
+      "label": "after-reveal"
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitMode",
+      "mode": "EscMode",
+      "timeoutSeconds": 6
+    },
+    {
+      "op": "snapshot",
+      "label": "menu-after-reveal"
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 60
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "expectNoSkip"
+    },
+    {
+      "op": "snapshot",
+      "label": "boundary"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "description": "Real keys: keypad Enter starts exactly one skip; Enter held and repeated across the dialogue boundary starts nothing else and picks no answer.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "pressKey",
+      "key": "KeypadEnter",
+      "holdMs": 1800
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 30
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "InteractionBoundary",
+      "timeoutSeconds": 5
+    },
+    {
+      "op": "wait",
+      "seconds": 1.0
+    },
+    {
+      "op": "snapshot",
+      "label": "after-held"
+    },
+    {
+      "op": "markOperations",
+      "label": "repeat"
+    },
+    {
+      "op": "pressKey",
+      "key": "Return",
+      "holdMs": 40,
+      "count": 5,
+      "intervalMs": 120
+    },
+    {
+      "op": "wait",
+      "seconds": 1.0
+    },
+    {
+      "op": "expectNoSkip"
+    },
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "seconds": 0.5,
+      "timeoutSeconds": 5
+    },
+    {
+      "op": "snapshot",
+      "label": "after-repeat"
+    }
+  ]
+}

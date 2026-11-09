@@ -38,6 +38,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 HarmonyInstance harmony = HarmonyInstance.Create("howardreith.kingmaker.cutsceneskip.runtimeharness");
                 result["isolation"] = ProfileIsolation.Apply(harmony, request.ProfileDir);
                 ProductAccess.InstallFaultInjection(harmony);
+                ProductAccess.InstallPanelFaultWatch(harmony);
                 CommandTrace.Install(harmony, recorder);
             }
             catch (Exception exception)

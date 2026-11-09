@@ -1,0 +1,51 @@
+{
+  "description": "Negative controls for the verifiers. A settings render forced to throw, and a load request that is suppressed, must each be reported as failures; the same checks then pass when nothing is injected.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "ummPanel",
+      "label": "render-fault",
+      "injectFault": true,
+      "expectFailure": "settings GUI failed",
+      "seconds": 1.5,
+      "timeoutSeconds": 20
+    },
+    {
+      "op": "ummPanel",
+      "label": "render-ok",
+      "seconds": 1.5,
+      "timeoutSeconds": 20
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "saveGame",
+      "label": "KMCS_NEGATIVE",
+      "timeoutSeconds": 60
+    },
+    {
+      "op": "loadLastSave",
+      "label": "suppressed",
+      "injectFault": true,
+      "expectFailure": "load did not begin",
+      "timeoutSeconds": 40
+    },
+    {
+      "op": "loadLastSave",
+      "label": "real",
+      "timeoutSeconds": 120
+    },
+    {
+      "op": "wait",
+      "seconds": 2.0
+    },
+    {
+      "op": "snapshot",
+      "label": "reloaded"
+    }
+  ]
+}

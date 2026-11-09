@@ -1,6 +1,6 @@
 {
   "description": "V7: load the save written after skipped cinematics with Cutscene Skip removed; it must load and match the pre-save state; Enter in exploration does nothing.",
-  "save": "KMCS_AFTER_SKIPS.zks",
+  "save": "KMCS_AFTER_SKIPS_012_MODONLY.zks",
   "captureEveryFrames": 0,
   "steps": [
     { "op": "wait", "seconds": 1.0 },

@@ -95,7 +95,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                     break;
                 case Stage.Settling:
-                    if (Now - stageStartedAt >= 1.0) Enter(Stage.Steps);
+                    if (Now - stageStartedAt >= 1.0)
+                    {
+                        recorder.WriteJson("runtime-assemblies.json", LoadedAssemblies());
+                        Enter(Stage.Steps);
+                    }
+
                     break;
                 case Stage.Steps:
                     TickSteps();
@@ -139,6 +144,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 keyEventsSent = 0;
                 stepFailure = null;
                 operationsAtStepBegin = ProductAccess.StartedOperations;
+                loadObserver = null;
                 autoplaySkipPresses = 0;
                 autoplaySkipRefused = 0;
                 recorder.Event("stepBegin", step.ToString());
@@ -162,6 +168,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             if (status == StepStatus.Running) return;
+            status = ApplyExpectedFailure(step, status);
             if (status == StepStatus.Failed)
             {
                 recorder.Event("stepFailed", step + ": " + stepFailure);
@@ -180,6 +187,21 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
             stepIndex++;
             stepBegun = false;
+        }
+
+        /// <summary>A negative control passes only when the verifier rejected the injected fault with the expected message.</summary>
+        private StepStatus ApplyExpectedFailure(HarnessStep step, StepStatus status)
+        {
+            if (string.IsNullOrEmpty(step.ExpectFailure)) return status;
+            if (status == StepStatus.Failed && stepFailure != null && stepFailure.IndexOf(step.ExpectFailure, StringComparison.Ordinal) >= 0)
+            {
+                recorder.Event("expectedFailure", step + ": " + stepFailure);
+                result["negativeControl_" + stepIndex] = stepFailure;
+                return StepStatus.Done;
+            }
+
+            stepFailure = "negative control did not report '" + step.ExpectFailure + "': " + (stepFailure ?? "the step succeeded");
+            return StepStatus.Failed;
         }
 
         private StepStatus Poll(HarnessStep step)
@@ -256,7 +278,10 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     {
                         conditionMetAt = Now;
                         saveCompleted = false;
+                        savedMoney = game.Player.Money;
                         SaveInfo created = game.SaveManager.CreateNewSave(step.Label);
+                        lastSave = created;
+                        lastSaveLabel = step.Label;
                         recorder.Event("saveGame", created.FolderName);
                         result["savedGame"] = created.FolderName;
                         game.SaveGame(created, () => saveCompleted = true);
@@ -274,6 +299,71 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 case "autoplayUntilControl":
                     return AutoplayUntilControl(game, step);
 
+                case "escMenu":
+                    // The call the native EscPressed key binding makes (API-driven: proves nothing about key delivery).
+                    game.UI.EscManager.OnEscPressed();
+                    recorder.Event("escMenu", game.CurrentMode.ToString());
+                    return StepStatus.Done;
+
+                case "cmiUpgrade":
+                    cmiGuid = CoexistenceOps.CraftMagicItemsUpgrade(step.Match, result);
+                    cmiEnchantmentName = step.Match;
+                    recorder.Event("cmiUpgrade", cmiGuid);
+                    return StepStatus.Done;
+
+                case "cmiVerify":
+                    // In a fresh process the item comes from the loaded save: the scenario names it ("expect", "match").
+                    string verifyGuid = cmiGuid ?? step.Expect;
+                    string verifyEnchantment = cmiEnchantmentName ?? step.Match;
+                    if (verifyGuid == null || verifyEnchantment == null) return Fail(true, "no custom item was crafted in this run or named by the step");
+                    CoexistenceOps.CraftMagicItemsVerify(verifyGuid, Kingmaker.Blueprints.ResourcesLibrary.GetBlueprints<Kingmaker.Blueprints.Items.Ecnchantments.BlueprintWeaponEnchantment>()
+                        .First(candidate => candidate != null && candidate.name == verifyEnchantment).AssetGuid, result, step.Label ?? "cmiVerified");
+                    recorder.Event("cmiVerified", step.Label);
+                    return StepStatus.Done;
+
+                case "probeBlueprint":
+                    string probed = CoexistenceOps.ProbeBlueprint(step.Type, step.Match, step.Member);
+                    result["probe_" + (step.Label ?? step.Match)] = probed;
+                    recorder.Event("probeBlueprint", step.Match + "." + step.Member + "=" + probed);
+                    return Fail(step.Expect != null && !string.Equals(step.Expect, probed, StringComparison.OrdinalIgnoreCase),
+                        step.Match + "." + step.Member + " is " + probed + ", expected " + step.Expect);
+
+                case "ummPanel":
+                    if (panelProbe == null)
+                    {
+                        panelProbe = CoexistenceOps.BeginPanelCheck(step.InjectFault);
+                        return StepStatus.Running;
+                    }
+
+                    if (Now - stepStartedAt < (step.Seconds > 0 ? step.Seconds : 1.0)) return StepStatus.Running;
+                    SettingsDrawProbe finishedProbe = panelProbe;
+                    panelProbe = null;
+                    result["ummPanel"] = CoexistenceOps.FinishPanelCheck(finishedProbe);
+                    recorder.Event("ummPanel", result["ummPanel"]);
+                    return StepStatus.Done;
+
+                case "loadLastSave":
+                    if (loadObserver == null)
+                    {
+                        if (lastSave == null) return Fail(true, "no save was made in this run");
+
+                        // The object from CreateNewSave is never marked as saved, and LoadRoutine silently ignores such an
+                        // object while the rest of the area reload still runs. Load the file the game wrote instead.
+                        string writtenFile = FindWrittenSave(game);
+                        if (writtenFile == null) return Fail(true, "the file for save " + lastSaveLabel + " was not found");
+                        SaveInfo written = game.SaveManager.LoadZipSave(writtenFile);
+                        if (written == null) return Fail(true, "the file could not be read: " + writtenFile);
+                        loadObserver = new LoadObserver(Now, game.Player, savedMoney);
+
+                        // Only loading the save can undo this marker; if the request does nothing it stays and the step fails.
+                        game.Player.GainMoney(LoadMarkerMoney);
+                        recorder.Event("loadLastSave", Path.GetFileName(writtenFile) + (step.InjectFault ? " (request suppressed)" : string.Empty));
+                        if (!step.InjectFault) game.LoadGame(written);
+                        return StepStatus.Running;
+                    }
+
+                    return PollLoad(game);
+
                 case "toggleMod":
                     UnityModManager.FindMod(ProductAccess.ProductId).Active = step.Enabled;
                     recorder.Event("modToggled", step.Enabled);
@@ -285,22 +375,46 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     return StepStatus.Done;
 
                 case "loadSave":
-                    if (!stepBegun || double.IsNaN(conditionMetAt))
+                    if (loadObserver == null)
                     {
-                        conditionMetAt = Now;
                         SaveInfo save = game.SaveManager.LoadZipSave(Path.Combine(game.SaveManager.SavePath, step.Save));
+                        if (save == null) return Fail(true, "save could not be read: " + step.Save);
+                        loadObserver = new LoadObserver(Now, game.Player, null);
                         recorder.Event("loadSaveInGame", step.Save);
                         game.LoadGame(save);
                         return StepStatus.Running;
                     }
 
-                    return Now - conditionMetAt > 1.0 && !LoadingProcess.Instance.IsLoadingInProcess && game.CurrentlyLoadedArea != null
-                        ? StepStatus.Done : StepStatus.Running;
+                    return PollLoad(game);
 
                 default:
                     stepFailure = "unknown op " + step.Op;
                     return StepStatus.Failed;
             }
+        }
+
+        private string FindWrittenSave(Game game)
+        {
+            return Directory.GetFiles(game.SaveManager.SavePath, "*_" + lastSaveLabel + ".zks")
+                .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+        }
+
+        private StepStatus PollLoad(Game game)
+        {
+            LoadProgress progress = loadObserver.Observe(Now, LoadingProcess.Instance.IsLoadingInProcess, game.Player,
+                game.CurrentlyLoadedArea != null, game.CurrentMode != Kingmaker.GameModes.GameModeType.None, game.Player?.Money ?? -1);
+            if (progress == LoadProgress.Waiting) return StepStatus.Running;
+            result["load_" + stepIndex] = new JObject
+            {
+                ["began"] = loadObserver.Began, ["playerReplaced"] = loadObserver.PlayerReplaced, ["money"] = loadObserver.LastMoney, ["verdict"] = progress.ToString()
+            };
+            if (progress == LoadProgress.Complete)
+            {
+                recorder.Event("loadCompleted", game.CurrentlyLoadedArea.name);
+                return StepStatus.Done;
+            }
+
+            return Fail(true, loadObserver.Describe(progress));
         }
 
         private StepStatus Settled(bool condition, double settleSeconds)
@@ -537,7 +651,15 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             return true;
         }
 
+        private const long LoadMarkerMoney = 1234;
         private bool saveCompleted;
+        private SaveInfo lastSave;
+        private string lastSaveLabel;
+        private long savedMoney;
+        private LoadObserver loadObserver;
+        private string cmiGuid;
+        private string cmiEnchantmentName;
+        private SettingsDrawProbe panelProbe;
         private string pendingKeyUp;
         private double pendingKeyUpAt;
         private double cinematicSince = double.NaN;
@@ -627,6 +749,40 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             return Game.Instance.State.Cutscenes.ToList().Any(player =>
                 player != null && !player.IsFinished && !player.Destroyed && player.Exclusive && !player.Paused &&
                 (string.IsNullOrEmpty(match) || (player.Cutscene != null && player.Cutscene.name.IndexOf(match, StringComparison.OrdinalIgnoreCase) >= 0)));
+        }
+
+        /// <summary>The loader, Harmony and mod assemblies actually loaded in this process, not what an installer reports.</summary>
+        private static JArray LoadedAssemblies()
+        {
+            JArray list = new JArray();
+            foreach (System.Reflection.Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                string name = assembly.GetName().Name;
+                if (name.StartsWith("System", StringComparison.Ordinal) || name.StartsWith("UnityEngine", StringComparison.Ordinal) ||
+                    name.StartsWith("Mono.", StringComparison.Ordinal) || name == "mscorlib" || name.StartsWith("Assembly-", StringComparison.Ordinal)) continue;
+                string location = string.Empty;
+                try { location = assembly.Location; } catch (Exception) { }
+                string hash = string.Empty;
+                if (!string.IsNullOrEmpty(location) && File.Exists(location))
+                {
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                    using (FileStream stream = File.OpenRead(location))
+                    {
+                        hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
+                    }
+                }
+
+                list.Add(new JObject
+                {
+                    ["name"] = name,
+                    ["version"] = assembly.GetName().Version.ToString(),
+                    ["mvid"] = assembly.ManifestModule.ModuleVersionId.ToString(),
+                    ["location"] = location,
+                    ["sha256"] = hash
+                });
+            }
+
+            return list;
         }
 
         private void WriteSnapshot(string label)

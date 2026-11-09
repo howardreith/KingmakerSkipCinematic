@@ -1,0 +1,25 @@
+{
+  "description": "Control for the reload checks: the prologue chain played normally to free control, then a save, with Cutscene Skip absent.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    },
+    {
+      "op": "saveGame",
+      "label": "KMCS_AFTER_NORMAL_012",
+      "timeoutSeconds": 60
+    }
+  ]
+}

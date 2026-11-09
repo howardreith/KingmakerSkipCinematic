@@ -1,0 +1,23 @@
+{
+  "description": "Loader assemblies the product compiles against, pinned to the oldest supported loader. A product input: changing this file requires a rebuild. Fetched from upstream, verified by SHA-256 and cached in artifacts/references; never committed or packaged.",
+  "references": [
+    {
+      "Name": "UnityModManager",
+      "File": "UnityModManager.dll",
+      "Version": "0.31.1",
+      "Url": "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.31.1/unitymodmanager.0.31.1.nupkg",
+      "ArchiveSha256": "05a82b66bc44d56d1246f146d16e9fa8f9a42c450c5bc334bcfa9efddbdb53c9",
+      "ArchiveEntry": "lib/net35/UnityModManager.dll",
+      "Sha256": "2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4"
+    },
+    {
+      "Name": "0Harmony12",
+      "File": "0Harmony12.dll",
+      "Version": "1.2.0.1",
+      "Url": "https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/Harmony/1.2/0Harmony12.dll",
+      "ArchiveSha256": null,
+      "ArchiveEntry": null,
+      "Sha256": "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+    }
+  ]
+}

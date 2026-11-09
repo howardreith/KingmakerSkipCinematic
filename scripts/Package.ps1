@@ -10,7 +10,8 @@ param(
 # No game assemblies, harness, saves or logs are included.
 # Provenance: the DLL must be the one recorded in the build receipt (artifacts\qualification\build.json, written by
 # Build.ps1), built from committed product inputs, and no product input may have changed between the build commit and
-# the packaging commit (documentation-only commits are allowed). The manifest records both commits.
+# the packaging commit (documentation-only commits are allowed). The receipt's loader references must equal the pins in
+# scripts\reference-pins.json. The manifest records both commits.
 
 . (Join-Path $PSScriptRoot 'Common.ps1')
 Add-Type -AssemblyName System.IO.Compression
@@ -43,6 +44,7 @@ $changedSinceBuild = @(Get-ProductChangesBetween $receipt.commit $git.Commit)
 if ($changedSinceBuild.Count -gt 0) { $problems += "product inputs changed since build commit $($receipt.commit): $($changedSinceBuild -join ', ')" }
 $uncommittedProduct = @(Get-UncommittedProductChanges)
 if ($uncommittedProduct.Count -gt 0) { $problems += "uncommitted product changes: $($uncommittedProduct -join '; ')" }
+$problems += @(Get-ReferencePinProblems $receipt (Get-PinnedReferenceDefinitions) $info.ManagerVersion)
 if ($problems.Count -gt 0) {
     if (-not $AllowDirty) { throw ('Package provenance check failed (rebuild from the current commit): ' + ($problems -join ' | ')) }
     Write-Warning ('Packaging despite provenance problems (-AllowDirty): ' + ($problems -join ' | '))

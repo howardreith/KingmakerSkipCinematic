@@ -1,0 +1,47 @@
+{
+  "description": "Real keys: Escape during the fade-out cancels before any acceleration and does not open the menu.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 3,
+  "steps": [
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "pressKey",
+      "key": "Return",
+      "holdMs": 60
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "FadingOut",
+      "timeoutSeconds": 3
+    },
+    {
+      "op": "pressKey",
+      "key": "Escape",
+      "holdMs": 40
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "Cancelled",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "waitNotMode",
+      "mode": "EscMode",
+      "seconds": 1.0,
+      "timeoutSeconds": 6
+    },
+    {
+      "op": "snapshot",
+      "label": "cancelled"
+    }
+  ]
+}

@@ -2,8 +2,10 @@
 
 Target: Pathfinder: Kingmaker 2.1.7b (Steam build 6757524). `Assembly-CSharp.dll` SHA-256
 `3b6450ffec440e296e586f71c711b195aed144b28d53e1cbb29406d18fef5afb`, MVID `07fa1e4d-8618-41b3-9b8d-faa17d3b26f7`.
-Unity Mod Manager 0.33.0 with the bundled Harmony 1.2 (`0Harmony12.dll`). Every signature below was read from that
-assembly (decompiled locally with ilspycmd 9.1; decompiled sources are never committed).
+Every game signature below was read from that assembly (decompiled locally with ilspycmd 9.1; decompiled sources are
+never committed). The mod is built against Unity Mod Manager 0.31.1 and its Harmony 1.2 shim (`0Harmony12.dll`), pinned
+by version and SHA-256 in `scripts/Common.ps1` and recorded in the build receipt. Supported loaders and the member
+audit behind them: `COMPATIBILITY.md`.
 
 ## How Kingmaker plays a cutscene
 
@@ -149,8 +151,26 @@ durations of all other timed buffs differ by exactly the extra game time (measur
 | Audio | Wwise RTPC `AudioLevel` ramped to 0 (setting untouched) | re-apply the player's live master-volume setting |
 | Input | skip key claimed from press until physical release (hides key-down and key-up from every binding); new skip-key presses swallowed during the skip and 0.35 s after the reveal; Escape claimed only when it cancels | claims expire on release; disable clears them |
 
-Nothing is serialized: no settings in saves, no blueprint changes, no scene edits. Patches stay installed while the mod
-is disabled but are inert; UMM unload removes them.
+The mod serializes nothing of its own: no settings in saves, no blueprint changes, no scene edits. That is narrower
+than "cannot affect a save": the game's own scripts run during a skip and their results are saved like any others, and
+the small extra game time of a skip (`VALIDATION.md`) counts on timed effects.
+
+Patches stay installed while the mod is disabled but are inert; UMM unload removes them.
+
+## Escape: cancelling a skip is not pausing the game
+
+Two separate paths use the key:
+
+* During `FadingOut` and `Advancing` the input gate claims Escape from press through release. The operation ends
+  `Cancelled`: acceleration and the mod's fade, audio and input claims are released, and the same cutscene continues
+  natively from its current commands. No command is finished, removed or reordered, and `EscPressed` never reaches the
+  game, so the menu does not open.
+* In every other state Escape is not claimed. It reaches `KeyboardAccess` -> `EscHotkeyManager` -> `EscMenuWindow`,
+  and `Game.StartMode(EscMode)` pauses the scene as without the mod. `EscMode` is a boundary, so a skip never runs
+  through the menu.
+* During `Revealing` the key is also unclaimed, but the fade still counts as a loading screen and the game's
+  `EscMenuWindow` refuses to open while `LoadingProcess.IsLoadingScreenActive`. The press does nothing, as it would
+  during any loading screen; a fresh press after the reveal opens the menu.
 
 ## Patched methods (Harmony 1.2, owner `howardreith.kingmaker.cutsceneskip`)
 
@@ -163,6 +183,8 @@ contract leaves the game untouched and the mod reports itself inactive.
 ## Unresolved limitations
 
 * Global-map cinematics (`GameModeType.CutsceneGlobalMap`) are declined: not exercised natively.
+* No command in `Kingmaker.AreaLogic.Cutscenes*` reads a real-time clock (source audit), but scene-specific logic
+  outside those commands, voiced barks and `CommandCustomLoadingScreen` were not reached in a native fixture.
 * Turn-based mode: a skip is declined, and ends, while turn-based combat is active.
 * Bag of Tricks' game-speed multiplier, when set ≠ 1, rewrites `DebugTimeScale` every tick; a skip then runs at that
   speed (ownership rules leave Bag of Tricks' value in place).
@@ -172,3 +194,11 @@ contract leaves the game untouched and the mod reports itself inactive.
   only engine-time logic keeps normal granularity.
 * Mods that patch `TimeController.Tick` do not see the substeps of an accelerated frame (the mod performs the
   Cutscene-mode time bookkeeping itself).
+
+## Observed by the native harness
+
+* `Game.CreateNewSave` returns a `SaveInfo` that is not marked as saved. `SaveManager.LoadRoutine` ignores such an object with
+  a log warning while the rest of the area reload still runs, so the player state is not replaced. A verifier has to load
+  the written file (`LoadZipSave`) and observe the state change.
+* `Tutorial_1_cutscene` holds Cutscene mode for one frame. A real key press sent in that frame arrives after the mode has
+  ended and starts nothing; a player cannot skip that episode, and nothing is left to skip.

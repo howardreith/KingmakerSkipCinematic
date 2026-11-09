@@ -1,0 +1,15 @@
+{
+  "description": "Control: load the save written after a normal playthrough with Cutscene Skip absent, using the same wait as reload-after-skips. Compare 'control' with reload-after-skips-modonly.",
+  "save": "KMCS_AFTER_NORMAL_012_MODONLY.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "wait",
+      "seconds": 2.0
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

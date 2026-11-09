@@ -29,7 +29,18 @@ param(
     [string] $Label,
     [int] $TimeoutSeconds = 900,
     [switch] $NoProduct,
-    [switch] $RecoverOnly
+    [switch] $RecoverOnly,
+    # Disposable copy of the game under <lab>\game-copies. All loader and mod staging then happens inside the copy and the
+    # owner's installation is only hashed. Launches Kingmaker.exe directly (Steam must be running).
+    [string] $GameCopy,
+    # Loader file set for the copy: a name from loader-profiles.json or owner-0.33.0.
+    [string] $LoaderProfile = 'owner-0.33.0',
+    # Mods from the pristine set to add to the copy (used with -ModProfile isolated).
+    [string[]] $ModSet = @(),
+    # Install the product from this packaged ZIP instead of the build output.
+    [string] $ProductZip,
+    # Overrides ManagerVersion in the staged Info.json only (assessing a loader below the advertised minimum).
+    [string] $ProductManagerVersion
 )
 
 . (Join-Path $PSScriptRoot '..\Common.ps1')
@@ -46,10 +57,16 @@ $scenarioData = Get-Content -LiteralPath $Scenario -Raw | ConvertFrom-Json
 if (-not $Label) { $Label = [IO.Path]::GetFileNameWithoutExtension($Scenario) }
 $runId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + '-' + $Label + '-' + $ModProfile + $(if ($NoProduct) { '-noproduct' } else { '' })
 $game = Get-KingmakerConfiguration
+$ownerGame = $game
+$copyPaths = $null
+if ($GameCopy) {
+    $copyPaths = Get-GameCopyPaths (Assert-GameCopy $lab $GameCopy $ownerGame.InstallDir)
+    $game = $copyPaths
+}
 $root = Get-RepositoryRoot
 $productDir = Join-Path $root "artifacts\bin\$Configuration\KingmakerCutsceneSkip"
 $harnessDir = Join-Path $root "artifacts\bin\$Configuration\RuntimeHarness"
-Assert-FileExists (Join-Path $productDir 'KingmakerCutsceneSkip.dll') 'Built product DLL (run scripts\Build.ps1)'
+if ($ProductZip) { Assert-FileExists $ProductZip 'Product ZIP' } else { Assert-FileExists (Join-Path $productDir 'KingmakerCutsceneSkip.dll') 'Built product DLL (run scripts\Build.ps1)' }
 Assert-FileExists (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll') 'Built harness DLL'
 
 Assert-RuntimePreflight $lab
@@ -57,23 +74,31 @@ $lock = Enter-RuntimeLock $lab $runId
 $evidence = Join-Path $lab.Evidence $runId
 $backup = Join-Path $lab.Backups $runId
 New-Item -ItemType Directory -Force -Path $evidence, $backup | Out-Null
-$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started' }
+$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started'; failure = $null }
 $journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
 $savesBefore = $null
+$installBefore = $null
 try {
     $savesBefore = Get-SaveManifest $lab.OwnerSaves
     $summary.ownerSaveCount = @($savesBefore).Count
-    $summary.productDllSha256 = Get-Sha256 (Join-Path $productDir 'KingmakerCutsceneSkip.dll')
+    $installBefore = Get-InstallationManifest $ownerGame
+    $summary.ownerInstallFileCount = @($installBefore).Count
+    $summary.gameRoot = $game.InstallDir
+    $summary.loaderProfile = $(if ($GameCopy) { $LoaderProfile } else { 'owner installation' })
+    if ($ProductZip) { $summary.productZipSha256 = Get-Sha256 $ProductZip }
+    elseif (-not $NoProduct) { $summary.productDllSha256 = Get-Sha256 (Join-Path $productDir 'KingmakerCutsceneSkip.dll') }
     $summary.harnessDllSha256 = Get-Sha256 (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll')
     $summary.git = Get-GitMetadata
 
-    # Configuration backups (restored in finally).
-    $params = Join-Path $game.UnityModManagerDir 'Params.xml'
-    # A backup is recorded in the journal only once it exists, so recovery never restores from a missing file.
-    $paramsBackup = Join-Path $backup 'Params.xml'
-    Copy-Item -LiteralPath $params -Destination $paramsBackup
-    $journal.paramsBackup = $paramsBackup
-    $journal.paramsTarget = $params
+    # Configuration backups (restored in finally). A game copy is rebuilt per run, so only the shared registry applies.
+    if (-not $GameCopy) {
+        $params = Join-Path $game.UnityModManagerDir 'Params.xml'
+        # A backup is recorded in the journal only once it exists, so recovery never restores from a missing file.
+        $paramsBackup = Join-Path $backup 'Params.xml'
+        Copy-Item -LiteralPath $params -Destination $paramsBackup
+        $journal.paramsBackup = $paramsBackup
+        $journal.paramsTarget = $params
+    }
     Save-Journal $lab $journal
     $registryBackup = Join-Path $backup 'game-settings.reg'
     $export = Invoke-NativeTool 'reg.exe' @('export', $lab.RegistryKey, $registryBackup, '/y')
@@ -82,7 +107,13 @@ try {
     Save-Journal $lab $journal
 
     # Mod staging.
-    if ($ModProfile -eq 'isolated') {
+    if ($GameCopy) {
+        Initialize-GameCopy $copyPaths
+        $loaderIdentity = Install-LoaderProfile $lab $copyPaths $LoaderProfile
+        Write-JsonFile (Join-Path $evidence 'loader-install.json') $loaderIdentity
+        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet)
+    }
+    elseif ($ModProfile -eq 'isolated') {
         # Persist the planned move first: recovery inspects both locations, so an interruption on either side of the
         # move is recoverable.
         $original = $game.ModsDir + '.kmcs-' + $runId + '.original'
@@ -95,7 +126,7 @@ try {
         New-Item -ItemType Directory -Path $game.ModsDir | Out-Null
     }
     $deploy = @(@{ Source = $harnessDir; Name = 'KingmakerCutsceneSkipRuntimeHarness'; Info = Join-Path $root 'tools\RuntimeHarness\Info.json' })
-    if (-not $NoProduct) { $deploy += @{ Source = $productDir; Name = 'KingmakerCutsceneSkip'; Info = Join-Path $root 'Info.json' } }
+    if (-not $NoProduct -and -not $ProductZip) { $deploy += @{ Source = $productDir; Name = 'KingmakerCutsceneSkip'; Info = Join-Path $root 'Info.json' } }
     foreach ($item in $deploy) {
         $target = Join-Path $game.ModsDir $item.Name
         if (Test-Path -LiteralPath $target) { throw "Refusing to overwrite an existing mod folder: $target" }
@@ -105,6 +136,22 @@ try {
         New-Item -ItemType Directory -Path $target | Out-Null
         Copy-Item -LiteralPath (Join-Path $item.Source ($(if ($item.Name -eq 'KingmakerCutsceneSkip') { 'KingmakerCutsceneSkip.dll' } else { 'KingmakerCutsceneSkip.RuntimeHarness.dll' }))) -Destination $target
         Copy-Item -LiteralPath $item.Info -Destination (Join-Path $target 'Info.json')
+    }
+
+    if ($ProductZip -and -not $NoProduct) {
+        # The packaged candidate, installed exactly as a user would: the ZIP's single top-level mod folder.
+        $productTarget = Join-Path $game.ModsDir 'KingmakerCutsceneSkip'
+        if (Test-Path -LiteralPath $productTarget) { throw "Refusing to overwrite an existing mod folder: $productTarget" }
+        $journal.staged += $productTarget
+        Save-Journal $lab $journal
+        Expand-Archive -LiteralPath $ProductZip -DestinationPath $game.ModsDir
+        $summary.productDllSha256 = Get-Sha256 (Join-Path $productTarget 'KingmakerCutsceneSkip.dll')
+    }
+    if ($ProductManagerVersion -and -not $NoProduct) {
+        $stagedInfo = Join-Path $game.ModsDir 'KingmakerCutsceneSkip\Info.json'
+        $text = (Get-Content -LiteralPath $stagedInfo -Raw) -replace '"ManagerVersion":\s*"[^"]+"', ('"ManagerVersion": "' + $ProductManagerVersion + '"')
+        [IO.File]::WriteAllText($stagedInfo, $text, (New-Object Text.UTF8Encoding($false)))
+        $summary.productManagerVersionOverride = $ProductManagerVersion
     }
 
     # Disposable profile and request.
@@ -122,7 +169,7 @@ try {
     $requestPath = Join-Path $evidence 'runtime-request.json'
     $request | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $requestPath -Encoding UTF8
 
-    $process = Start-OwnedKingmaker $lab $requestPath
+    $process = if ($GameCopy) { Start-KingmakerCopy $copyPaths $requestPath } else { Start-OwnedKingmaker $lab $requestPath }
     $summary.gamePid = $process.Id
     $exited = $process.WaitForExit($TimeoutSeconds * 1000)
     if (-not $exited) {
@@ -170,6 +217,22 @@ finally {
         catch {
             $summary.ownerSavesUnchanged = $null
             $integrityFailures += "owner save verification failed: $($_.Exception.Message)"
+        }
+    }
+
+    if ($null -ne $installBefore -and $GameCopy) {
+        try {
+            $installDiff = Compare-SaveManifest $installBefore (Get-InstallationManifest $ownerGame)
+            $summary.ownerInstallUnchanged = ($installDiff.Count -eq 0)
+            if ($installDiff.Count -gt 0) {
+                $summary.ownerInstallChanges = $installDiff
+                $integrityFailures += 'owner installation changed'
+                Write-Warning ("OWNER INSTALLATION CHANGED DURING RUN: " + ($installDiff -join '; '))
+            }
+        }
+        catch {
+            $summary.ownerInstallUnchanged = $null
+            $integrityFailures += "owner installation verification failed: $($_.Exception.Message)"
         }
     }
 

@@ -1,0 +1,46 @@
+{
+  "description": "A skip cancelled while still fading out (nothing accelerated), then native playback to free control. Compare 'control' with prologue-chain-normal. Waits 2.5 s so the scene's own opening fade has cleared; at 1.5 s the screen is still black and the mod's fade ends within a frame.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 1.0,
+      "timeoutSeconds": 240
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "skipDirect"
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "FadingOut",
+      "timeoutSeconds": 2
+    },
+    {
+      "op": "cancelDirect"
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "Cancelled",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "autoplayUntilControl",
+      "seconds": 3,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "description": "Other-mod behaviour without any skip: Craft Magic Items upgrades a weapon through its own code; Kingmaker Bugfixes' Dart blueprint change is present; item survives save and reload. Run with Cutscene Skip absent (-NoProduct) and present.",
+  "save": "Auto_1069.zks",
+  "captureEveryFrames": 0,
+  "steps": [
+    { "op": "probeBlueprint", "type": "BlueprintWeaponType", "match": "Dart", "member": "IsLight", "label": "bugfixesDartIsLight", "expect": "True" },
+    { "op": "autoplayUntilControl", "seconds": 3, "timeoutSeconds": 300 },
+    { "op": "snapshot", "label": "control" },
+    { "op": "cmiUpgrade", "match": "Enhancement1" },
+    { "op": "snapshot", "label": "crafted" },
+    { "op": "saveGame", "label": "KMCS_CMI_PERSIST", "timeoutSeconds": 60 },
+    { "op": "loadLastSave", "timeoutSeconds": 120 },
+    { "op": "wait", "seconds": 2.0 },
+    { "op": "cmiVerify", "label": "cmiAfterReload" },
+    { "op": "snapshot", "label": "reloaded" }
+  ]
+}

@@ -1,10 +1,10 @@
 {
-  "description": "V1/V2/V5/V6: same chain, real Enter pressed the moment every cinematic episode begins (story actions then run under acceleration); must stop at every dialogue and reach identical state at free control.",
+  "description": "V1/V2/V5/V6: same chain, real Enter pressed on the frame after every cinematic episode is first seen (story actions then run under acceleration); must stop at every dialogue and reach identical state at free control. A real key arrives at least one frame after it is sent, so an episode that lasts a single frame (Tutorial_1_cutscene) gets no press; each press made must still start exactly one operation.",
   "save": "Auto_1069.zks",
   "captureEveryFrames": 4,
   "steps": [
     { "op": "snapshot", "label": "pre" },
-    { "op": "autoplayUntilControl", "seconds": 3, "skipAfterSeconds": 0.0, "key": "Return", "timeoutSeconds": 400 },
+    { "op": "autoplayUntilControl", "seconds": 3, "skipAfterSeconds": 0.02, "key": "Return", "timeoutSeconds": 400 },
     { "op": "snapshot", "label": "control" }
   ]
 }

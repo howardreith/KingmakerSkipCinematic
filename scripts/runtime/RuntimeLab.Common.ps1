@@ -221,3 +221,138 @@ function Copy-RunLogs($lab, $game, [string] $evidence) {
     if (Test-Path -LiteralPath $umm) { Copy-Item -LiteralPath $umm -Destination (Join-Path $evidence 'umm-log.txt') -Force }
     if (Test-Path -LiteralPath $lab.PlayerLog) { Copy-Item -LiteralPath $lab.PlayerLog -Destination (Join-Path $evidence 'player-log.txt') -Force }
 }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Disposable game copy and loader profiles. Replacing UMM affects the proxy DLL, its configuration and every file in the
+# loader directory, so loader tests never touch the owner's installation: they run in a full copy under the lab, and the
+# owner's installation is hashed before and after every run.
+# ---------------------------------------------------------------------------------------------------------------------
+
+function Get-LoaderProfileDocument {
+    return Get-Content -LiteralPath (Join-Path $PSScriptRoot 'loader-profiles.json') -Raw | ConvertFrom-Json
+}
+
+function Get-GameCopyPaths([string] $copyRoot) {
+    $managed = Join-Path $copyRoot 'Kingmaker_Data\Managed'
+    return [pscustomobject]@{
+        InstallDir = $copyRoot; ManagedDir = $managed; UnityModManagerDir = Join-Path $managed 'UnityModManager'
+        ModsDir = Join-Path $copyRoot 'Mods'; Pristine = Join-Path $copyRoot '.lab-pristine'
+    }
+}
+
+# Refuses anything but a copy inside the lab, so a mistyped path can never wipe the loader of a real installation.
+function Assert-GameCopy($lab, [string] $copyRoot, [string] $ownerInstall) {
+    $full = [IO.Path]::GetFullPath($copyRoot).TrimEnd('\')
+    $owner = [IO.Path]::GetFullPath($ownerInstall).TrimEnd('\')
+    $allowed = (Join-Path $lab.Root 'game-copies').TrimEnd('\') + '\'
+    if ($full -ieq $owner -or $full.StartsWith($owner + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Refusing to use the owner's installation as a game copy: $full" }
+    if (-not $full.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase)) { throw "A game copy must live under $allowed (got $full)." }
+    Assert-FileExists (Join-Path $full 'Kingmaker.exe') 'Game copy Kingmaker.exe'
+    return $full
+}
+
+# One-time capture of the copy's as-copied loader state, so the owner's 0.33.0 set can be re-applied exactly.
+function Initialize-GameCopy($paths) {
+    $pristine = $paths.Pristine
+    if (-not (Test-Path -LiteralPath $pristine)) {
+        $building = "$pristine.building"
+        if (Test-Path -LiteralPath $building) { Remove-Item -LiteralPath $building -Recurse -Force }
+        New-Item -ItemType Directory -Path $building | Out-Null
+        Copy-Item -LiteralPath $paths.UnityModManagerDir -Destination (Join-Path $building 'UnityModManager') -Recurse
+        Copy-Item -LiteralPath $paths.ModsDir -Destination (Join-Path $building 'Mods') -Recurse
+        foreach ($name in @('winhttp.dll', 'doorstop_config.ini')) { Copy-Item -LiteralPath (Join-Path $paths.InstallDir $name) -Destination $building }
+        Move-Item -LiteralPath $building -Destination $pristine
+    }
+    Set-Content -LiteralPath (Join-Path $paths.InstallDir 'steam_appid.txt') -Value '640820' -Encoding ASCII -NoNewline
+}
+
+function Resolve-LoaderComponent($lab, $file) {
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $cache = Join-Path $lab.Root 'private\umm-distributions\cache'
+    [IO.Directory]::CreateDirectory($cache) | Out-Null
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $urlKey = (-join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($file.url)) | ForEach-Object { $_.ToString('x2') }))
+    $sha.Dispose()
+    $download = Join-Path $cache $urlKey
+    if (-not (Test-Path -LiteralPath $download)) { Invoke-WebRequest -Uri $file.url -OutFile $download -UseBasicParsing }
+    $archiveEntry = Get-OptionalProperty $file 'archiveEntry' $null
+    if (-not $archiveEntry) { return $download }
+    if ((Get-Sha256 $download) -ne $file.archiveSha256) { throw "Archive hash mismatch: $($file.url)" }
+    $extracted = Join-Path $cache ($file.sha256 + '.bin')
+    if (-not (Test-Path -LiteralPath $extracted)) {
+        $archive = [IO.Compression.ZipFile]::OpenRead($download)
+        try { [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry($archiveEntry), $extracted, $true) }
+        finally { $archive.Dispose() }
+    }
+    return $extracted
+}
+
+# Clean install: the loader directory, proxy and proxy configuration are removed and rebuilt from one declared file set,
+# so a profile can never be a mixture of old and new files. Returns the installed identity for the evidence directory.
+function Install-LoaderProfile($lab, $paths, [string] $profileName) {
+    $pristine = $paths.Pristine
+    $installed = [ordered]@{ profile = $profileName; method = 'clean DoorstopProxy file set in a disposable game copy'; files = [ordered]@{} }
+    Remove-Item -LiteralPath $paths.UnityModManagerDir -Recurse -Force
+    foreach ($name in @('winhttp.dll', 'doorstop_config.ini')) { Remove-Item -LiteralPath (Join-Path $paths.InstallDir $name) -Force }
+
+    if ($profileName -eq 'owner-0.33.0') {
+        $installed.source = 'byte copy of the owner installation (UMM 0.33.0 Nexus distribution, Harmony 2.3.6)'
+        Copy-Item -LiteralPath (Join-Path $pristine 'UnityModManager') -Destination $paths.UnityModManagerDir -Recurse
+        foreach ($name in @('winhttp.dll', 'doorstop_config.ini')) { Copy-Item -LiteralPath (Join-Path $pristine $name) -Destination $paths.InstallDir }
+        Remove-Item -LiteralPath (Join-Path $paths.UnityModManagerDir 'Log.txt') -Force -ErrorAction SilentlyContinue
+    }
+    else {
+        $document = Get-LoaderProfileDocument
+        $property = $document.profiles.PSObject.Properties[$profileName]
+        if (-not $property) { throw "Unknown loader profile: $profileName" }
+        $definition = $property.Value
+        $installed.source = 'component-assembled from upstream NuGet packages and the UMM repository; not the Nexus ZIP'
+        $installed.note = $definition.note
+        $installed.ummVersion = $definition.ummVersion
+        $installed.harmonyVersion = $definition.harmonyVersion
+        New-Item -ItemType Directory -Path $paths.UnityModManagerDir | Out-Null
+        Copy-Item -LiteralPath (Join-Path $pristine 'UnityModManager\Config.xml') -Destination $paths.UnityModManagerDir
+        foreach ($entry in $definition.files.PSObject.Properties) {
+            $source = Resolve-LoaderComponent $lab $entry.Value
+            if ((Get-Sha256 $source) -ne $entry.Value.sha256) { throw "Component hash mismatch for $($entry.Name)" }
+            Copy-Item -LiteralPath $source -Destination (Join-Path $paths.InstallDir ($entry.Name -replace '/', '\')) -Force
+        }
+        [IO.File]::WriteAllText((Join-Path $paths.InstallDir 'doorstop_config.ini'), $document.doorstopConfig, [Text.Encoding]::ASCII)
+    }
+
+    foreach ($file in @(Get-ChildItem -LiteralPath $paths.UnityModManagerDir -File)) { $installed.files[$file.Name] = Get-Sha256 $file.FullName }
+    foreach ($name in @('winhttp.dll', 'doorstop_config.ini')) { $installed.files[$name] = Get-Sha256 (Join-Path $paths.InstallDir $name) }
+    return $installed
+}
+
+# Rebuilds the copy's Mods folder from the pristine set: none, the named mods, or all of them.
+function Set-GameCopyMods($paths, [string] $modProfile, [string[]] $modSet) {
+    if (Test-Path -LiteralPath $paths.ModsDir) { Remove-Item -LiteralPath $paths.ModsDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $paths.ModsDir | Out-Null
+    $pristineMods = Join-Path $paths.Pristine 'Mods'
+    $names = if ($modProfile -eq 'owner') { @(Get-ChildItem -LiteralPath $pristineMods -Directory | ForEach-Object Name) } else { @($modSet | Where-Object { $_ }) }
+    foreach ($name in $names) {
+        $source = Join-Path $pristineMods $name
+        if (-not (Test-Path -LiteralPath $source)) { throw "Mod not found in the pristine set: $name" }
+        Copy-Item -LiteralPath $source -Destination $paths.ModsDir -Recurse
+    }
+    return $names
+}
+
+# Every file a loader or mod change could affect in a real installation. Compared before and after each run.
+function Get-InstallationManifest($game) {
+    $files = New-Object System.Collections.ArrayList
+    foreach ($name in @('winhttp.dll', 'doorstop_config.ini', 'Kingmaker.exe')) { [void] $files.Add((Get-Item -LiteralPath (Join-Path $game.InstallDir $name))) }
+    [void] $files.Add((Get-Item -LiteralPath (Join-Path $game.ManagedDir 'Assembly-CSharp.dll')))
+    foreach ($directory in @($game.UnityModManagerDir, $game.ModsDir)) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $directory -File -Recurse -Force)) { [void] $files.Add($file) }
+    }
+    return @($files | ForEach-Object { "{0}|{1}|{2}" -f $_.FullName, $_.Length, (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } | Sort-Object)
+}
+
+function Start-KingmakerCopy($paths, [string] $requestPath) {
+    $exe = Join-Path $paths.InstallDir 'Kingmaker.exe'
+    $arguments = @('-popupwindow', '-screen-width', '1280', '-screen-height', '720', "-kmcsRequest=`"$requestPath`"")
+    return Start-Process -FilePath $exe -WorkingDirectory $paths.InstallDir -ArgumentList $arguments -PassThru
+}
