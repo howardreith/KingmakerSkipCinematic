@@ -40,7 +40,7 @@ covers a report path that becomes a hard link to the input at publication, and a
   and recovery journal stay for `-RecoverOnly`. Private copies go below a temporary root the caller can scope.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
-- `scripts/Test.ps1` at `4e4a8e5`: 55/55 unit, provenance 54/54, package provenance 10/10.
+- `scripts/Test.ps1` at `4e4a8e5` and again at `879c19d` (a test-detail change only): 55/55 unit, provenance 54/54, package provenance 10/10.
   - Fixtures are compiled with the .NET Framework compiler against the pinned files or disposable stub loaders of known
     identity, so no case depends on the installed loader.
   - Reference cases: newer UMM 0.33.0.0; a 0.31.1.0 with another culture; Harmony 2; an extra UMM-family assembly; an
