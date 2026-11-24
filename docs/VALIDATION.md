@@ -10,8 +10,11 @@ other repository-level hook) as the last step before `CoreCompile`, the UnityMod
 receives must be exactly the two pinned files, re-hashed against the parsed pins. In both checks the CLR identity read
 from the same bytes as the digest must be the identity the pin declares (name, version, neutral culture, no token), so a
 pin whose digest matches but whose declared version does not is refused. Each compile logs both compiler-input paths and
-hashes. These two files, the targets and a root `Directory.Build.targets` (with `Directory.Build.props`) are product
-inputs for the receipt comparison.
+hashes. These two files, the targets, everything under `src/` (including any `src/Directory.Build.props` or
+`src/Directory.Build.targets`) and the root `Directory.Build.props` / `Directory.Build.targets` are product inputs for
+the receipt comparison. Digests, CLR identities, entry names and manifest fields are compared with exact ordinal
+equality (PowerShell's `-ceq` follows culture rules, under which an ignorable character such as a soft hyphen makes
+different strings equal).
 
 **Package validation.** `scripts/Validate-Package.ps1` is the standalone check of what will be installed. It reads the
 input once, through one handle, into memory, and takes the digest and every inspection from that snapshot. For a ZIP it
@@ -40,23 +43,29 @@ by rename.
   with the checkout's `Info.json`. It validates that copy before taking the run lock and installs exactly the validated
   files; the staged `Info.json` must equal the validated digest before `-ProductManagerVersion` (still recorded in the
   summary) edits it.
-- A no-product control never includes Cutscene Skip, identified by its UMM `Id` in each folder's `Info.json` (ignoring
-  case), whatever the folder is called. Game copies leave it out of the owner profile they copy, with or without a
-  comparison ZIP; a live profile that already contains it is refused; a folder whose manifest cannot be read refuses.
+- No run starts with an inherited Cutscene Skip, identified by its UMM `Id` in each folder's `Info.json` (ignoring case),
+  whatever the folder is called; hidden folders are included. Game copies never copy it from the owner profile (product
+  and no-product runs alike), and only the selected folders' manifests are read. A live profile that already contains
+  it is refused before staging. After product staging exactly one folder carries the shipping Id, the staged validated
+  candidate. A selected folder whose manifest cannot be read refuses.
 - Final cleanup steps are independent of each other. The private copy is removed first and the outcome is saved in the
   host summary: a failed removal makes the run `integrity-failed` (the scenario status is kept). A failure writing the
-  summary or removing the private copy is reported, and this run's lock is still released when restoration succeeded. If restoration did not complete, the lock
+  summary or removing the private copy is reported, and this run's lock is still released when restoration succeeded.
+  Lock release removes only a lock recorded for this run. If it fails, the saved summary is `integrity-failed` with
+  `lockReleased: false`, and a release-only recovery journal lets `-RecoverOnly` remove that run's lock (and refuse
+  another run's). If restoration did not complete, the lock
   and recovery journal stay for `-RecoverOnly`. Private copies go below a temporary root the caller can scope.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
-- `scripts/Test.ps1` at `d2ca1d9`: 55/55 unit, provenance 65/65, package provenance 13/13.
+- `scripts/Test.ps1` at `883fb6e`: 55/55 unit, provenance 81/81, package provenance 16/16.
   - Fixtures are compiled with the .NET Framework compiler against the pinned files or disposable stub loaders of known
     identity, so no case depends on the installed loader.
   - Reference cases: newer UMM 0.33.0.0; a 0.31.1.0 with another culture; Harmony 2; an extra UMM-family assembly; an
     added case-variant `unitymodmanager` reference at 0.31.1.0 and 0.33.0.0 (fixture AssemblyRef name rewritten in
     place); in a disposable validator root, the genuine package with and without a cache, and a declared version that
     disagrees with the cached assembly.
-  - Package cases: wrong assembly name, `AssemblyName`, `EntryMethod`, file version, extra loader payload, raised minimum.
+  - Package cases: wrong assembly name, `AssemblyName`, `EntryMethod`, file version, extra loader payload, raised minimum;
+    a soft hyphen in an otherwise correct `EntryMethod` or `ManagerVersion` (ZIP and bare manifest).
   - Report cases: aliases by spelling and hard link; a report below a fresh subdirectory; the input replaced in place and
     by rename right after its snapshot (every report field still comes from the snapshot); a report path aliased to the
     input, or to the replaced current input, at publication (refused, bytes intact). These use a PowerShell line
@@ -66,13 +75,18 @@ by rename.
     `EntryMethod` refused before locking, and the genuine pair staged with the validated manifest digest; a manifest
     changed after preparation does not change what is staged; a report path equal to or hard-linked to the supplied
     `Info.json` refused with both inputs intact; final cleanup with summary and private-copy failures; incomplete
-    restoration; a private-copy cleanup failure saved as an `integrity-failed` summary with the lock released;
+    restoration; a private-copy cleanup failure saved as an `integrity-failed` summary with the lock released; a lock
+    that cannot be deleted saved as `integrity-failed` with a release-only journal, recovery refusing another run's lock
+    and then clearing only this run's;
     no-product controls from an owner profile that contains Cutscene Skip, also under another folder name and in another
-    case; cleanup counted only below the
+    case, in a folder named `Keys` and in a hidden folder; product runs (ZIP and bare DLL) from an owner profile with an
+    older Cutscene Skip under another name, staging only the validated candidate, and a live profile with it refused; a
+    malformed manifest in an unselected folder not blocking an isolated selection, and refused when selected; cleanup counted only below the
     invocation's own temporary root, with another invocation's folder present.
   - Package provenance runs the real build and packaging commands in a temporary checkout: genuine package; build-helper
     change refused, then rebuilt; documentation-only reuse; corrupt cache refused before compilation; a DLL differing
-    from its receipt refused; a committed root `Directory.Build.targets` change refused, then rebuilt. It also runs
+    from its receipt refused; a committed root or `src/Directory.Build.targets` change refused, then rebuilt, with
+    documentation-only reuse after it. It also runs
     direct MSBuild builds: a genuine rebuild recording both compiler inputs, a
     substituted cache file refused, a declared version disagreeing with the pinned bytes refused, and a `Directory.Build.targets` hook at the `CoreCompile` boundary that points
     UnityModManager elsewhere refused by the final check. It finds the manifest by the checkout's version.
