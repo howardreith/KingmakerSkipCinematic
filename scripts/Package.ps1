@@ -70,6 +70,20 @@ try {
 }
 finally { $archive.Dispose() }
 
+# The ZIP as built is checked by the standalone validator (its own process): the four entries, the packaged Info.json
+# and the packaged DLL's actual AssemblyRefs (exactly the pinned UnityModManager and 0Harmony12). A refused ZIP is removed.
+$validationPath = Join-Path $outputDir "KingmakerCutsceneSkip-$($info.Version).validation.json"
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Validate-Package.ps1') -PackagePath $zipPath -ReportPath $validationPath
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item -LiteralPath $zipPath, $validationPath -Force -ErrorAction SilentlyContinue
+    throw 'Package validation failed; the ZIP was removed.'
+}
+$validation = Get-Content -LiteralPath $validationPath -Raw | ConvertFrom-Json
+if ([string]$validation.dll_sha256 -cne $dllSha256 -or [string]$validation.input_sha256 -cne (Get-Sha256 $zipPath)) {
+    Remove-Item -LiteralPath $zipPath, $validationPath -Force -ErrorAction SilentlyContinue
+    throw 'The validated package is not the ZIP just built from the receipt''s DLL; the ZIP was removed.'
+}
+
 $manifest = [ordered]@{
     product = $info.Id
     version = $info.Version
@@ -81,6 +95,8 @@ $manifest = [ordered]@{
     zip = $zipPath
     zip_sha256 = Get-Sha256 $zipPath
     dll_sha256 = $dllSha256
+    dll_loader_references = @($validation.dll_loader_references)
+    package_validation = [IO.Path]::GetFileName($validationPath)
     contents = @($entries.Keys)
 }
 Write-JsonFile (Join-Path $outputDir "KingmakerCutsceneSkip-$($info.Version).manifest.json") $manifest
