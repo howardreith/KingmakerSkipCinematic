@@ -1,15 +1,15 @@
 {
     "product":  "KingmakerCutsceneSkip",
     "version":  "0.1.2",
-    "build_commit":  "4e4a8e5487bef636a110f44d0ae75b21006e5c43",
-    "package_commit":  "4e4a8e5487bef636a110f44d0ae75b21006e5c43",
+    "build_commit":  "50a92c9e27fa70d0569db9d8ecff302248b1011b",
+    "package_commit":  "50a92c9e27fa70d0569db9d8ecff302248b1011b",
     "dirty":  false,
     "provenance_verified":  true,
     "provenance_problems":  [
 
                             ],
     "zip":  "<repo>\\artifacts\\package\\KingmakerCutsceneSkip-0.1.2.zip",
-    "zip_sha256":  "86651c9a23f2e2997cf538ae8fc8e200824e41142f968b20561f3b6f0a99cff4",
+    "zip_sha256":  "ff666d858218af0c1940cf39a7b2b2e6f2c48a106628d850ea7fae2188d6c69d",
     "dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
     "dll_loader_references":  [
                                   {
