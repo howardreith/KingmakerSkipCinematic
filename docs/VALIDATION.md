@@ -22,7 +22,8 @@ requires exactly the four package entries (`Info.json`, `KingmakerCutsceneSkip.d
 `KingmakerCutsceneSkip/`). The packaged `Info.json` must name the product's fixed load target (`Id`
 `KingmakerCutsceneSkip`, `AssemblyName` `KingmakerCutsceneSkip.dll`, `EntryMethod` `KingmakerCutsceneSkip.Main.Load`,
 defined in `scripts/Common.ps1` independently of any manifest file), this checkout's `Version`, and a `ManagerVersion`
-equal to the pinned floor (0.31.1). A bare DLL (`-DllPath`) may be given its `Info.json` (`-InfoPath`). It is read once
+equal to the pinned floor (0.31.1). Each of these five members must be present under exactly its declared name
+(compared ordinally; PowerShell's member lookup ignores case, so `managerversion` alone is refused) and be a string. A bare DLL (`-DllPath`) may be given its `Info.json` (`-InfoPath`). It is read once
 through one handle, checked the same way, and protected like the input. The DLL must define `KingmakerCutsceneSkip` with a file version
 belonging to the shipping version. Within the UnityModManager and Harmony families (any case, any suffix), the full
 identities in its AssemblyRef table, compared ordinally, must be exactly the declared pins:
@@ -35,14 +36,20 @@ through one handle that is refused if it is the snapshot identity or current fil
 by rename.
 
 - `scripts/Package.ps1` validates the ZIP it builds (a refused ZIP is removed) and records the validated ZIP digest and
-  references in its manifest. Documentation-only commits still reuse the frozen DLL.
+  references in its manifest. Documentation-only commits still reuse the frozen DLL. Build-receipt fields are typed
+  before any comparison: `status` and `configuration` are strings, `commit` is a 40-character hexadecimal string, and
+  `dll_sha256` and every recorded pinned-reference digest are strings of 64 lowercase hexadecimal characters. A boolean,
+  an array or a padded digest is refused, never compared.
 - The reference cache refuses an existing entry that does not match its pin (remove it explicitly to re-fetch); only an
   absent entry is downloaded.
 - `scripts/runtime/Invoke-NativeRun.ps1` decides once whether a product is staged (`-NoProduct` wins; a ZIP given with it
   is recorded as a comparison archive only). It freezes the product as a private copy: the ZIP, or the built DLL together
   with the checkout's `Info.json`. It validates that copy before taking the run lock and installs exactly the validated
-  files; the staged `Info.json` must equal the validated digest before `-ProductManagerVersion` (still recorded in the
-  summary) edits it.
+  files. A ZIP is read once into memory at staging, and that snapshot must have the validated digest. Only its four
+  package entries are written, from the snapshot, into `Mods\KingmakerCutsceneSkip`; any other entry refuses before
+  anything is written, and a failure removes the product folder. In both routes the staged `Info.json` must equal the
+  validated manifest digest (the validator now reports `info_sha256` for the packaged manifest too) before
+  `-ProductManagerVersion` (still recorded in the summary) edits it.
 - No run starts with an inherited Cutscene Skip, identified by its UMM `Id` in each folder's `Info.json` (ignoring case),
   whatever the folder is called; hidden folders are included. Game copies never copy it from the owner profile (product
   and no-product runs alike), and only the selected folders' manifests are read. A live profile that already contains
@@ -51,13 +58,39 @@ by rename.
 - Final cleanup steps are independent of each other. The private copy is removed first and the outcome is saved in the
   host summary: a failed removal makes the run `integrity-failed` (the scenario status is kept). A failure writing the
   summary or removing the private copy is reported, and this run's lock is still released when restoration succeeded.
-  Lock release removes only a lock recorded for this run. If it fails, the saved summary is `integrity-failed` with
-  `lockReleased: false`, and a release-only recovery journal lets `-RecoverOnly` remove that run's lock (and refuse
-  another run's). If restoration did not complete, the lock
-  and recovery journal stay for `-RecoverOnly`. Private copies go below a temporary root the caller can scope.
+  Private copies go below a temporary root the caller can scope.
+- Run lock and recovery. The lab's configured lock (`runtime-state\runtime.lock`) is the only lock a run or recovery
+  releases. It is released only for a named run whose `runId` it records, and it is opened once exclusively (no sharing,
+  with delete access): the owner is read through that handle and the file is deleted through the same handle, so it
+  cannot be replaced between the check and the removal. When restoration completes, the journal is replaced by this
+  run's release-lock journal in one write. There is no interval without a record of the owned transaction, and that
+  journal is retired only after the lock release is confirmed. If the release fails, the saved summary is
+  `integrity-failed` with `lockReleased: false`, and the release-lock journal stays for a retry. The same handoff
+  applies when setup after taking the lock fails and the lock cannot be released. `-RecoverOnly` first requires the
+  journal to name a run and that run to own this lab's lock (ignoring any lock path stored in the journal), before
+  anything is restored or released. Another run's lock, an empty run ID, or an ordinary journal without its lock is
+  refused with the staged files, journal and locks untouched. If restoration did not complete, the lock and recovery
+  journal stay for `-RecoverOnly`.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
-- `scripts/Test.ps1` at `883fb6e`: 55/55 unit, provenance 81/81, package provenance 16/16.
+- `scripts/Test.ps1` at `91da7b6`: 55/55 unit, provenance 97/97, package provenance 20/20. Cases added in round 6 are
+  listed first; the rest are unchanged from earlier rounds.
+  - Receipt digests: in the temporary checkout, a real build of an uncommitted source change (reverted before packaging)
+    gives a different baseline-compatible DLL. Beside it, an otherwise coherent receipt with `dll_sha256` `true` or `[]`
+    is refused without any override; the genuine receipt and DLL then package again. Recorded pin digests that are a
+    boolean, an empty array or followed by a line feed are problems.
+  - Manifest members: `ManagerVersion` spelled `managerversion` in a ZIP manifest and `EntryMethod` spelled `entrymethod`
+    in a bare manifest are refused; a manifest with the declared names passes.
+  - ZIP staging: the private ZIP replaced after validation by one with the same DLL and Id but a changed manifest, or
+    with an additional top-level entry, is refused with nothing in the destination; the genuine ZIP stages exactly its
+    four entries with the validated DLL and manifest digests.
+  - Recovery, in disposable labs: an ordinary journal recovered while the owned lock is held open completes restoration
+    and keeps a release-lock journal and the lock; a retry after the handle closes clears only that transaction. An
+    ordinary journal for run A with run B's lock leaves the staged files, journal and lock untouched. A release-lock
+    journal naming another lab's lock path, or with an empty run ID, keeps both locks. In a child process with a line
+    breakpoint: a successor's lock written just before the exclusive open is kept; an attempt to replace the lock after
+    the ownership check is refused and only the verified lock is removed. These labs have no game, so in those blocks
+    only, the shared wait for a running Kingmaker process sees an empty process list.
   - Fixtures are compiled with the .NET Framework compiler against the pinned files or disposable stub loaders of known
     identity, so no case depends on the installed loader.
   - Reference cases: newer UMM 0.33.0.0; a 0.31.1.0 with another culture; Harmony 2; an extra UMM-family assembly; an
