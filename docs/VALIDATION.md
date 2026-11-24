@@ -7,23 +7,29 @@
 twice: before references resolve, the cache files must match the hashes parsed from `scripts/reference-pins.json`; and in
 `LoaderReferences.Final.targets`, imported after `Microsoft.CSharp.targets` (so after `Directory.Build.targets` and any
 other repository-level hook) as the last step before `CoreCompile`, the UnityModManager and 0Harmony12 entries Csc
-receives must be exactly the two pinned files, re-hashed against the parsed pins. Each compile logs both compiler-input
-paths and hashes. These two files and the targets are product inputs for the receipt comparison.
+receives must be exactly the two pinned files, re-hashed against the parsed pins. In both checks the CLR identity read
+from the same bytes as the digest must be the identity the pin declares (name, version, neutral culture, no token), so a
+pin whose digest matches but whose declared version does not is refused. Each compile logs both compiler-input paths and
+hashes. These two files, the targets and a root `Directory.Build.targets` (with `Directory.Build.props`) are product
+inputs for the receipt comparison.
 
 **Package validation.** `scripts/Validate-Package.ps1` is the standalone check of what will be installed. It reads the
 input once, through one handle, into memory, and takes the digest and every inspection from that snapshot. For a ZIP it
 requires exactly the four package entries (`Info.json`, `KingmakerCutsceneSkip.dll`, `README.md`, `LICENSE` under
-`KingmakerCutsceneSkip/`), and a packaged `Info.json` whose `Id`, `Version`, `AssemblyName` and `EntryMethod` are this
-checkout's shipping identity and whose `ManagerVersion` equals the pinned floor (0.31.1); a bare DLL (`-DllPath`) may be
-given its `Info.json` (`-InfoPath`), checked the same way. The DLL must define `KingmakerCutsceneSkip` with a file version
+`KingmakerCutsceneSkip/`). The packaged `Info.json` must name the product's fixed load target (`Id`
+`KingmakerCutsceneSkip`, `AssemblyName` `KingmakerCutsceneSkip.dll`, `EntryMethod` `KingmakerCutsceneSkip.Main.Load`,
+defined in `scripts/Common.ps1` independently of any manifest file), this checkout's `Version`, and a `ManagerVersion`
+equal to the pinned floor (0.31.1). A bare DLL (`-DllPath`) may be given its `Info.json` (`-InfoPath`). It is read once
+through one handle, checked the same way, and protected like the input. The DLL must define `KingmakerCutsceneSkip` with a file version
 belonging to the shipping version. Within the UnityModManager and Harmony families (any case, any suffix), the full
 identities in its AssemblyRef table, compared ordinally, must be exactly the declared pins:
 `UnityModManager, Version=0.31.1.0, Culture=neutral, PublicKeyToken=null` and
 `0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null`. A case variant such as `unitymodmanager` is a
 different, refused reference. The declared pin is authoritative. A cached pinned file whose digest authenticates it must
 also carry the declared identity (digest and identity come from one read), or validation stops. The report is written
-through one handle that is refused if it is the input's snapshot identity or the input path's current file. This also
-covers a report path that becomes a hard link to the input at publication, and an input replaced by rename.
+through one handle that is refused if it is the snapshot identity or current file of the input or of the supplied
+`Info.json`. This also covers a report path that becomes a hard link to the input at publication, and an input replaced
+by rename.
 
 - `scripts/Package.ps1` validates the ZIP it builds (a refused ZIP is removed) and records the validated ZIP digest and
   references in its manifest. Documentation-only commits still reuse the frozen DLL.
@@ -32,15 +38,18 @@ covers a report path that becomes a hard link to the input at publication, and a
 - `scripts/runtime/Invoke-NativeRun.ps1` decides once whether a product is staged (`-NoProduct` wins; a ZIP given with it
   is recorded as a comparison archive only). It freezes the product as a private copy: the ZIP, or the built DLL together
   with the checkout's `Info.json`. It validates that copy before taking the run lock and installs exactly the validated
-  files. `-ProductManagerVersion` still edits only the staged `Info.json`, and the summary records it.
-- A no-product control never includes Cutscene Skip. Game copies leave it out of the owner profile they copy, with or
-  without a comparison ZIP; a live profile that already contains it is refused.
-- Final cleanup steps are independent of each other. A failure writing the summary or removing the private copy is
-  reported, and this run's lock is still released when restoration succeeded. If restoration did not complete, the lock
+  files; the staged `Info.json` must equal the validated digest before `-ProductManagerVersion` (still recorded in the
+  summary) edits it.
+- A no-product control never includes Cutscene Skip, identified by its UMM `Id` in each folder's `Info.json` (ignoring
+  case), whatever the folder is called. Game copies leave it out of the owner profile they copy, with or without a
+  comparison ZIP; a live profile that already contains it is refused; a folder whose manifest cannot be read refuses.
+- Final cleanup steps are independent of each other. The private copy is removed first and the outcome is saved in the
+  host summary: a failed removal makes the run `integrity-failed` (the scenario status is kept). A failure writing the
+  summary or removing the private copy is reported, and this run's lock is still released when restoration succeeded. If restoration did not complete, the lock
   and recovery journal stay for `-RecoverOnly`. Private copies go below a temporary root the caller can scope.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
-- `scripts/Test.ps1` at `4e4a8e5` and again at `879c19d` (a test-detail change only): 55/55 unit, provenance 54/54, package provenance 10/10.
+- `scripts/Test.ps1` at `d2ca1d9`: 55/55 unit, provenance 65/65, package provenance 13/13.
   - Fixtures are compiled with the .NET Framework compiler against the pinned files or disposable stub loaders of known
     identity, so no case depends on the installed loader.
   - Reference cases: newer UMM 0.33.0.0; a 0.31.1.0 with another culture; Harmony 2; an extra UMM-family assembly; an
@@ -52,14 +61,20 @@ covers a report path that becomes a hard link to the input at publication, and a
     by rename right after its snapshot (every report field still comes from the snapshot); a report path aliased to the
     input, or to the replaced current input, at publication (refused, bytes intact). These use a PowerShell line
     breakpoint in a separate process, so the validator has no test hook.
-  - Runner cases: bare manifests with a mismatched `Version`, `ManagerVersion` or `Id` refused; a manifest changed after
-    preparation does not change what is staged; final cleanup with summary and private-copy failures; incomplete
-    restoration; no-product controls from an owner profile that contains Cutscene Skip; cleanup counted only below the
+  - Runner cases: bare manifests with a mismatched `Version`, `ManagerVersion` or `Id` refused; in a disposable checkout
+    using the default manifest path, a root `Info.json` changed after the build to another `Id`, `AssemblyName` or
+    `EntryMethod` refused before locking, and the genuine pair staged with the validated manifest digest; a manifest
+    changed after preparation does not change what is staged; a report path equal to or hard-linked to the supplied
+    `Info.json` refused with both inputs intact; final cleanup with summary and private-copy failures; incomplete
+    restoration; a private-copy cleanup failure saved as an `integrity-failed` summary with the lock released;
+    no-product controls from an owner profile that contains Cutscene Skip, also under another folder name and in another
+    case; cleanup counted only below the
     invocation's own temporary root, with another invocation's folder present.
   - Package provenance runs the real build and packaging commands in a temporary checkout: genuine package; build-helper
     change refused, then rebuilt; documentation-only reuse; corrupt cache refused before compilation; a DLL differing
-    from its receipt refused. It also runs direct MSBuild builds: a genuine rebuild recording both compiler inputs, a
-    substituted cache file refused, and a `Directory.Build.targets` hook at the `CoreCompile` boundary that points
+    from its receipt refused; a committed root `Directory.Build.targets` change refused, then rebuilt. It also runs
+    direct MSBuild builds: a genuine rebuild recording both compiler inputs, a
+    substituted cache file refused, a declared version disagreeing with the pinned bytes refused, and a `Directory.Build.targets` hook at the `CoreCompile` boundary that points
     UnityModManager elsewhere refused by the final check. It finds the manifest by the checkout's version.
 
 ## Candidate 0.1.2 (UMM compatibility and cinematic safety)
