@@ -122,7 +122,7 @@ try {
         Initialize-GameCopy $copyPaths
         $loaderIdentity = Install-LoaderProfile $lab $copyPaths $LoaderProfile
         Write-JsonFile (Join-Path $evidence 'loader-install.json') $loaderIdentity
-        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet -ExcludeModIds @(Get-NoProductModExclusions $productPlan))
+        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet -ExcludeModIds @(Get-InheritedModExclusions $productPlan))
     }
     elseif ($ModProfile -eq 'isolated') {
         # Persist the planned move first: recovery inspects both locations, so an interruption on either side of the
@@ -136,8 +136,9 @@ try {
         Save-Journal $lab $journal
         New-Item -ItemType Directory -Path $game.ModsDir | Out-Null
     }
-    # A no-product control must not run with an inherited Cutscene Skip (game copies exclude it; a live profile refuses).
-    if ($productPlan.Mode -eq 'none') { Assert-NoProductControlMods $game.ModsDir }
+    # No run starts with an inherited Cutscene Skip under any folder name (game copies exclude it; a live profile refuses):
+    # a no-product control has none and a product run loads only the validated candidate staged below.
+    Assert-NoInstalledShippingMod $game.ModsDir
     $deploy = @(@{ Source = $harnessDir; Name = 'KingmakerCutsceneSkipRuntimeHarness'; Info = Join-Path $root 'tools\RuntimeHarness\Info.json' })
     # The product itself is staged below from the validated private copy (never from the build output).
     foreach ($item in $deploy) {
@@ -158,6 +159,7 @@ try {
         $journal.staged += $productTarget
         Save-Journal $lab $journal
         $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir
+        Assert-OnlyStagedShippingMod $game.ModsDir 'KingmakerCutsceneSkip'
     }
     if ($ProductManagerVersion -and -not $NoProduct) {
         $stagedInfo = Join-Path $game.ModsDir 'KingmakerCutsceneSkip\Info.json'
@@ -254,7 +256,7 @@ finally {
         $summary.integrityFailures = $integrityFailures
     }
     # Summary, private-copy cleanup and lock release are independent; the lock is released whenever restoration succeeded.
-    Complete-NativeRun $lab $lock ([bool]$restored) $summary (Join-Path $evidence 'host-summary.json') $validatedProduct
+    Complete-NativeRun $lab $lock ([bool]$restored) $summary (Join-Path $evidence 'host-summary.json') $validatedProduct $runId
     Write-Host "Run $runId finished: $($summary.status) $($summary.failure) $(if ($integrityFailures.Count -gt 0) { '[' + ($integrityFailures -join '; ') + ']' })"
     Write-Host "Evidence: $evidence"
 }

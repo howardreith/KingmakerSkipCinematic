@@ -69,8 +69,15 @@ function Enter-RuntimeLock($lab, [string] $runId) {
     return $lab.Lock
 }
 
-function Exit-RuntimeLock($lab, [string] $lock) {
-    if ($lock -and (Test-Path -LiteralPath $lock)) { Remove-Item -LiteralPath $lock -Force }
+# Releases a runtime lock. With -RunId, only a lock recorded for that run (runId=<id>) is removed; another run's lock is
+# refused. A failed removal is an error (it is never silently left behind).
+function Exit-RuntimeLock($lab, [string] $lock, [string] $RunId) {
+    if (-not $lock -or -not (Test-Path -LiteralPath $lock)) { return }
+    if ($RunId) {
+        $recorded = @([IO.File]::ReadAllLines($lock) | Where-Object { $_.StartsWith('runId=', [StringComparison]::Ordinal) } | ForEach-Object { $_.Substring(6) })
+        if ($recorded.Count -ne 1 -or -not [string]::Equals($recorded[0], $RunId, [StringComparison]::Ordinal)) { throw "The runtime lock $lock belongs to run '$($recorded -join ',')', not '$RunId'; it is left in place." }
+    }
+    Remove-Item -LiteralPath $lock -Force -ErrorAction Stop
 }
 
 function Save-Journal($lab, $journal) {
@@ -211,8 +218,15 @@ function Restore-RunJournal($lab, $journal) {
 function Restore-InterruptedRun($lab) {
     if (-not (Test-Path -LiteralPath $lab.Journal)) { Write-Host 'No interrupted run journal.'; return }
     $journal = Get-Content -LiteralPath $lab.Journal -Raw | ConvertFrom-Json
+    if ($journal.PSObject.Properties['phase'] -and [string]$journal.phase -eq 'release-lock') {
+        # Restoration had completed; only this run's lock release is outstanding.
+        Exit-RuntimeLock $lab ([string]$journal.lock) ([string]$journal.runId)
+        Remove-Item -LiteralPath $lab.Journal -Force
+        Write-Host "Released the runtime lock of run $($journal.runId)."
+        return
+    }
     Restore-RunJournal $lab $journal   # throws (journal and lock kept) unless every step succeeded
-    Exit-RuntimeLock $lab $lab.Lock
+    Exit-RuntimeLock $lab $lab.Lock ([string]$journal.runId)
     Write-Host "Recovered interrupted run $($journal.runId)."
 }
 
@@ -331,12 +345,17 @@ function Set-GameCopyMods($paths, [string] $modProfile, [string[]] $modSet, [str
     if (Test-Path -LiteralPath $paths.ModsDir) { Remove-Item -LiteralPath $paths.ModsDir -Recurse -Force }
     New-Item -ItemType Directory -Path $paths.ModsDir | Out-Null
     $pristineMods = Join-Path $paths.Pristine 'Mods'
-    $names = if ($modProfile -eq 'owner') { @(Get-ChildItem -LiteralPath $pristineMods -Directory | ForEach-Object Name) } else { @($modSet | Where-Object { $_ }) }
+    $names = if ($modProfile -eq 'owner') { @(Get-ChildItem -LiteralPath $pristineMods -Directory -Force | ForEach-Object Name) } else { @($modSet | Where-Object { $_ }) }
     # Mods whose UMM Id is excluded (the shipping mod for a no-product control) are never copied, whatever their folder
     # is called. The Ids come from each folder's Info.json; an unreadable manifest refuses the copy.
+    # Only the selected folders' manifests are read.
     if (@($ExcludeModIds).Count -gt 0) {
-        $ids = Get-ModFolderIds $pristineMods
-        $names = @($names | Where-Object { $id = [string]$ids[$_]; -not @($ExcludeModIds | Where-Object { [string]::Equals($_, $id, [StringComparison]::OrdinalIgnoreCase) }) })
+        $names = @($names | Where-Object {
+            $source = Join-Path $pristineMods $_
+            if (-not (Test-Path -LiteralPath $source -PathType Container)) { throw "Mod not found in the pristine set: $_" }
+            $id = Get-ModManifestId $source
+            -not @($ExcludeModIds | Where-Object { [string]::Equals($_, $id, [StringComparison]::OrdinalIgnoreCase) })
+        })
     }
     foreach ($name in $names) {
         $source = Join-Path $pristineMods $name

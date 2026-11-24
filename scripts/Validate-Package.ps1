@@ -34,7 +34,7 @@ if ($ReportPath) {
     $ReportPath = Resolve-LiteralPath $ReportPath
     foreach ($protectedInput in @($inputPath, $InfoPath | Where-Object { $_ })) {
         $sameSpelling = [string]::Equals([IO.Path]::GetFullPath($ReportPath), [IO.Path]::GetFullPath($protectedInput), [StringComparison]::OrdinalIgnoreCase)
-        if ($sameSpelling -or ([IO.File]::Exists($ReportPath) -and [KmcsFileIdentity]::Of($ReportPath) -ceq [KmcsFileIdentity]::Of($protectedInput))) { throw 'The report path must not be the validated input.' }
+        if ($sameSpelling -or ([IO.File]::Exists($ReportPath) -and (Test-OrdinalEqual ([KmcsFileIdentity]::Of($ReportPath)) ([KmcsFileIdentity]::Of($protectedInput))))) { throw 'The report path must not be the validated input.' }
     }
 }
 
@@ -55,15 +55,15 @@ foreach ($pin in $pins) {
     $cached = Join-Path (Get-PinnedReferenceDirectory) $pin.File
     if (Test-Path -LiteralPath $cached -PathType Leaf) {
         $cachedBytes = [IO.File]::ReadAllBytes($cached)
-        if ((Get-BytesSha256 $cachedBytes) -ceq [string]$pin.Sha256) {
+        if (Test-OrdinalEqual (Get-BytesSha256 $cachedBytes) ([string]$pin.Sha256)) {
             # The same rule the compiler gate applies (Assert-PinnedReferenceBytes), on this one read.
             $cachedIdentity = [Reflection.Assembly]::ReflectionOnlyLoad($cachedBytes).GetName().FullName
-            if ($cachedIdentity -cne $declared) { throw "The pinned file $($pin.File) is $cachedIdentity, which disagrees with its declared pin $declared." }
+            if (-not (Test-OrdinalEqual $cachedIdentity $declared)) { throw "The pinned file $($pin.File) is $cachedIdentity, which disagrees with its declared pin $declared." }
         }
     }
     $expected[$declared] = $true
 }
-$loaderPin = @($pins | Where-Object { $_.Name -ceq 'UnityModManager' })
+$loaderPin = @($pins | Where-Object { Test-OrdinalEqual ([string]$_.Name) 'UnityModManager' })
 if ($loaderPin.Count -ne 1) { throw 'The pins do not name exactly one UnityModManager reference.' }
 
 $result = [ordered]@{ status = 'validated'; input = $inputPath; input_sha256 = Get-BytesSha256 $inputBytes }
@@ -74,10 +74,10 @@ function Assert-ManifestIdentity($Manifest, [string] $Label) {
         if (-not $Manifest.PSObject.Properties[$field] -or -not ($Manifest.$field -is [string])) { throw "$Label $field must be a string." }
     }
     foreach ($field in @('Id', 'AssemblyName', 'EntryMethod')) {
-        if ($Manifest.$field -cne [string]$loadIdentity[$field]) { throw "$Label $field is '$($Manifest.$field)', not the product's '$($loadIdentity[$field])'." }
+        if (-not (Test-OrdinalEqual $Manifest.$field ([string]$loadIdentity[$field]))) { throw "$Label $field is '$($Manifest.$field)', not the product's '$($loadIdentity[$field])'." }
     }
-    if ($Manifest.Version -cne [string]$info.Version) { throw "$Label Version is '$($Manifest.Version)', not the shipping '$($info.Version)'." }
-    if ($Manifest.ManagerVersion -cne [string]$loaderPin[0].Version) { throw "$Label ManagerVersion $($Manifest.ManagerVersion) must equal the pinned loader floor $($loaderPin[0].Version)." }
+    if (-not (Test-OrdinalEqual $Manifest.Version ([string]$info.Version))) { throw "$Label Version is '$($Manifest.Version)', not the shipping '$($info.Version)'." }
+    if (-not (Test-OrdinalEqual $Manifest.ManagerVersion ([string]$loaderPin[0].Version))) { throw "$Label ManagerVersion $($Manifest.ManagerVersion) must equal the pinned loader floor $($loaderPin[0].Version)." }
 }
 $shippingVersion = [string]$info.Version
 if ($PackagePath) {
@@ -86,9 +86,10 @@ if ($PackagePath) {
     $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Read)
     try {
         $names = @($archive.Entries | ForEach-Object { $_.FullName })
-        $unexpected = @($names | Where-Object { $allowed -cnotcontains $_ })
+        $allowedSet = [Collections.Generic.HashSet[string]]::new([string[]]$allowed, [StringComparer]::Ordinal)
+        $unexpected = @($names | Where-Object { -not $allowedSet.Contains($_) })
         if ($unexpected.Count -gt 0) { throw "Package contains entries outside the mod's four files: $($unexpected -join ', ')" }
-        foreach ($name in $allowed) { if (@($names | Where-Object { $_ -ceq $name }).Count -ne 1) { throw "Package must contain $name exactly once." } }
+        foreach ($name in $allowed) { if (@($names | Where-Object { Test-OrdinalEqual $_ $name }).Count -ne 1) { throw "Package must contain $name exactly once." } }
         function Read-Entry([string] $Name) {
             $entryStream = $archive.GetEntry($Name).Open(); $buffer = [IO.MemoryStream]::new()
             try { $entryStream.CopyTo($buffer); return , $buffer.ToArray() } finally { $buffer.Dispose(); $entryStream.Dispose() }
@@ -116,9 +117,9 @@ else {
 
 $assembly = [Reflection.Assembly]::ReflectionOnlyLoad($dllBytes)
 $assemblyName = $assembly.GetName().Name
-if ($assemblyName -cne 'KingmakerCutsceneSkip') { throw "The product DLL defines assembly '$assemblyName', not KingmakerCutsceneSkip." }
-$fileVersion = @([Reflection.CustomAttributeData]::GetCustomAttributes($assembly) | Where-Object { $_.AttributeType.FullName -ceq 'System.Reflection.AssemblyFileVersionAttribute' } | ForEach-Object { [string]$_.ConstructorArguments[0].Value })
-if ($fileVersion.Count -ne 1 -or -not $fileVersion[0].StartsWith($shippingVersion + '.')) { throw "The product DLL file version '$($fileVersion -join ',')' does not belong to the shipping version $shippingVersion." }
+if (-not (Test-OrdinalEqual $assemblyName 'KingmakerCutsceneSkip')) { throw "The product DLL defines assembly '$assemblyName', not KingmakerCutsceneSkip." }
+$fileVersion = @([Reflection.CustomAttributeData]::GetCustomAttributes($assembly) | Where-Object { Test-OrdinalEqual $_.AttributeType.FullName 'System.Reflection.AssemblyFileVersionAttribute' } | ForEach-Object { [string]$_.ConstructorArguments[0].Value })
+if ($fileVersion.Count -ne 1 -or -not $fileVersion[0].StartsWith($shippingVersion + '.', [StringComparison]::Ordinal)) { throw "The product DLL file version '$($fileVersion -join ',')' does not belong to the shipping version $shippingVersion." }
 # Every reference in the UnityModManager or Harmony families (any case, any suffix) is a loader reference. Their full
 # identities, compared ordinally (so a case variant is a different reference), must be exactly the declared pins.
 $loaderRefs = @($assembly.GetReferencedAssemblies() | Where-Object { $_.Name -match '(?i)^(unitymodmanager|0?harmony)' } | Sort-Object { $_.FullName } -CaseSensitive)
@@ -128,11 +129,12 @@ $expectedIdentities = [string[]]@($expected.Keys)
 foreach ($identity in $observedIdentities) {
     if ([Array]::IndexOf($expectedIdentities, $identity) -lt 0) {
         $name = ($identity -split ',')[0]
-        if (@($expectedIdentities | Where-Object { ($_ -split ',')[0] -ceq $name }).Count -gt 0) { throw "The product DLL references $identity, not the pinned $(@($expectedIdentities | Where-Object { ($_ -split ',')[0] -ceq $name })[0])." }
+        $sameName = @($expectedIdentities | Where-Object { Test-OrdinalEqual ($_ -split ',')[0] $name })
+        if ($sameName.Count -gt 0) { throw "The product DLL references $identity, not the pinned $($sameName[0])." }
         throw "The product DLL references an unpinned loader or Harmony assembly: $identity"
     }
 }
-if (($observedIdentities -join "`n") -cne ($expectedIdentities -join "`n")) { throw "The product DLL must reference exactly the pinned loader assemblies [$($expectedIdentities -join '; ')]; found [$($observedIdentities -join '; ')]." }
+if (-not (Test-OrdinalEqual ($observedIdentities -join "`n") ($expectedIdentities -join "`n"))) { throw "The product DLL must reference exactly the pinned loader assemblies [$($expectedIdentities -join '; ')]; found [$($observedIdentities -join '; ')]." }
 $result.dll_assembly_name = $assemblyName
 $result.dll_file_version = $fileVersion[0]
 $result.dll_sha256 = Get-BytesSha256 $dllBytes

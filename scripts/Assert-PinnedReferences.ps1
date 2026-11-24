@@ -24,7 +24,7 @@ try {
         $inputs = @($CompilerInputs.Split('|') | Where-Object { $_ })
         if ($inputs.Count -ne $pins.Count) { throw "Expected exactly $($pins.Count) loader compiler inputs; got: $($inputs -join ', ')" }
         foreach ($pin in $pins) {
-            $match = @($inputs | Where-Object { [IO.Path]::GetFileName($_) -ceq $pin.File })
+            $match = @($inputs | Where-Object { Test-OrdinalEqual ([IO.Path]::GetFileName($_)) ([string]$pin.File) })
             if ($match.Count -ne 1) { throw "The compiler input for $($pin.File) is missing or duplicated." }
             try { $hash = Assert-PinnedReferenceBytes $match[0] $pin } catch { throw "The compiler input $($match[0]) differs from its pin: $($_.Exception.Message)" }
             Write-Host "Loader compiler input: $($match[0]) $hash"

@@ -7,6 +7,9 @@ $script:ProductId = 'KingmakerCutsceneSkip'
 # is never its own reference.
 $script:ProductLoadIdentity = [ordered]@{ Id = 'KingmakerCutsceneSkip'; AssemblyName = 'KingmakerCutsceneSkip.dll'; EntryMethod = 'KingmakerCutsceneSkip.Main.Load' }
 function Get-ProductLoadIdentity { return $script:ProductLoadIdentity }
+# Exact ordinal string equality. PowerShell's -ceq/-cne compare with culture rules, under which ignorable characters
+# (a soft hyphen, for example) make different strings equal; identities, digests and load targets use this instead.
+function Test-OrdinalEqual([string] $A, [string] $B) { return [string]::Equals($A, $B, [StringComparison]::Ordinal) }
 
 function Get-RepositoryRoot { return $script:RepositoryRoot }
 
@@ -61,10 +64,10 @@ function Assert-PinnedReferenceBytes([string] $Path, $Pin) {
     $bytes = [IO.File]::ReadAllBytes($Path)
     $hasher = [Security.Cryptography.SHA256]::Create()
     try { $hash = ([BitConverter]::ToString($hasher.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() } finally { $hasher.Dispose() }
-    if ($hash -cne [string]$Pin.Sha256) { throw "The pinned file $Path does not match its pin." }
+    if (-not (Test-OrdinalEqual $hash ([string]$Pin.Sha256))) { throw "The pinned file $Path does not match its pin." }
     $identity = [Reflection.Assembly]::ReflectionOnlyLoad($bytes).GetName().FullName
     $declared = Get-PinnedDeclaredIdentity $Pin
-    if ($identity -cne $declared) { throw "The pinned file $($Pin.File) is $identity, which disagrees with its declared pin $declared." }
+    if (-not (Test-OrdinalEqual $identity $declared)) { throw "The pinned file $($Pin.File) is $identity, which disagrees with its declared pin $declared." }
     return $hash
 }
 
@@ -159,7 +162,7 @@ function Get-GitMetadata {
 # Repository paths whose content determines the product DLL or the packaged mod identity, including the build and
 # reference helpers that select and verify what the compiler receives (scripts/Build.ps1, scripts/Common.ps1). Changes anywhere else
 # (documentation, tests, native tooling) do not require rebuilding the validated binary.
-$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1', 'scripts/Assert-PinnedReferences.ps1', 'LoaderReferences.Final.targets', 'Directory.Build.targets')
+$script:ProductInputPaths = @('src', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1', 'scripts/Assert-PinnedReferences.ps1', 'LoaderReferences.Final.targets', 'Directory.Build.targets')
 
 function Get-ProductInputPaths { return $script:ProductInputPaths }
 

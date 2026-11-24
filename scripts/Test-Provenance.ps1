@@ -204,6 +204,23 @@ try {
         Assert-Case 'WithoutACacheTheDllIsCheckedAgainstTheDeclaredPin' ($r.ExitCode -ne 0 -and $r.Output -match 'references 0Harmony12, Version=1\.2\.0\.1, Culture=neutral, PublicKeyToken=null, not the pinned 0Harmony12, Version=1\.2\.0\.2')
     }
     finally { $validator = $saved }
+    # Fixed fields are compared ordinally: a soft hyphen (U+00AD, ignorable under culture rules) in an otherwise correct
+    # EntryMethod or ManagerVersion is refused, for a ZIP and for a bare manifest.
+    $softHyphen = [string][char]0x00AD
+    $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'soft-hyphen-entry' $genuine { param($i) $i.EntryMethod = 'KingmakerCutsceneSkip.Main.Lo' + $softHyphen + 'ad' } $null))
+    Assert-Case 'PackagedEntryMethodWithASoftHyphenIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'EntryMethod is .KingmakerCutsceneSkip\.Main\.Lo.?ad., not the product')
+    $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'soft-hyphen-manager' $genuine { param($i) $i.ManagerVersion = '0.31' + $softHyphen + '.1' } $null))
+    Assert-Case 'PackagedManagerVersionWithASoftHyphenIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'ManagerVersion 0\.31.\.1 must equal the pinned loader floor')
+    foreach ($soft in @(@('EntryMethod', ('KingmakerCutsceneSkip.Main.Lo' + $softHyphen + 'ad')), @('ManagerVersion', ('0.31' + $softHyphen + '.1')))) {
+        $softInfo = Join-Path $fixtures "soft-hyphen-$($soft[0]).json"
+        $si = Get-Content -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Raw | ConvertFrom-Json; $si.($soft[0]) = $soft[1]
+        [IO.File]::WriteAllText($softInfo, ($si | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+        $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $softInfo)
+        Assert-Case "BareManifest$($soft[0])WithASoftHyphenIsRejected" ($r.ExitCode -ne 0 -and $r.Output -match "$($soft[0])")
+    }
+    $genuineInfoCopy = Join-Path $fixtures 'genuine bare Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $genuineInfoCopy
+    $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $genuineInfoCopy)
+    Assert-Case 'GenuineBarePairIsAccepted' ($r.ExitCode -eq 0)
     $r = Invoke-Validator @('-DllPath', $genuine)
     Assert-Case 'BuiltDllWithPinnedReferencesIsAccepted' ($r.ExitCode -eq 0)
     $r = Invoke-Validator @('-DllPath', $newerUmm)
@@ -361,7 +378,7 @@ Remove-ValidatedNativeProduct $product
     $held = [IO.File]::Open((Join-Path $heldPrivate 'held.bin'), [IO.FileMode]::Create, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     $blocked = Join-Path $fixtures 'summary blocked'; Set-Content -LiteralPath $blocked -Value 'a file where the evidence folder belongs'
     $completeError = ''
-    try { Complete-NativeRun $doneLab $doneLock $true ([ordered]@{ status = 'passed' }) (Join-Path $blocked 'host-summary.json') ([pscustomobject]@{ PrivateDirectory = $heldPrivate }) 3>$null }
+    try { Complete-NativeRun $doneLab $doneLock $true ([ordered]@{ status = 'passed' }) (Join-Path $blocked 'host-summary.json') ([pscustomobject]@{ PrivateDirectory = $heldPrivate }) 'fixture-complete' 3>$null }
     catch { $completeError = $_.Exception.Message }
     finally { $held.Dispose() }
     Assert-Case 'RestoredRunReleasesOwnLockDespiteSummaryAndCleanupFailures' ($completeError -match 'summary write failed' -and $completeError -match 'private product cleanup failed' -and -not (Test-Path -LiteralPath $doneLock) -and (Test-Path -LiteralPath $foreign))
@@ -373,7 +390,7 @@ Remove-ValidatedNativeProduct $product
     $held = [IO.File]::Open((Join-Path $heldPrivate 'held.bin'), [IO.FileMode]::Create, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     $cleanupSummaryPath = Join-Path $fixtures 'cleanup evidence\host-summary.json'
     $cleanupError = ''
-    try { Complete-NativeRun $doneLab $cleanupLock $true ([ordered]@{ status = 'passed'; restored = $true }) $cleanupSummaryPath ([pscustomobject]@{ PrivateDirectory = $heldPrivate }) 3>$null }
+    try { Complete-NativeRun $doneLab $cleanupLock $true ([ordered]@{ status = 'passed'; restored = $true }) $cleanupSummaryPath ([pscustomobject]@{ PrivateDirectory = $heldPrivate }) 'fixture-cleanup' 3>$null }
     catch { $cleanupError = $_.Exception.Message }
     finally { $held.Dispose() }
     $saved = if (Test-Path -LiteralPath $cleanupSummaryPath) { Get-Content -LiteralPath $cleanupSummaryPath -Raw | ConvertFrom-Json } else { $null }
@@ -381,9 +398,30 @@ Remove-ValidatedNativeProduct $product
     Remove-Item -LiteralPath $heldPrivate -Recurse -Force
     $keptLock = Enter-RuntimeLock $doneLab 'fixture-incomplete'
     $incompleteError = ''
-    try { Complete-NativeRun $doneLab $keptLock $false ([ordered]@{ status = 'failed' }) (Join-Path $fixtures 'incomplete summary.json') $null 3>$null } catch { $incompleteError = $_.Exception.Message }
+    try { Complete-NativeRun $doneLab $keptLock $false ([ordered]@{ status = 'failed' }) (Join-Path $fixtures 'incomplete summary.json') $null 'fixture-incomplete' 3>$null } catch { $incompleteError = $_.Exception.Message }
     Assert-Case 'IncompleteRestorationKeepsLockAndJournal' ($incompleteError -eq '' -and (Test-Path -LiteralPath $keptLock) -and (Test-Path -LiteralPath $doneLab.Journal) -and (Test-Path -LiteralPath (Join-Path $fixtures 'incomplete summary.json')))
-    Exit-RuntimeLock $doneLab $keptLock
+    Exit-RuntimeLock $doneLab $keptLock 'fixture-incomplete'
+    Remove-Item -LiteralPath $doneLab.Journal -Force
+    # The owned lock cannot be deleted after a successful restoration (held open without delete sharing): the saved summary
+    # is a failed host outcome with the scenario result kept, a release-only journal is written, and guarded recovery,
+    # once the handle is released, removes only that run's lock (another run's lock is refused and kept).
+    $releaseLock = Enter-RuntimeLock $doneLab 'fixture-release'
+    $holder = [IO.File]::Open($releaseLock, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $releaseSummaryPath = Join-Path $fixtures 'release evidence\host-summary.json'
+    $releaseError = ''
+    try { Complete-NativeRun $doneLab $releaseLock $true ([ordered]@{ status = 'passed'; restored = $true }) $releaseSummaryPath $null 'fixture-release' 3>$null }
+    catch { $releaseError = $_.Exception.Message }
+    finally { $holder.Dispose() }
+    $releaseSaved = if (Test-Path -LiteralPath $releaseSummaryPath) { Get-Content -LiteralPath $releaseSummaryPath -Raw | ConvertFrom-Json } else { $null }
+    $releaseJournal = if (Test-Path -LiteralPath $doneLab.Journal) { Get-Content -LiteralPath $doneLab.Journal -Raw | ConvertFrom-Json } else { $null }
+    Assert-Case 'LockReleaseFailureIsAFailedSavedOutcomeWithARecoveryJournal' ($releaseError -match 'lock release failed' -and $null -ne $releaseSaved -and $releaseSaved.status -eq 'integrity-failed' -and $releaseSaved.scenarioStatus -eq 'passed' -and $releaseSaved.lockReleased -eq $false -and $releaseSaved.restored -eq $true -and (Test-Path -LiteralPath $releaseLock) -and $null -ne $releaseJournal -and $releaseJournal.phase -eq 'release-lock' -and $releaseJournal.runId -eq 'fixture-release')
+    $otherRunLock = [IO.File]::ReadAllText($releaseLock)
+    [IO.File]::WriteAllText($releaseLock, "runId=another-run`n")
+    $refusedRecovery = ''; try { Restore-InterruptedRun $doneLab 6>$null } catch { $refusedRecovery = $_.Exception.Message }
+    Assert-Case 'ReleaseRecoveryRefusesAnotherRunsLock' ($refusedRecovery -match "belongs to run 'another-run'" -and (Test-Path -LiteralPath $releaseLock) -and (Test-Path -LiteralPath $doneLab.Journal))
+    [IO.File]::WriteAllText($releaseLock, $otherRunLock)
+    Restore-InterruptedRun $doneLab 6>$null
+    Assert-Case 'ReleaseRecoveryClearsOnlyThatRunsLock' (-not (Test-Path -LiteralPath $releaseLock) -and -not (Test-Path -LiteralPath $doneLab.Journal) -and (Test-Path -LiteralPath $foreign))
     # A no-product control never inherits Cutscene Skip from the owner profile it copies (with or without a comparison
     # ZIP); the owner's source set is left intact; a profile already containing it is refused.
     $pristine = Join-Path $fixtures 'owner pristine'
@@ -393,11 +431,11 @@ Remove-ValidatedNativeProduct $product
     foreach ($withZip in @($true, $false)) {
         $npPlan = if ($withZip) { Resolve-NativeProductPlan -NoProduct -ProductZip $genuineZip } else { Resolve-NativeProductPlan -NoProduct }
         $copyPaths = [pscustomobject]@{ ModsDir = Join-Path $fixtures "copy mods $withZip"; Pristine = $pristine }
-        $copied = @(Set-GameCopyMods $copyPaths 'owner' @() -ExcludeModIds @(Get-NoProductModExclusions $npPlan))
+        $copied = @(Set-GameCopyMods $copyPaths 'owner' @() -ExcludeModIds @(Get-InheritedModExclusions $npPlan))
         $controlOk = $true; try { Assert-NoProductControlMods $copyPaths.ModsDir } catch { $controlOk = $false }
         Assert-Case "NoProductControlExcludesInheritedCutsceneSkip$(if ($withZip) { 'WithComparisonZip' } else { 'WithoutZip' })" ($copied -notcontains 'KingmakerCutsceneSkip' -and $copied -contains 'OtherOwnerMod' -and -not (Test-Path -LiteralPath (Join-Path $copyPaths.ModsDir 'KingmakerCutsceneSkip')) -and $controlOk)
     }
-    $refusedControl = $false; try { Assert-NoProductControlMods (Join-Path $pristine 'Mods') } catch { $refusedControl = $_.Exception.Message -match 'refusing the control' }
+    $refusedControl = $false; try { Assert-NoProductControlMods (Join-Path $pristine 'Mods') } catch { $refusedControl = $_.Exception.Message -match 'refusing before staging' }
     Assert-Case 'NoProductControlWithAnInstalledCutsceneSkipIsRefusedAndTheSourceIsIntact' ($refusedControl -and (& $sourceListing) -ceq $sourceBefore)
     # The shipping UMM Id under another folder name (and in another case): identified from the manifest, excluded from the
     # copy with or without a comparison ZIP, refused in a profile that contains it; the unrelated mod and the source stay.
@@ -409,12 +447,61 @@ Remove-ValidatedNativeProduct $product
     foreach ($withZip in @($true, $false)) {
         $npPlan = if ($withZip) { Resolve-NativeProductPlan -NoProduct -ProductZip $genuineZip } else { Resolve-NativeProductPlan -NoProduct }
         $copyPaths = [pscustomobject]@{ ModsDir = Join-Path $fixtures "renamed copy mods $withZip"; Pristine = $renamed }
-        $copied = @(Set-GameCopyMods $copyPaths 'owner' @() -ExcludeModIds @(Get-NoProductModExclusions $npPlan))
+        $copied = @(Set-GameCopyMods $copyPaths 'owner' @() -ExcludeModIds @(Get-InheritedModExclusions $npPlan))
         $controlOk = $true; try { Assert-NoProductControlMods $copyPaths.ModsDir } catch { $controlOk = $false }
         Assert-Case "NoProductControlExcludesTheShippingIdUnderAnotherFolderName$(if ($withZip) { 'WithComparisonZip' } else { 'WithoutZip' })" ($copied -notcontains 'Skip Under Another Name' -and $copied -notcontains 'lowercase id copy' -and $copied -contains 'OtherOwnerMod' -and @(Get-ChildItem -LiteralPath $copyPaths.ModsDir -Directory).Count -eq 1 -and $controlOk)
     }
     $refusedRenamed = ''; try { Assert-NoProductControlMods (Join-Path $renamed 'Mods') } catch { $refusedRenamed = $_.Exception.Message }
     Assert-Case 'NoProductControlRefusesTheShippingIdUnderAnotherFolderNameAndKeepsTheSource' ($refusedRenamed -match 'UMM Id KingmakerCutsceneSkip in folder' -and (& $renamedListing) -ceq $renamedBefore)
+    # Product runs: an owner profile carrying an older Cutscene Skip under another folder name. Game copies (ZIP and bare
+    # DLL routes) never inherit it, so after staging the validated candidate is the only folder with the shipping Id; a
+    # live profile containing it is refused before staging; the source is unchanged.
+    $older = Join-Path $fixtures 'owner pristine older skip'
+    foreach ($entry in @(@('Older Skip 0.1.1', 'KingmakerCutsceneSkip'), @('OtherOwnerMod', 'OtherOwnerMod'))) { $d = Join-Path $older "Mods\$($entry[0])"; New-Item -ItemType Directory -Path $d -Force | Out-Null; Set-Content -LiteralPath (Join-Path $d 'Info.json') -Value "{`"Id`":`"$($entry[1])`",`"Version`":`"0.1.1`"}"; Set-Content -LiteralPath (Join-Path $d 'KingmakerCutsceneSkip.dll') -Value 'older build' }
+    $olderListing = { (Get-ChildItem -LiteralPath (Join-Path $older 'Mods') -Recurse -File | ForEach-Object { $_.FullName.Substring($older.Length) + '=' + (Get-Sha256 $_.FullName) }) -join ';' }
+    $olderBefore = & $olderListing
+    $dllOutput = Join-Path $fixtures 'older test build output'; New-Item -ItemType Directory -Path $dllOutput | Out-Null
+    Copy-Item -LiteralPath $genuine -Destination (Join-Path $dllOutput 'KingmakerCutsceneSkip.dll')
+    foreach ($route in @(@('Zip', (Resolve-NativeProductPlan -ProductZip $genuineZip)), @('BareDll', (Resolve-NativeProductPlan -ProductDll (Join-Path $dllOutput 'KingmakerCutsceneSkip.dll'))))) {
+        $copyPaths = [pscustomobject]@{ ModsDir = Join-Path $fixtures "older copy mods $($route[0])"; Pristine = $older }
+        $copied = @(Set-GameCopyMods $copyPaths 'owner' @() -ExcludeModIds @(Get-InheritedModExclusions $route[1]))
+        $beforeStaging = $true; try { Assert-NoInstalledShippingMod $copyPaths.ModsDir } catch { $beforeStaging = $false }
+        $routeProduct = New-ValidatedNativeProduct $route[1] $validator -TempRoot $runTemp
+        $stagedDll = Install-ValidatedNativeProduct $routeProduct $copyPaths.ModsDir
+        Remove-ValidatedNativeProduct $routeProduct
+        $onlyStaged = $true; try { Assert-OnlyStagedShippingMod $copyPaths.ModsDir 'KingmakerCutsceneSkip' } catch { $onlyStaged = $false }
+        Assert-Case "ProductRun$($route[0])LoadsOnlyTheValidatedCandidate" ($copied -notcontains 'Older Skip 0.1.1' -and $copied -contains 'OtherOwnerMod' -and $beforeStaging -and $onlyStaged -and $stagedDll -eq (Get-Sha256 $genuine) -and @(Get-ShippingModFolders $copyPaths.ModsDir).Count -eq 1)
+    }
+    $refusedLive = ''; try { Assert-NoInstalledShippingMod (Join-Path $older 'Mods') } catch { $refusedLive = $_.Exception.Message }
+    $twoCopies = Join-Path $fixtures 'two copies mods'; Copy-Item -LiteralPath (Join-Path $older 'Mods') -Destination $twoCopies -Recurse
+    New-Item -ItemType Directory -Path (Join-Path $twoCopies 'KingmakerCutsceneSkip') | Out-Null; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination (Join-Path $twoCopies 'KingmakerCutsceneSkip\Info.json')
+    $refusedTwo = ''; try { Assert-OnlyStagedShippingMod $twoCopies 'KingmakerCutsceneSkip' } catch { $refusedTwo = $_.Exception.Message }
+    Assert-Case 'ProductRunRefusesALiveProfileWithAnOlderShippingIdAndKeepsTheSource' ($refusedLive -match "refusing before staging" -and $refusedLive -match 'Older Skip 0\.1\.1' -and $refusedTwo -match 'only in' -and (& $olderListing) -ceq $olderBefore)
+    # Name-independent inventory: the shipping manifest in a folder named Keys and in a hidden folder is found; a profile
+    # with only an unrelated mod passes.
+    foreach ($case in @(@('Keys', $false), @('Hidden Skip', $true))) {
+        $profileDir = Join-Path $fixtures "effective $($case[0])"
+        $d = Join-Path $profileDir $case[0]; New-Item -ItemType Directory -Path $d -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination (Join-Path $d 'Info.json')
+        $u = Join-Path $profileDir 'OtherOwnerMod'; New-Item -ItemType Directory -Path $u | Out-Null; Set-Content -LiteralPath (Join-Path $u 'Info.json') -Value '{"Id":"OtherOwnerMod"}'
+        if ($case[1]) { (Get-Item -LiteralPath $d).Attributes = [IO.FileAttributes]::Directory -bor [IO.FileAttributes]::Hidden }
+        $listing = (Get-ChildItem -LiteralPath $profileDir -Recurse -File -Force | ForEach-Object { $_.FullName + '=' + (Get-Sha256 $_.FullName) }) -join ';'
+        $refusedCase = ''; try { Assert-NoProductControlMods $profileDir } catch { $refusedCase = $_.Exception.Message }
+        Assert-Case "NoProductControlFindsTheShippingIdInFolder$($case[0].Replace(' ', ''))" ($refusedCase -match "in folder '$($case[0])'" -and ((Get-ChildItem -LiteralPath $profileDir -Recurse -File -Force | ForEach-Object { $_.FullName + '=' + (Get-Sha256 $_.FullName) }) -join ';') -ceq $listing)
+    }
+    $unrelatedOnly = Join-Path $fixtures 'effective unrelated'; $u = Join-Path $unrelatedOnly 'OtherOwnerMod'; New-Item -ItemType Directory -Path $u -Force | Out-Null; Set-Content -LiteralPath (Join-Path $u 'Info.json') -Value '{"Id":"OtherOwnerMod"}'
+    $unrelatedOk = $true; try { Assert-NoProductControlMods $unrelatedOnly } catch { $unrelatedOk = $false }
+    Assert-Case 'NoProductControlWithOnlyAnUnrelatedModPasses' $unrelatedOk
+    # Only the selected folders' manifests are read: a malformed manifest in an unselected folder does not block an empty
+    # isolated selection or a valid named subset; selecting it refuses.
+    $malformed = Join-Path $fixtures 'pristine with malformed'
+    foreach ($entry in @(@('Broken', '{ not json'), @('OtherOwnerMod', '{"Id":"OtherOwnerMod"}'))) { $d = Join-Path $malformed "Mods\$($entry[0])"; New-Item -ItemType Directory -Path $d -Force | Out-Null; Set-Content -LiteralPath (Join-Path $d 'Info.json') -Value $entry[1] }
+    $npPlan = Resolve-NativeProductPlan -NoProduct
+    $emptyOk = $true; try { $emptyCopy = @(Set-GameCopyMods ([pscustomobject]@{ ModsDir = Join-Path $fixtures 'malformed empty'; Pristine = $malformed }) 'isolated' @() -ExcludeModIds @(Get-InheritedModExclusions $npPlan)) } catch { $emptyOk = $false }
+    $subsetOk = $true; try { $subsetCopy = @(Set-GameCopyMods ([pscustomobject]@{ ModsDir = Join-Path $fixtures 'malformed subset'; Pristine = $malformed }) 'isolated' @('OtherOwnerMod') -ExcludeModIds @(Get-InheritedModExclusions $npPlan)) } catch { $subsetOk = $false }
+    $selectedRefusal = ''; try { Set-GameCopyMods ([pscustomobject]@{ ModsDir = Join-Path $fixtures 'malformed selected'; Pristine = $malformed }) 'isolated' @('Broken') -ExcludeModIds @(Get-InheritedModExclusions $npPlan) | Out-Null } catch { $selectedRefusal = $_.Exception.Message }
+    Assert-Case 'UnselectedMalformedManifestDoesNotBlockAnIsolatedSelection' ($emptyOk -and $emptyCopy.Count -eq 0 -and $subsetOk -and ($subsetCopy -join ',') -eq 'OtherOwnerMod')
+    Assert-Case 'SelectedMalformedManifestIsRefused' ($selectedRefusal -match "manifest of mod folder 'Broken' cannot be read")
 }
 finally { Remove-Item -LiteralPath $fixtures -Recurse -Force -ErrorAction SilentlyContinue }
 

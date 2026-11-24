@@ -7,7 +7,7 @@ param([string] $ReportPath)
 # documentation-only commit reusing the frozen DLL; a corrupt cache entry refused before compilation; and packaging
 # refused for a DLL that differs from its receipt; direct MSBuild builds verifying their compiler inputs, refusing a
 # substituted cache file, a declared version disagreeing with the pinned bytes and a rewritten resolved reference; a
-# committed Directory.Build.targets change invalidating the receipt. This checkout's artifacts are not touched.
+# committed root or src-level Directory.Build.targets change invalidating the receipt. This checkout's artifacts are not touched.
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $source = Get-RepositoryRoot
 $commit = (& git -C $source rev-parse HEAD).Trim()
@@ -69,6 +69,25 @@ try {
     & $git @('rm', '-q', 'Directory.Build.targets') | Out-Null; & $git @('commit', '-q', '-m', 'test: remove Directory.Build.targets') | Out-Null
     $b = Invoke-Script $build
     if ($b.ExitCode -ne 0) { throw 'The rebuild after removing Directory.Build.targets failed.' }
+
+    # The same for a src-level MSBuild input (src/Directory.Build.targets): refused, rebuilt, then a documentation-only
+    # commit still reuses the frozen DLL; removing it again is followed by a fresh build.
+    $srcDbt = Join-Path $clone 'src\Directory.Build.targets'
+    [IO.File]::WriteAllText($srcDbt, "<Project><PropertyGroup><DefineConstants>`$(DefineConstants);KMCS_SRC_PROBE</DefineConstants></PropertyGroup></Project>`r`n")
+    & $git @('add', 'src/Directory.Build.targets') | Out-Null; & $git @('commit', '-q', '-m', 'test: material src/Directory.Build.targets') | Out-Null
+    $p = Invoke-Script $package
+    Add-Case 'SrcDirectoryBuildTargetsChangeInvalidatesThePriorReceipt' ($p.ExitCode -ne 0 -and $p.Output -match 'product inputs changed since build commit .*src/Directory\.Build\.targets') (Get-Reason $p.Output)
+    $b = Invoke-Script $build; $p = Invoke-Script $package
+    $srcFrozen = Get-Sha256 $dll
+    Add-Case 'FreshBuildAfterSrcDirectoryBuildTargetsChangePasses' ($b.ExitCode -eq 0 -and $p.ExitCode -eq 0) "build exit $($b.ExitCode); package exit $($p.ExitCode)"
+    [IO.File]::AppendAllText((Join-Path $clone 'README.md'), "`r`n<!-- documentation-only change after the src input change -->`r`n")
+    & $git @('commit', '-q', '-am', 'test: documentation only') | Out-Null
+    $p = Invoke-Script $package
+    $srcManifest = Get-Content -LiteralPath (Join-Path $clone "artifacts\package\KingmakerCutsceneSkip-$cloneVersion.manifest.json") -Raw | ConvertFrom-Json
+    Add-Case 'DocumentationOnlyChangeAfterTheSrcInputStillReusesTheFrozenDll' ($p.ExitCode -eq 0 -and $srcManifest.dll_sha256 -eq $srcFrozen -and $srcManifest.build_commit -ne $srcManifest.package_commit) "build $($srcManifest.build_commit.Substring(0, 7)), package $($srcManifest.package_commit.Substring(0, 7))"
+    & $git @('rm', '-q', 'src/Directory.Build.targets') | Out-Null; & $git @('commit', '-q', '-m', 'test: remove src/Directory.Build.targets') | Out-Null
+    $b = Invoke-Script $build
+    if ($b.ExitCode -ne 0) { throw 'The rebuild after removing src/Directory.Build.targets failed.' }
 
     # A corrupt cache entry is refused before compilation (the DLL is not rebuilt).
     $cached = Join-Path $clone 'artifacts\references\0Harmony12.dll'

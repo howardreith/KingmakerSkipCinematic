@@ -36,8 +36,8 @@ function New-ValidatedNativeProduct($Plan, [string] $Validator, [string] $InfoPa
         & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Validator $kind $copy @extra -ReportPath $report | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'The product failed package validation; nothing was locked or staged.' }
         $validation = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-        if ((Get-Sha256 $copy) -cne [string]$validation.input_sha256) { throw 'The private product copy changed after validation.' }
-        if ($infoCopy -and (Get-Sha256 $infoCopy) -cne [string]$validation.info_sha256) { throw 'The private manifest copy changed after validation.' }
+        if (-not (Test-OrdinalEqual (Get-Sha256 $copy) ([string]$validation.input_sha256))) { throw 'The private product copy changed after validation.' }
+        if ($infoCopy -and -not (Test-OrdinalEqual (Get-Sha256 $infoCopy) ([string]$validation.info_sha256))) { throw 'The private manifest copy changed after validation.' }
         return [pscustomobject]@{ Mode = $Plan.Mode; PrivateDirectory = $private; File = $copy; Info = $infoCopy; Validation = $validation }
     }
     catch {
@@ -56,43 +56,47 @@ function Install-ValidatedNativeProduct($Product, [string] $ModsDir) {
         Copy-Item -LiteralPath $Product.File -Destination $target
         Copy-Item -LiteralPath $Product.Info -Destination (Join-Path $target 'Info.json')
         # The staged manifest is the validated one (before any explicit -ProductManagerVersion override is applied).
-        if ((Get-Sha256 (Join-Path $target 'Info.json')) -cne [string]$Product.Validation.info_sha256) { throw 'The staged Info.json differs from the validated manifest.' }
+        if (-not (Test-OrdinalEqual (Get-Sha256 (Join-Path $target 'Info.json')) ([string]$Product.Validation.info_sha256))) { throw 'The staged Info.json differs from the validated manifest.' }
     }
     $staged = Get-Sha256 (Join-Path $target 'KingmakerCutsceneSkip.dll')
-    if ($staged -cne [string]$Product.Validation.dll_sha256) { throw 'The staged product DLL differs from the validated product.' }
+    if (-not (Test-OrdinalEqual $staged ([string]$Product.Validation.dll_sha256))) { throw 'The staged product DLL differs from the validated product.' }
     return $staged
 }
 
-# The UMM Id of each mod folder, from its Info.json (UMM's manifest), whatever the folder is called. A folder whose
-# manifest cannot be read cannot be shown not to be Cutscene Skip.
-function Get-ModFolderIds([string] $ModsDir) {
-    $ids = [ordered]@{}
-    if (-not (Test-Path -LiteralPath $ModsDir -PathType Container)) { return $ids }
-    foreach ($folder in @(Get-ChildItem -LiteralPath $ModsDir -Directory)) {
-        $manifest = Join-Path $folder.FullName 'Info.json'
-        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { $ids[$folder.Name] = $null; continue }
-        try { $ids[$folder.Name] = [string]((Get-Content -LiteralPath $manifest -Raw) | ConvertFrom-Json).Id }
-        catch { throw "The manifest of mod folder '$($folder.Name)' cannot be read: $($_.Exception.Message)" }
-    }
-    return $ids
+# The UMM Id in one mod folder's Info.json (UMM's manifest); $null when the folder has none. A manifest that cannot be
+# read cannot be shown not to be Cutscene Skip, so it refuses.
+function Get-ModManifestId([string] $Folder) {
+    $manifest = Join-Path $Folder 'Info.json'
+    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { return $null }
+    try { return [string]((Get-Content -LiteralPath $manifest -Raw) | ConvertFrom-Json).Id }
+    catch { throw "The manifest of mod folder '$(Split-Path -Leaf $Folder)' cannot be read: $($_.Exception.Message)" }
 }
-# A no-product control must not include the shipping mod (UMM Id KingmakerCutsceneSkip, compared as UMM does, ignoring
-# case) under any folder name.
-function Assert-NoProductControlMods([string] $ModsDir) {
-    $productId = [string](Get-ProductLoadIdentity).Id
-    $ids = Get-ModFolderIds $ModsDir
-    foreach ($folder in $ids.Keys) {
-        if ([string]::Equals([string]$ids[$folder], $productId, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "The no-product control would include Cutscene Skip (UMM Id $productId in folder '$folder'); refusing the control."
-        }
-    }
+# One record per folder of a Mods directory, hidden folders included (UMM loads them), independent of folder names.
+function Get-ModFolderRecords([string] $ModsDir) {
+    if (-not (Test-Path -LiteralPath $ModsDir -PathType Container)) { return @() }
+    return @(Get-ChildItem -LiteralPath $ModsDir -Directory -Force | ForEach-Object { [pscustomobject]@{ Folder = $_.Name; Id = (Get-ModManifestId $_.FullName) } })
+}
+function Test-ShippingModId([string] $Id) { return [string]::Equals($Id, [string](Get-ProductLoadIdentity).Id, [StringComparison]::OrdinalIgnoreCase) }
+# The folders of a Mods directory that carry the shipping UMM Id (compared as UMM does, ignoring case), any folder name.
+function Get-ShippingModFolders([string] $ModsDir) { return @(Get-ModFolderRecords $ModsDir | Where-Object { Test-ShippingModId $_.Id } | ForEach-Object { $_.Folder }) }
+# Before staging (with or without a product): the effective Mods directory must not already carry the shipping Id, so
+# the validated candidate is the only Cutscene Skip that can load and a no-product control has none.
+function Assert-NoInstalledShippingMod([string] $ModsDir) {
+    $found = @(Get-ShippingModFolders $ModsDir)
+    if ($found.Count -gt 0) { throw "The Mods directory already contains Cutscene Skip (UMM Id $((Get-ProductLoadIdentity).Id) in folder '$($found -join "', '")'); refusing before staging." }
+}
+function Assert-NoProductControlMods([string] $ModsDir) { Assert-NoInstalledShippingMod $ModsDir }
+# After product staging: exactly one folder carries the shipping Id, and it is the staged one.
+function Assert-OnlyStagedShippingMod([string] $ModsDir, [string] $StagedFolder) {
+    $found = @(Get-ShippingModFolders $ModsDir)
+    if ($found.Count -ne 1 -or -not (Test-OrdinalEqual $found[0] $StagedFolder)) { throw "After staging, the Mods directory must contain Cutscene Skip only in '$StagedFolder'; found: '$($found -join "', '")'." }
 }
 
 # Final steps of a run, each independent. The private copy is removed first and its outcome is part of the saved host
 # summary (a failed removal makes the run integrity-failed); then the summary is written; then this run's own lock is
 # released whenever restoration succeeded, even if a step failed (the failures are surfaced afterwards). On incomplete
 # restoration the lock and journal are kept for -RecoverOnly.
-function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [string] $SummaryPath, $Product) {
+function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [string] $SummaryPath, $Product, [string] $RunId) {
     $ErrorActionPreference = 'Stop'
     $failures = New-Object System.Collections.Generic.List[string]
     try {
@@ -107,9 +111,23 @@ function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [s
         $Summary['status'] = 'integrity-failed'
         $Summary['integrityFailures'] = @(@($(if ($Summary.Contains('integrityFailures')) { $Summary['integrityFailures'] })) + @("private product cleanup failed: $($_.Exception.Message)") | Where-Object { $_ })
     }
+    if ($Restored) {
+        # Only this run's lock is released. If that fails, the outcome is part of the summary and a release-only recovery
+        # journal is kept, so -RecoverOnly can retry the release for this run (and only this run).
+        try { Exit-RuntimeLock $Lab $Lock $RunId; $Summary['lockReleased'] = $true }
+        catch {
+            $failures.Add("lock release failed: $($_.Exception.Message)")
+            $Summary['lockReleased'] = $false
+            $Summary['lockReleaseError'] = $_.Exception.Message
+            if (-not $Summary.Contains('scenarioStatus')) { $Summary['scenarioStatus'] = $Summary['status'] }
+            $Summary['status'] = 'integrity-failed'
+            $Summary['integrityFailures'] = @(@($(if ($Summary.Contains('integrityFailures')) { $Summary['integrityFailures'] })) + @("lock release failed: $($_.Exception.Message)") | Where-Object { $_ })
+            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock'; lock = $Lock }) }
+            catch { $failures.Add("release-lock journal write failed: $($_.Exception.Message)") }
+        }
+    }
     try { Write-JsonFile $SummaryPath $Summary } catch { $failures.Add("summary write failed: $($_.Exception.Message)") }
-    if ($Restored) { Exit-RuntimeLock $Lab $Lock }
-    else { Write-Warning 'Run lock and recovery journal kept; run Invoke-NativeRun.ps1 -RecoverOnly after resolving the error.' }
+    if (-not $Restored) { Write-Warning 'Run lock and recovery journal kept; run Invoke-NativeRun.ps1 -RecoverOnly after resolving the error.' }
     if ($failures.Count -gt 0) { throw ($failures -join '; ') }
 }
 
@@ -119,9 +137,9 @@ function Remove-ValidatedNativeProduct($Product) {
     if ((Split-Path -Leaf $private) -like 'kmcs-product-*' -and (Test-Path -LiteralPath $private)) { Remove-Item -LiteralPath $private -Recurse -Force -ErrorAction Stop }
 }
 
-# The UMM Ids a game copy must not inherit from the profile it copies: the shipping mod, for a no-product control (with
-# or without a comparison ZIP).
-function Get-NoProductModExclusions($Plan) { if ($Plan.Mode -eq 'none') { return @([string](Get-ProductLoadIdentity).Id) } return @() }
+# The UMM Ids a game copy never inherits from the profile it copies: the shipping mod, in every mode. A no-product control
+# (with or without a comparison ZIP) then has none, and a product run has only the validated candidate staged later.
+function Get-InheritedModExclusions($Plan) { return @([string](Get-ProductLoadIdentity).Id) }
 
 # Takes this run's lock and creates its evidence and backup folders. A failure after the lock is taken releases only this
 # invocation's lock (nothing was changed yet) and rethrows; another lab's lock is never touched.
@@ -135,7 +153,7 @@ function Enter-NativeRunDirectories($Lab, [string] $RunId) {
         return [pscustomobject]@{ Lock = $lock; Evidence = $evidence; Backup = $backup }
     }
     catch {
-        Exit-RuntimeLock $Lab $lock
+        Exit-RuntimeLock $Lab $lock $RunId
         throw
     }
 }
