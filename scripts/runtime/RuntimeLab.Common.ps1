@@ -327,13 +327,17 @@ function Install-LoaderProfile($lab, $paths, [string] $profileName) {
 }
 
 # Rebuilds the copy's Mods folder from the pristine set: none, the named mods, or all of them.
-function Set-GameCopyMods($paths, [string] $modProfile, [string[]] $modSet, [string[]] $ExcludeNames = @()) {
+function Set-GameCopyMods($paths, [string] $modProfile, [string[]] $modSet, [string[]] $ExcludeModIds = @()) {
     if (Test-Path -LiteralPath $paths.ModsDir) { Remove-Item -LiteralPath $paths.ModsDir -Recurse -Force }
     New-Item -ItemType Directory -Path $paths.ModsDir | Out-Null
     $pristineMods = Join-Path $paths.Pristine 'Mods'
     $names = if ($modProfile -eq 'owner') { @(Get-ChildItem -LiteralPath $pristineMods -Directory | ForEach-Object Name) } else { @($modSet | Where-Object { $_ }) }
-    # Excluded mods (the shipping mod for a no-product control) are never copied from the pristine set.
-    $names = @($names | Where-Object { $ExcludeNames -notcontains $_ })
+    # Mods whose UMM Id is excluded (the shipping mod for a no-product control) are never copied, whatever their folder
+    # is called. The Ids come from each folder's Info.json; an unreadable manifest refuses the copy.
+    if (@($ExcludeModIds).Count -gt 0) {
+        $ids = Get-ModFolderIds $pristineMods
+        $names = @($names | Where-Object { $id = [string]$ids[$_]; -not @($ExcludeModIds | Where-Object { [string]::Equals($_, $id, [StringComparison]::OrdinalIgnoreCase) }) })
+    }
     foreach ($name in $names) {
         $source = Join-Path $pristineMods $name
         if (-not (Test-Path -LiteralPath $source)) { throw "Mod not found in the pristine set: $name" }

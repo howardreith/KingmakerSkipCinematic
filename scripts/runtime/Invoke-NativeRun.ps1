@@ -122,7 +122,7 @@ try {
         Initialize-GameCopy $copyPaths
         $loaderIdentity = Install-LoaderProfile $lab $copyPaths $LoaderProfile
         Write-JsonFile (Join-Path $evidence 'loader-install.json') $loaderIdentity
-        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet -ExcludeNames @(Get-NoProductModExclusions $productPlan))
+        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet -ExcludeModIds @(Get-NoProductModExclusions $productPlan))
     }
     elseif ($ModProfile -eq 'isolated') {
         # Persist the planned move first: recovery inspects both locations, so an interruption on either side of the
@@ -254,7 +254,7 @@ finally {
         $summary.integrityFailures = $integrityFailures
     }
     # Summary, private-copy cleanup and lock release are independent; the lock is released whenever restoration succeeded.
-    Complete-NativeRun $lab $lock ([bool]$restored) { Write-JsonFile (Join-Path $evidence 'host-summary.json') $summary } $validatedProduct
+    Complete-NativeRun $lab $lock ([bool]$restored) $summary (Join-Path $evidence 'host-summary.json') $validatedProduct
     Write-Host "Run $runId finished: $($summary.status) $($summary.failure) $(if ($integrityFailures.Count -gt 0) { '[' + ($integrityFailures -join '; ') + ']' })"
     Write-Host "Evidence: $evidence"
 }

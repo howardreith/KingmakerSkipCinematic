@@ -6,7 +6,8 @@ param([string] $ReportPath)
 # override; a committed build-helper change invalidating the old receipt and a fresh build passing; a
 # documentation-only commit reusing the frozen DLL; a corrupt cache entry refused before compilation; and packaging
 # refused for a DLL that differs from its receipt; direct MSBuild builds verifying their compiler inputs, refusing a
-# substituted cache file and a rewritten resolved reference. This checkout's artifacts are not touched.
+# substituted cache file, a declared version disagreeing with the pinned bytes and a rewritten resolved reference; a
+# committed Directory.Build.targets change invalidating the receipt. This checkout's artifacts are not touched.
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $source = Get-RepositoryRoot
 $commit = (& git -C $source rev-parse HEAD).Trim()
@@ -56,6 +57,19 @@ try {
     $manifest = Get-Content -LiteralPath (Join-Path $clone "artifacts\package\KingmakerCutsceneSkip-$cloneVersion.manifest.json") -Raw | ConvertFrom-Json
     Add-Case 'DocumentationOnlyChangeReusesTheFrozenDll' ($p.ExitCode -eq 0 -and $manifest.dll_sha256 -eq $frozenDll -and $manifest.build_commit -ne $manifest.package_commit) "build $($manifest.build_commit.Substring(0, 7)), package $($manifest.package_commit.Substring(0, 7)), DLL $($manifest.dll_sha256)"
 
+    # A committed material root Directory.Build.targets change: the old DLL is not reused without an override; a fresh
+    # build passes; removing the file again is also a product change, followed by a fresh build.
+    $dbt = Join-Path $clone 'Directory.Build.targets'
+    [IO.File]::WriteAllText($dbt, "<Project><PropertyGroup><DefineConstants>`$(DefineConstants);KMCS_PACKAGE_PROVENANCE_PROBE</DefineConstants></PropertyGroup></Project>`r`n")
+    & $git @('add', 'Directory.Build.targets') | Out-Null; & $git @('commit', '-q', '-m', 'test: material Directory.Build.targets') | Out-Null
+    $p = Invoke-Script $package
+    Add-Case 'DirectoryBuildTargetsChangeInvalidatesThePriorReceipt' ($p.ExitCode -ne 0 -and $p.Output -match 'product inputs changed since build commit .*Directory\.Build\.targets') (Get-Reason $p.Output)
+    $b = Invoke-Script $build; $p = Invoke-Script $package
+    Add-Case 'FreshBuildAfterDirectoryBuildTargetsChangePasses' ($b.ExitCode -eq 0 -and $p.ExitCode -eq 0) "build exit $($b.ExitCode); package exit $($p.ExitCode)"
+    & $git @('rm', '-q', 'Directory.Build.targets') | Out-Null; & $git @('commit', '-q', '-m', 'test: remove Directory.Build.targets') | Out-Null
+    $b = Invoke-Script $build
+    if ($b.ExitCode -ne 0) { throw 'The rebuild after removing Directory.Build.targets failed.' }
+
     # A corrupt cache entry is refused before compilation (the DLL is not rebuilt).
     $cached = Join-Path $clone 'artifacts\references\0Harmony12.dll'
     $original = [IO.File]::ReadAllBytes($cached)
@@ -97,6 +111,15 @@ try {
     $d = & $direct 'Build'
     Remove-Item -LiteralPath $hook
     Add-Case 'ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused' ($d.ExitCode -ne 0 -and $d.Output -match 'Loader compiler references must be the pinned files' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') ([regex]::Match($d.Output, 'Loader compiler references must be the pinned files[^\n]*').Value)
+    # A pin whose digest still matches but whose declared version disagrees with the authenticated bytes is refused by the
+    # production gate before compilation; the coherent pin rebuilds.
+    $clonePins = Join-Path $clone 'scripts\reference-pins.json'; $clonePinsText = [IO.File]::ReadAllText($clonePins)
+    $disagree = $clonePinsText | ConvertFrom-Json
+    @($disagree.references | Where-Object { $_.Name -eq '0Harmony12' })[0].Version = '1.2.0.2'
+    [IO.File]::WriteAllText($clonePins, ($disagree | ConvertTo-Json -Depth 5))
+    $d = & $direct 'Rebuild'
+    [IO.File]::WriteAllText($clonePins, $clonePinsText)
+    Add-Case 'DirectRebuildRefusesADeclaredVersionDisagreeingWithThePinnedBytes' ($d.ExitCode -ne 0 -and $d.Output -match 'disagrees with its declared pin 0Harmony12, Version=1\.2\.0\.2' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') ([regex]::Match($d.Output, 'is 0Harmony12[^\n]*').Value)
     $d = & $direct 'Rebuild'
     Add-Case 'DirectRebuildPassesAgainAfterRestoringTheCache' ($d.ExitCode -eq 0 -and $d.Output -match 'Loader compiler input: ') "exit $($d.ExitCode)"
 

@@ -25,10 +25,17 @@ if ([bool]$PackagePath -eq [bool]$DllPath) { throw 'Pass exactly one of -Package
 function Resolve-LiteralPath([string] $Path) { return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path) }
 $inputPath = Resolve-LiteralPath $(if ($PackagePath) { $PackagePath } else { $DllPath })
 Assert-FileExists $inputPath $(if ($PackagePath) { 'Package' } else { 'Product DLL' })
+if ($InfoPath) {
+    if ($PackagePath) { throw '-InfoPath belongs to the bare -DllPath route.' }
+    $InfoPath = Resolve-LiteralPath $InfoPath
+    Assert-FileExists $InfoPath 'Info.json'
+}
 if ($ReportPath) {
     $ReportPath = Resolve-LiteralPath $ReportPath
-    $sameSpelling = [string]::Equals([IO.Path]::GetFullPath($ReportPath), [IO.Path]::GetFullPath($inputPath), [StringComparison]::OrdinalIgnoreCase)
-    if ($sameSpelling -or ([IO.File]::Exists($ReportPath) -and [KmcsFileIdentity]::Of($ReportPath) -ceq [KmcsFileIdentity]::Of($inputPath))) { throw 'The report path must not be the validated input.' }
+    foreach ($protectedInput in @($inputPath, $InfoPath | Where-Object { $_ })) {
+        $sameSpelling = [string]::Equals([IO.Path]::GetFullPath($ReportPath), [IO.Path]::GetFullPath($protectedInput), [StringComparison]::OrdinalIgnoreCase)
+        if ($sameSpelling -or ([IO.File]::Exists($ReportPath) -and [KmcsFileIdentity]::Of($ReportPath) -ceq [KmcsFileIdentity]::Of($protectedInput))) { throw 'The report path must not be the validated input.' }
+    }
 }
 
 function Get-BytesSha256([byte[]] $Bytes) {
@@ -39,20 +46,17 @@ $inputBytes = $null
 $inputId = [KmcsFileIdentity]::ReadSnapshot($inputPath, [ref]$inputBytes)
 $info = Get-ProductInfo
 $pins = @(Get-PinnedReferenceDefinitions)
-function ConvertTo-AssemblyVersion([string] $Version) {
-    $v = [version]$Version
-    return '{0}.{1}.{2}.{3}' -f $v.Major, $v.Minor, [Math]::Max($v.Build, 0), [Math]::Max($v.Revision, 0)
-}
 # The expected binding identity of each pinned loader reference comes from the declared pin (name and version, neutral
 # culture, no public key token). A cached pinned file, when present and authenticated by its digest, must agree with
 # the declared identity; its digest and identity are taken from one read of the file.
 $expected = @{}
 foreach ($pin in $pins) {
-    $declared = '{0}, Version={1}, Culture=neutral, PublicKeyToken=null' -f $pin.Name, (ConvertTo-AssemblyVersion ([string]$pin.Version))
+    $declared = Get-PinnedDeclaredIdentity $pin
     $cached = Join-Path (Get-PinnedReferenceDirectory) $pin.File
     if (Test-Path -LiteralPath $cached -PathType Leaf) {
         $cachedBytes = [IO.File]::ReadAllBytes($cached)
         if ((Get-BytesSha256 $cachedBytes) -ceq [string]$pin.Sha256) {
+            # The same rule the compiler gate applies (Assert-PinnedReferenceBytes), on this one read.
             $cachedIdentity = [Reflection.Assembly]::ReflectionOnlyLoad($cachedBytes).GetName().FullName
             if ($cachedIdentity -cne $declared) { throw "The pinned file $($pin.File) is $cachedIdentity, which disagrees with its declared pin $declared." }
         }
@@ -63,6 +67,18 @@ $loaderPin = @($pins | Where-Object { $_.Name -ceq 'UnityModManager' })
 if ($loaderPin.Count -ne 1) { throw 'The pins do not name exactly one UnityModManager reference.' }
 
 $result = [ordered]@{ status = 'validated'; input = $inputPath; input_sha256 = Get-BytesSha256 $inputBytes }
+# The load target is the product's fixed identity (Common.ps1), never taken from the manifest being checked.
+$loadIdentity = Get-ProductLoadIdentity
+function Assert-ManifestIdentity($Manifest, [string] $Label) {
+    foreach ($field in @('Id', 'Version', 'ManagerVersion', 'AssemblyName', 'EntryMethod')) {
+        if (-not $Manifest.PSObject.Properties[$field] -or -not ($Manifest.$field -is [string])) { throw "$Label $field must be a string." }
+    }
+    foreach ($field in @('Id', 'AssemblyName', 'EntryMethod')) {
+        if ($Manifest.$field -cne [string]$loadIdentity[$field]) { throw "$Label $field is '$($Manifest.$field)', not the product's '$($loadIdentity[$field])'." }
+    }
+    if ($Manifest.Version -cne [string]$info.Version) { throw "$Label Version is '$($Manifest.Version)', not the shipping '$($info.Version)'." }
+    if ($Manifest.ManagerVersion -cne [string]$loaderPin[0].Version) { throw "$Label ManagerVersion $($Manifest.ManagerVersion) must equal the pinned loader floor $($loaderPin[0].Version)." }
+}
 $shippingVersion = [string]$info.Version
 if ($PackagePath) {
     $allowed = @('KingmakerCutsceneSkip/Info.json', 'KingmakerCutsceneSkip/KingmakerCutsceneSkip.dll', 'KingmakerCutsceneSkip/README.md', 'KingmakerCutsceneSkip/LICENSE')
@@ -81,29 +97,19 @@ if ($PackagePath) {
         $dllBytes = Read-Entry 'KingmakerCutsceneSkip/KingmakerCutsceneSkip.dll'
     }
     finally { $archive.Dispose(); $stream.Dispose() }
-    foreach ($field in @('Id', 'Version', 'ManagerVersion', 'AssemblyName', 'EntryMethod')) {
-        if (-not $packagedInfo.PSObject.Properties[$field] -or -not ($packagedInfo.$field -is [string])) { throw "Packaged Info.json $field must be a string." }
-    }
-    foreach ($field in @('Id', 'Version', 'AssemblyName', 'EntryMethod')) {
-        if ($packagedInfo.$field -cne [string]$info.$field) { throw "Packaged Info.json $field is '$($packagedInfo.$field)', not the shipping '$($info.$field)'." }
-    }
-    if ($packagedInfo.ManagerVersion -cne [string]$loaderPin[0].Version) { throw "Packaged Info.json ManagerVersion $($packagedInfo.ManagerVersion) must equal the pinned loader floor $($loaderPin[0].Version)." }
+    Assert-ManifestIdentity $packagedInfo 'Packaged Info.json'
     $result.manager_version = $packagedInfo.ManagerVersion
     $shippingVersion = $packagedInfo.Version
 }
 else {
     $dllBytes = $inputBytes
     if ($InfoPath) {
-        # The bare route's manifest: the shipping identity and the pinned floor, from one read of the file.
-        $infoBytes = [IO.File]::ReadAllBytes((Resolve-LiteralPath $InfoPath))
+        # The bare route's manifest, read once through one handle (its identity is protected like the input's).
+        $infoBytes = $null
+        $infoId = [KmcsFileIdentity]::ReadSnapshot($InfoPath, [ref]$infoBytes)
         $bareInfo = [Text.Encoding]::UTF8.GetString($infoBytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
-        foreach ($field in @('Id', 'Version', 'ManagerVersion', 'AssemblyName', 'EntryMethod')) {
-            if (-not $bareInfo.PSObject.Properties[$field] -or -not ($bareInfo.$field -is [string])) { throw "Info.json $field must be a string." }
-        }
-        foreach ($field in @('Id', 'Version', 'AssemblyName', 'EntryMethod')) {
-            if ($bareInfo.$field -cne [string]$info.$field) { throw "Info.json $field is '$($bareInfo.$field)', not the shipping '$($info.$field)'." }
-        }
-        if ($bareInfo.ManagerVersion -cne [string]$loaderPin[0].Version) { throw "Info.json ManagerVersion $($bareInfo.ManagerVersion) must equal the pinned loader floor $($loaderPin[0].Version)." }
+        Assert-ManifestIdentity $bareInfo 'Info.json'
+        $result.info = $InfoPath
         $result.info_sha256 = Get-BytesSha256 $infoBytes
     }
 }
@@ -135,7 +141,9 @@ $result.dll_loader_references = @($loaderRefs | ForEach-Object { [ordered]@{ nam
 if ($ReportPath) {
     [void][IO.Directory]::CreateDirectory((Split-Path -Parent $ReportPath))
     $reportBytes = [byte[]](@([Text.Encoding]::UTF8.GetPreamble()) + @([Text.Encoding]::UTF8.GetBytes(($result | ConvertTo-Json -Depth 5) + "`r`n")))
-    [void][KmcsFileIdentity]::WriteChecked($ReportPath, [string[]]@($inputId), [string[]]@($inputPath), $reportBytes)
+    $protectedIds = [string[]]@($inputId, $(if ($InfoPath) { $infoId }) | Where-Object { $_ })
+    $protectedPaths = [string[]]@($inputPath, $InfoPath | Where-Object { $_ })
+    [void][KmcsFileIdentity]::WriteChecked($ReportPath, $protectedIds, $protectedPaths, $reportBytes)
 }
 Write-Host "Package validation passed: $inputPath"
 Write-Host ("DLL SHA-256: {0}; MVID: {1}; loader references: {2}" -f $result.dll_sha256, $result.dll_mvid, (($loaderRefs | ForEach-Object { $_.Name + ' ' + $_.Version }) -join ', '))

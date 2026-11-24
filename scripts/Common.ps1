@@ -3,6 +3,10 @@ $ErrorActionPreference = 'Stop'
 
 $script:RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $script:ProductId = 'KingmakerCutsceneSkip'
+# The load target UMM reads from Info.json. Fixed for this product, independently of any Info.json file, so a manifest
+# is never its own reference.
+$script:ProductLoadIdentity = [ordered]@{ Id = 'KingmakerCutsceneSkip'; AssemblyName = 'KingmakerCutsceneSkip.dll'; EntryMethod = 'KingmakerCutsceneSkip.Main.Load' }
+function Get-ProductLoadIdentity { return $script:ProductLoadIdentity }
 
 function Get-RepositoryRoot { return $script:RepositoryRoot }
 
@@ -44,6 +48,24 @@ function Get-PinnedReferenceDefinitions([string] $Path = $script:ReferencePinsPa
     Assert-FileExists $Path 'Reference pin manifest'
     $document = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
     return @($document.references)
+}
+
+# The CLR identity a pin declares (name, four-part version, neutral culture, no public key token).
+function Get-PinnedDeclaredIdentity($Pin) {
+    $v = [version][string]$Pin.Version
+    return '{0}, Version={1}.{2}.{3}.{4}, Culture=neutral, PublicKeyToken=null' -f $Pin.Name, $v.Major, $v.Minor, [Math]::Max($v.Build, 0), [Math]::Max($v.Revision, 0)
+}
+# One read of a pinned file: its SHA-256 must be the pin's and the CLR identity in those same bytes must be the declared
+# identity. Returns the digest. (Loads the bytes reflection-only into this process.)
+function Assert-PinnedReferenceBytes([string] $Path, $Pin) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try { $hash = ([BitConverter]::ToString($hasher.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() } finally { $hasher.Dispose() }
+    if ($hash -cne [string]$Pin.Sha256) { throw "The pinned file $Path does not match its pin." }
+    $identity = [Reflection.Assembly]::ReflectionOnlyLoad($bytes).GetName().FullName
+    $declared = Get-PinnedDeclaredIdentity $Pin
+    if ($identity -cne $declared) { throw "The pinned file $($Pin.File) is $identity, which disagrees with its declared pin $declared." }
+    return $hash
 }
 
 function Get-PinnedReferenceDirectory { return (Join-Path $script:RepositoryRoot 'artifacts\references') }
@@ -137,7 +159,7 @@ function Get-GitMetadata {
 # Repository paths whose content determines the product DLL or the packaged mod identity, including the build and
 # reference helpers that select and verify what the compiler receives (scripts/Build.ps1, scripts/Common.ps1). Changes anywhere else
 # (documentation, tests, native tooling) do not require rebuilding the validated binary.
-$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1', 'scripts/Assert-PinnedReferences.ps1', 'LoaderReferences.Final.targets')
+$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1', 'scripts/Assert-PinnedReferences.ps1', 'LoaderReferences.Final.targets', 'Directory.Build.targets')
 
 function Get-ProductInputPaths { return $script:ProductInputPaths }
 
