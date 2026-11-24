@@ -85,7 +85,7 @@ $lock = $runDirectories.Lock
 $evidence = $runDirectories.Evidence
 $backup = $runDirectories.Backup
 $summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = ($productPlan.Mode -eq 'none'); productMode = $productPlan.Mode; status = 'started'; failure = $null }
-$journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
+$journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); created = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
 $savesBefore = $null
 $installBefore = $null
 try {
@@ -148,6 +148,8 @@ try {
         $journal.staged += $target
         Save-Journal $lab $journal
         New-Item -ItemType Directory -Path $target | Out-Null
+        $journal.created += $target
+        Save-Journal $lab $journal
         Copy-Item -LiteralPath (Join-Path $item.Source ($(if ($item.Name -eq 'KingmakerCutsceneSkip') { 'KingmakerCutsceneSkip.dll' } else { 'KingmakerCutsceneSkip.RuntimeHarness.dll' }))) -Destination $target
         Copy-Item -LiteralPath $item.Info -Destination (Join-Path $target 'Info.json')
     }
@@ -158,7 +160,7 @@ try {
         if (Test-Path -LiteralPath $productTarget) { throw "Refusing to overwrite an existing mod folder: $productTarget" }
         $journal.staged += $productTarget
         Save-Journal $lab $journal
-        $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir
+        $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir -OnCreated { param($created) $journal.created += $created; Save-Journal $lab $journal }
         Assert-OnlyStagedShippingMod $game.ModsDir 'KingmakerCutsceneSkip'
     }
     if ($ProductManagerVersion -and -not $NoProduct) {
@@ -206,7 +208,10 @@ catch {
 finally {
     $restored = $false
     try {
-        Restore-RunJournal $lab $journal
+        # Restoration holds this run's lock; a run whose lock now belongs to another run restores nothing.
+        $ownedLock = Open-OwnedRuntimeLock $lab $runId
+        if ($null -eq $ownedLock) { throw "This run's runtime lock is gone; nothing was restored by this invocation." }
+        try { Restore-RunJournal $lab $journal $ownedLock } finally { $ownedLock.Dispose() }
         $restored = $true
     }
     catch {

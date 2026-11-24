@@ -208,6 +208,12 @@ function Get-ReferencePinProblems($Receipt, $Pins, [string] $ManagerVersion) {
         if (-not (Test-Sha256String $matches[0].sha256)) { $problems += "the build receipt's SHA-256 for $($pin.File) is not a SHA-256 string" }
         elseif (-not (Test-OrdinalEqual $matches[0].sha256 ([string]$pin.Sha256))) { $problems += "$($pin.File) was built with SHA-256 $($matches[0].sha256), but the pin is $($pin.Sha256)" }
         if (-not ($matches[0].source -is [string]) -or -not (Test-OrdinalEqual $matches[0].source ([string]$pin.Url))) { $problems += "$($pin.File) was built from $($matches[0].source), but the pin is $($pin.Url)" }
+        # The recorded assembly version must be the declared pin version (normalized to four parts).
+        $declaredParts = @(([string]$pin.Version).Split('.')); while ($declaredParts.Count -lt 4) { $declaredParts += '0' }
+        $declaredVersion = $declaredParts -join '.'
+        if (-not ($matches[0].PSObject.Properties['assembly_version']) -or -not ($matches[0].assembly_version -is [string]) -or -not (Test-OrdinalEqual $matches[0].assembly_version $declaredVersion)) {
+            $problems += "$($pin.File) was recorded as assembly version $($matches[0].assembly_version), but the pin declares $declaredVersion"
+        }
     }
     foreach ($identity in $recorded) {
         if (@($Pins | Where-Object { ($identity.file -is [string]) -and (Test-OrdinalEqual $identity.file ([string]$_.File)) }).Count -eq 0) { $problems += "the build receipt records an unpinned loader reference: $($identity.file)" }

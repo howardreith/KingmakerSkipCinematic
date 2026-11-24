@@ -35,11 +35,26 @@ $receipt = Get-Content -LiteralPath $BuildReceipt -Raw | ConvertFrom-Json
 $dllSha256 = Get-Sha256 $dll
 # Receipt fields are typed before they are compared: a boolean, array or other non-string value is never equal.
 if (-not ($receipt.status -is [string]) -or -not (Test-OrdinalEqual $receipt.status 'passed')) { throw "Build receipt status is '$($receipt.status)', not passed." }
-if (-not ($receipt.configuration -is [string]) -or -not (Test-OrdinalEqual $receipt.configuration $Configuration)) { throw "Build receipt is for $($receipt.configuration), not $Configuration." }
+# The supported configurations select the same output folder in any letter case, so they compare without case.
+if (-not ($receipt.configuration -is [string]) -or -not [string]::Equals($receipt.configuration, $Configuration, [StringComparison]::OrdinalIgnoreCase)) { throw "Build receipt is for $($receipt.configuration), not $Configuration." }
 if (-not (Test-Sha256String $receipt.dll_sha256)) { throw 'The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\Build.ps1.' }
 if (-not (Test-OrdinalEqual $receipt.dll_sha256 $dllSha256)) { throw "DLL SHA-256 $dllSha256 does not match the build receipt ($($receipt.dll_sha256)); rebuild with scripts\Build.ps1." }
 if (-not ($receipt.commit -is [string]) -or -not [regex]::IsMatch($receipt.commit, '\A[0-9a-f]{40}\z')) { throw 'Build receipt has no source commit.' }
-$receiptInputsDirty = if ($receipt.PSObject.Properties['product_inputs_dirty']) { [bool] $receipt.product_inputs_dirty } else { [bool] $receipt.dirty }
+# The dirty flag is a JSON boolean (product_inputs_dirty, or dirty in an older receipt), never coerced; a clean claim
+# that lists product changes is a contradiction.
+if ($receipt.PSObject.Properties['product_inputs_dirty']) {
+    if (-not ($receipt.product_inputs_dirty -is [bool])) { throw 'The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\Build.ps1.' }
+    $receiptInputsDirty = $receipt.product_inputs_dirty
+    if ($receipt.PSObject.Properties['product_input_changes']) {
+        $recordedChanges = $receipt.product_input_changes
+        if ($null -ne $recordedChanges -and -not ($recordedChanges -is [array]) -and -not ($recordedChanges -is [string])) { throw 'The build receipt product_input_changes must be a list; rebuild with scripts\Build.ps1.' }
+        if (-not $receiptInputsDirty -and @($recordedChanges | Where-Object { $_ }).Count -gt 0) { throw 'The build receipt claims clean product inputs but lists product changes; rebuild with scripts\Build.ps1.' }
+    }
+}
+else {
+    if (-not ($receipt.PSObject.Properties['dirty']) -or -not ($receipt.dirty -is [bool])) { throw 'The build receipt dirty flag must be a JSON boolean; rebuild with scripts\Build.ps1.' }
+    $receiptInputsDirty = $receipt.dirty
+}
 $problems = @()
 if ($receiptInputsDirty) { $problems += "the DLL was built with uncommitted product changes" }
 $changedSinceBuild = @(Get-ProductChangesBetween $receipt.commit $git.Commit)

@@ -131,6 +131,49 @@ try {
     [IO.File]::WriteAllBytes($dll, $dllBytes)
     $p = Invoke-Script $package
     Add-Case 'GenuineReceiptAndDllPackageAgain' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"
+    # R6-F1: the alternate build's own receipt (built from an uncommitted source change; its digest matches its DLL), after
+    # the source is restored: refused as recorded, and refused when its dirty metadata is malformed (null, an empty array,
+    # the string "false") or contradictory (false while listing the changed file). The genuine clean receipt then packages.
+    [IO.File]::AppendAllText($probeSource, "`r`nnamespace KmcsReceiptProbe { internal static class Marker { internal const int Value = 7; } }`r`n")
+    $b = Invoke-Script $build
+    [IO.File]::WriteAllBytes($probeSource, $probeOriginal)
+    $altReceiptText = [IO.File]::ReadAllText($receiptPath); $altDll = [IO.File]::ReadAllBytes($dll)
+    $alt = $altReceiptText | ConvertFrom-Json
+    Add-Case 'AlternateBuildReceiptRecordsItsDirtyInputs' ($b.ExitCode -eq 0 -and $alt.product_inputs_dirty -eq $true -and @($alt.product_input_changes).Count -gt 0 -and $alt.dll_sha256 -eq (Get-Sha256 $dll) -and @(& git -C $clone status --porcelain -- src).Count -eq 0) "dirty $($alt.product_inputs_dirty); changes $(@($alt.product_input_changes) -join ', '); DLL $($alt.dll_sha256)"
+    $p = Invoke-Script $package
+    Add-Case 'AlternateDirtyReceiptRefused' ($p.ExitCode -ne 0 -and $p.Output -match 'built with uncommitted product changes') (Get-Reason $p.Output)
+    foreach ($bad in @(@('Null', $null), @('EmptyArray', @()), @('StringFalse', 'false'))) {
+        $edited = $altReceiptText | ConvertFrom-Json
+        $edited.product_inputs_dirty = $bad[1]
+        [IO.File]::WriteAllText($receiptPath, ($edited | ConvertTo-Json -Depth 8)); [IO.File]::WriteAllBytes($dll, $altDll)
+        $p = Invoke-Script $package
+        Add-Case "Alternate$($bad[0])DirtyFlagRefused" ($p.ExitCode -ne 0 -and $p.Output -match 'product_inputs_dirty must be a JSON boolean') ([regex]::Match($p.Output, 'The build receipt[^.]*').Value)
+    }
+    $edited = $altReceiptText | ConvertFrom-Json
+    $edited.product_inputs_dirty = $false
+    [IO.File]::WriteAllText($receiptPath, ($edited | ConvertTo-Json -Depth 8)); [IO.File]::WriteAllBytes($dll, $altDll)
+    $p = Invoke-Script $package
+    Add-Case 'AlternateCleanClaimListingChangesRefused' ($p.ExitCode -ne 0 -and $p.Output -match 'claims clean product inputs but lists product changes') ([regex]::Match($p.Output, 'The build receipt[^.]*').Value)
+    [IO.File]::WriteAllText($receiptPath, $genuineReceiptText); [IO.File]::WriteAllBytes($dll, $dllBytes)
+    $p = Invoke-Script $package
+    Add-Case 'GenuineCleanReceiptPackagesAfterTheDirtyCases' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"
+    # R6-F5: the supported configuration in another letter case packages the genuine Release build; a Debug receipt for a
+    # Release package is refused.
+    $p = Invoke-Script $package @('-Configuration', 'release')
+    Add-Case 'LowercaseReleaseConfigurationPackagesTheGenuineBuild' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"
+    $edited = $genuineReceiptText | ConvertFrom-Json; $edited.configuration = 'Debug'
+    [IO.File]::WriteAllText($receiptPath, ($edited | ConvertTo-Json -Depth 8))
+    $p = Invoke-Script $package
+    Add-Case 'DebugReceiptForAReleasePackageRefused' ($p.ExitCode -ne 0 -and $p.Output -match 'Build receipt is for Debug, not Release') ([regex]::Match($p.Output, 'Build receipt is for[^.]*').Value)
+    # R6-F6: only the recorded UnityModManager assembly version changed (digest and source unchanged): refused; genuine accepted.
+    $edited = $genuineReceiptText | ConvertFrom-Json
+    @($edited.references | Where-Object { $_.file -eq 'UnityModManager.dll' })[0].assembly_version = '0.33.0.0'
+    [IO.File]::WriteAllText($receiptPath, ($edited | ConvertTo-Json -Depth 8))
+    $p = Invoke-Script $package
+    Add-Case 'ReceiptWithContradictoryLoaderAssemblyVersionRefused' ($p.ExitCode -ne 0 -and $p.Output -match 'recorded as assembly version 0\.33\.0\.0, but the pin declares 0\.31\.1\.0') ([regex]::Match($p.Output, 'UnityModManager\.dll was recorded[^|]*').Value)
+    [IO.File]::WriteAllText($receiptPath, $genuineReceiptText)
+    $p = Invoke-Script $package
+    Add-Case 'GenuineReceiptPackagesAfterTheVersionCase' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"
 
     # Direct production builds (MSBuild on the project, without Build.ps1) apply the same pins: a genuine rebuild passes
     # and records its compiler inputs; a substituted cache file is refused before compilation; a repository-level hook at

@@ -17,8 +17,9 @@ function New-Pin([string] $File, [string] $Sha, [string] $Url, [string] $Name = 
     return [pscustomobject]@{ Name = $Name; File = $File; Version = $Version; Url = $Url; Sha256 = $Sha }
 }
 
-function New-Identity([string] $File, [string] $Sha, [string] $Url) {
-    return [pscustomobject]@{ role = 'pinned loader reference'; file = $File; assembly_version = '1.0.0.0'; sha256 = $Sha; source = $Url }
+function New-Identity([string] $File, [string] $Sha, [string] $Url, [string] $AssemblyVersion) {
+    if (-not $AssemblyVersion) { $AssemblyVersion = switch ($File) { 'UnityModManager.dll' { '0.31.1.0' } '0Harmony12.dll' { '1.2.0.1' } default { '1.0.0.0' } } }
+    return [pscustomobject]@{ role = 'pinned loader reference'; file = $File; assembly_version = $AssemblyVersion; sha256 = $Sha; source = $Url }
 }
 
 $shaA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; $shaB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
@@ -42,6 +43,11 @@ Assert-Case 'UnpinnedIdentityIsRejected' (@(Get-ReferencePinProblems ([pscustomo
 
 Assert-Case 'ReceiptWithoutReferencesIsRejected' (@(Get-ReferencePinProblems ([pscustomobject]@{ status = 'passed' }) $pins '0.31.1').Count -gt 0)
 Assert-Case 'ManagerVersionMustEqualThePinnedLoader' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $good }) $pins '0.33.0').Count -gt 0)
+# The recorded assembly version must be the declared pin version: a receipt naming UnityModManager 0.33.0.0 (digest and
+# source unchanged) is a problem.
+$otherVersion = @((New-Identity 'UnityModManager.dll' $shaA 'u1' '0.33.0.0'), (New-Identity '0Harmony12.dll' $shaB 'u2'))
+$found = @(Get-ReferencePinProblems ([pscustomobject]@{ references = $otherVersion }) $pins '0.31.1')
+Assert-Case 'RecordedAssemblyVersionContradictingThePinIsAProblem' ($found.Count -gt 0 -and ($found -join ' ') -match 'recorded as assembly version 0\.33\.0\.0, but the pin declares 0\.31\.1\.0')
 # Recorded pin digests are typed: a boolean, an empty array or a digest with a trailing line feed is a problem, never a match.
 foreach ($malformed in @(@('Boolean', $true), @('EmptyArray', @()), @('TrailingLineFeed', ($shaA + "`n")))) {
     $typed = @([pscustomobject]@{ role = 'pinned loader reference'; file = 'UnityModManager.dll'; assembly_version = '1.0.0.0'; sha256 = $malformed[1]; source = 'u1' }, (New-Identity '0Harmony12.dll' $shaB 'u2'))
@@ -235,6 +241,17 @@ try {
     [IO.File]::WriteAllText($lowerInfo, ($li | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $lowerInfo)
     Assert-Case 'BareManifestWithLowercaseEntryMethodMemberIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'must contain the member EntryMethod with exactly that name')
+    # Repeated required members whose last declaration is genuine (ConvertFrom-Json would keep only that one) are refused,
+    # in a ZIP manifest and in a bare manifest.
+    $genuineInfoRaw = [IO.File]::ReadAllText((Join-Path (Get-RepositoryRoot) 'Info.json'))
+    $dupManager = Join-Path $fixtures 'duplicate-managerversion Info.json'
+    [IO.File]::WriteAllText($dupManager, $genuineInfoRaw.Replace('"ManagerVersion"', '"ManagerVersion": "0.33.0", "ManagerVersion"'), [Text.UTF8Encoding]::new($false))
+    $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'duplicate-managerversion' $genuine $null @("KingmakerCutsceneSkip/Info.json|$dupManager")))
+    Assert-Case 'PackagedManifestDeclaringManagerVersionTwiceIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'Packaged Info\.json declares ManagerVersion more than once')
+    $dupEntry = Join-Path $fixtures 'duplicate-entrymethod Info.json'
+    [IO.File]::WriteAllText($dupEntry, $genuineInfoRaw.Replace('"EntryMethod"', '"EntryMethod": "Other.Main.Load", "EntryMethod"'), [Text.UTF8Encoding]::new($false))
+    $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $dupEntry)
+    Assert-Case 'BareManifestDeclaringEntryMethodTwiceIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'Info\.json declares EntryMethod more than once')
     $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'declared-names-control' $genuine $null $null))
     Assert-Case 'PackagedManifestWithDeclaredMemberNamesIsAccepted' ($r.ExitCode -eq 0)
     $genuineInfoCopy = Join-Path $fixtures 'genuine bare Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $genuineInfoCopy
@@ -463,18 +480,19 @@ Remove-ValidatedNativeProduct $product
     Restore-InterruptedRun $doneLab 6>$null
     Assert-Case 'ReleaseRecoveryClearsOnlyThatRunsLock' (-not (Test-Path -LiteralPath $releaseLock) -and -not (Test-Path -LiteralPath $doneLab.Journal) -and (Test-Path -LiteralPath $foreign))
     # Ordinary interrupted-run recovery in disposable labs (fixture Mods folders; no Params or registry backup). These labs
-    # have no game, so inside these blocks only, the shared wait for a running Kingmaker sees an empty process list.
-    $noGame = { function Get-Process { } }
+    # have no game, so inside these blocks only, the shared wait for a running Kingmaker sees no Kingmaker process (a lookup by
+    # process ID is answered normally).
+    $noGame = { function Get-Process { [CmdletBinding()] param([string] $Name, [int] $Id) if ($PSBoundParameters.ContainsKey('Id')) { Microsoft.PowerShell.Management\Get-Process -Id $Id -ErrorAction SilentlyContinue } } }
     $newLab = { param([string] $Name) $state = Join-Path $fixtures "$Name\state"; [pscustomobject]@{ State = $state; Lock = Join-Path $state 'runtime.lock'; Journal = Join-Path $state 'active-run.json' } }
     $newOrdinary = { param($Lab, [string] $RunId)
         $modsDir = Join-Path (Split-Path -Parent $Lab.State) 'Mods'; $stagedDir = Join-Path $modsDir 'KingmakerCutsceneSkip'
         New-Item -ItemType Directory -Path $stagedDir -Force | Out-Null; Set-Content -LiteralPath (Join-Path $stagedDir 'staged.txt') -Value 'staged'
         New-Item -ItemType Directory -Path $Lab.State -Force | Out-Null
-        Save-Journal $Lab ([ordered]@{ runId = $RunId; modsDir = $modsDir; staged = @($stagedDir); modsOriginal = $null; paramsBackup = $null; paramsTarget = $null; registryBackup = $null; completedSteps = @() })
+        Save-Journal $Lab ([ordered]@{ runId = $RunId; modsDir = $modsDir; staged = @($stagedDir); created = @($stagedDir); modsOriginal = $null; paramsBackup = $null; paramsTarget = $null; registryBackup = $null; completedSteps = @() })
         return $stagedDir }
-    # The owned lock held open (read sharing only) during recovery: restoration completes, the first attempt fails at the
-    # release and leaves a release-lock journal for this run with the lock; after the handle closes, a second attempt
-    # clears only that transaction.
+    # The owned lock held open (read sharing only) during recovery: recovery cannot hold the lock, so the first attempt
+    # changes nothing (staged files, ordinary journal and lock kept, retryable); after the handle closes, a second attempt
+    # restores and clears only that transaction.
     $heldLab = & $newLab 'held lab'
     $heldStaged = & $newOrdinary $heldLab 'fixture-held'
     $heldLock = Enter-RuntimeLock $heldLab 'fixture-held'
@@ -482,9 +500,9 @@ Remove-ValidatedNativeProduct $product
     $firstError = ''
     try { & { . $noGame; Restore-InterruptedRun $heldLab 6>$null } } catch { $firstError = $_.Exception.Message } finally { $holder.Dispose() }
     $heldJournal = if (Test-Path -LiteralPath $heldLab.Journal) { Get-Content -LiteralPath $heldLab.Journal -Raw | ConvertFrom-Json } else { $null }
-    Assert-Case 'OrdinaryRecoveryWithTheLockHeldRestoresAndKeepsARetryableReleaseJournal' ($firstError -match 'cannot be opened exclusively' -and -not (Test-Path -LiteralPath $heldStaged) -and (Test-Path -LiteralPath $heldLock) -and $null -ne $heldJournal -and $heldJournal.phase -eq 'release-lock' -and $heldJournal.runId -eq 'fixture-held')
+    Assert-Case 'OrdinaryRecoveryWithTheLockHeldChangesNothingAndStaysRetryable' ($firstError -match 'cannot be opened exclusively' -and (Test-Path -LiteralPath $heldStaged) -and (Test-Path -LiteralPath $heldLock) -and $null -ne $heldJournal -and -not $heldJournal.PSObject.Properties['phase'] -and $heldJournal.runId -eq 'fixture-held')
     & { . $noGame; Restore-InterruptedRun $heldLab 6>$null }
-    Assert-Case 'OrdinaryRecoveryRetryAfterTheHandleClosesClearsOnlyThatTransaction' (-not (Test-Path -LiteralPath $heldLock) -and -not (Test-Path -LiteralPath $heldLab.Journal) -and (Test-Path -LiteralPath $foreign))
+    Assert-Case 'OrdinaryRecoveryRetryAfterTheHandleClosesClearsOnlyThatTransaction' (-not (Test-Path -LiteralPath $heldStaged) -and -not (Test-Path -LiteralPath $heldLock) -and -not (Test-Path -LiteralPath $heldLab.Journal) -and (Test-Path -LiteralPath $foreign))
     # Ownership before change: an ordinary journal for run A while this lab's lock records run B is refused before any
     # restoration (staged files, journal and lock unchanged).
     $labA = & $newLab 'lab A'; $labB = & $newLab 'lab B'
@@ -492,14 +510,14 @@ Remove-ValidatedNativeProduct $product
     [void](Enter-RuntimeLock $labA 'fixture-B')
     $journalBefore = Get-Sha256 $labA.Journal
     $ownerError = ''; try { & { . $noGame; Restore-InterruptedRun $labA 6>$null } } catch { $ownerError = $_.Exception.Message }
-    Assert-Case 'OrdinaryJournalWithAnotherRunsLockLeavesStagedFilesUntouched' ($ownerError -match "belongs to run 'fixture-B', not 'fixture-A'; nothing was changed" -and (Test-Path -LiteralPath (Join-Path $stagedA 'staged.txt')) -and (Get-Sha256 $labA.Journal) -eq $journalBefore -and (Test-Path -LiteralPath $labA.Lock))
+    Assert-Case 'OrdinaryJournalWithAnotherRunsLockLeavesStagedFilesUntouched' ($ownerError -match "belongs to run 'fixture-B', not 'fixture-A'" -and (Test-Path -LiteralPath (Join-Path $stagedA 'staged.txt')) -and (Get-Sha256 $labA.Journal) -eq $journalBefore -and (Test-Path -LiteralPath $labA.Lock))
     # A release-only journal naming another lab's lock path: only this lab's lock is the authority (here another run's),
     # so it is refused and both locks are kept, including the other lab's lock that records the journal's own run.
     [void](Enter-RuntimeLock $labB 'fixture-A')
-    Save-Journal $labA ([ordered]@{ runId = 'fixture-A'; phase = 'release-lock'; lock = $labB.Lock })
+    [IO.File]::WriteAllText($labA.Journal, (([ordered]@{ runId = 'fixture-A'; phase = 'release-lock'; lock = $labB.Lock }) | ConvertTo-Json))
     $foreignPathError = ''; try { Restore-InterruptedRun $labA 6>$null } catch { $foreignPathError = $_.Exception.Message }
     Assert-Case 'ReleaseJournalWithAForeignLockPathPreservesBothLocks' ($foreignPathError -match "belongs to run 'fixture-B', not 'fixture-A'" -and (Test-Path -LiteralPath $labA.Lock) -and (Test-Path -LiteralPath $labB.Lock) -and (Test-Path -LiteralPath $labA.Journal))
-    Save-Journal $labA ([ordered]@{ runId = ''; phase = 'release-lock'; lock = $labA.Lock })
+    [IO.File]::WriteAllText($labA.Journal, (([ordered]@{ runId = ''; phase = 'release-lock'; lock = $labA.Lock }) | ConvertTo-Json))
     $emptyIdError = ''; try { Restore-InterruptedRun $labA 6>$null } catch { $emptyIdError = $_.Exception.Message }
     Assert-Case 'ReleaseJournalWithAnEmptyRunIdPreservesBothLocks' ($emptyIdError -match 'names no run' -and (Test-Path -LiteralPath $labA.Lock) -and (Test-Path -LiteralPath $labB.Lock) -and (Test-Path -LiteralPath $labA.Journal))
     # Replacement of the lock between inspection and removal, in a child process with a line breakpoint (no hook in the
@@ -510,7 +528,7 @@ Remove-ValidatedNativeProduct $product
     $raceLines = [IO.File]::ReadAllLines($raceScript)
     $lineOf = { param([string] $Anchor) for ($i = 0; $i -lt $raceLines.Length; $i++) { if ($raceLines[$i].TrimStart().StartsWith($Anchor)) { return $i + 1 } }; throw "Anchor not found: $Anchor" }
     $q = { param([string] $t) "'" + $t.Replace("'", "''") + "'" }
-    foreach ($race in @(@('BeforeTheExclusiveOpen', '$lockStream = [KmcsRuntimeLock]::OpenExclusive($lock)'), @('AfterTheOwnershipCheck', '[KmcsRuntimeLock]::DeleteWhenClosed($lockStream)'))) {
+    foreach ($race in @(@('BeforeTheExclusiveOpen', '$lockStream = [KmcsRuntimeLock]::OpenExclusive($lab.Lock)'), @('AfterTheOwnershipCheck', 'try { [KmcsRuntimeLock]::DeleteWhenClosed($lockStream) }'))) {
         $raceLab = & $newLab "race lab $($race[0])"
         $driver = Join-Path $fixtures ('race-' + [guid]::NewGuid().ToString('N') + '.ps1')
         [IO.File]::WriteAllText($driver, ("`$ErrorActionPreference = 'Stop'`r`n" +
@@ -529,6 +547,82 @@ Remove-ValidatedNativeProduct $product
             Assert-Case 'LockReplacementAfterTheOwnershipCheckIsRefusedAndOnlyTheVerifiedLockIsRemoved' ($raceOutput -match 'REPLACEMENT=refused OUTCOME=released LOCK=absent')
         }
     }
+    # R5-F2: publication of the restoration handoff fails (the journal held open, readable but not replaceable): the
+    # complete ordinary journal stays readable, no temporary file is left and the lock is kept; after the handle closes,
+    # recovery clears the owned transaction.
+    $pubLab = & $newLab 'publication lab'
+    $pubStaged = & $newOrdinary $pubLab 'fixture-publish'
+    [void](Enter-RuntimeLock $pubLab 'fixture-publish')
+    $journalHold = [IO.File]::Open($pubLab.Journal, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $pubError = ''
+    try { & { . $noGame; Restore-InterruptedRun $pubLab 6>$null } } catch { $pubError = $_.Exception.Message } finally { $journalHold.Dispose() }
+    $pubJournal = $null; try { $pubJournal = Get-Content -LiteralPath $pubLab.Journal -Raw | ConvertFrom-Json } catch { $pubJournal = $null }
+    $tmpLeft = @(Get-ChildItem -LiteralPath $pubLab.State -Filter '*.tmp').Count
+    Assert-Case 'FailedJournalPublicationLeavesTheCompleteJournalAndLock' ($pubError -ne '' -and $null -ne $pubJournal -and $pubJournal.runId -eq 'fixture-publish' -and -not $pubJournal.PSObject.Properties['phase'] -and (Test-Path -LiteralPath $pubLab.Lock) -and $tmpLeft -eq 0)
+    & { . $noGame; Restore-InterruptedRun $pubLab 6>$null }
+    Assert-Case 'RecoveryAfterFailedPublicationClearsTheOwnedTransaction' (-not (Test-Path -LiteralPath $pubStaged) -and -not (Test-Path -LiteralPath $pubLab.Lock) -and -not (Test-Path -LiteralPath $pubLab.Journal))
+    # R6-F3: the release-lock journal held readable but undeletable when the finalizer retires it: the lock is released,
+    # the saved host summary is integrity-failed with the scenario status kept, and recovery retires the journal after the
+    # handle closes.
+    $retLab = & $newLab 'retirement lab'
+    New-Item -ItemType Directory -Path $retLab.State -Force | Out-Null
+    $retLock = Enter-RuntimeLock $retLab 'fixture-retire'
+    Save-Journal $retLab ([ordered]@{ runId = 'fixture-retire'; phase = 'release-lock' })
+    $retSummaryPath = Join-Path $fixtures 'retirement evidence\host-summary.json'
+    $retHold = [IO.File]::Open($retLab.Journal, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $retError = ''
+    try { Complete-NativeRun $retLab $retLock $true ([ordered]@{ status = 'passed'; restored = $true }) $retSummaryPath $null 'fixture-retire' 3>$null } catch { $retError = $_.Exception.Message } finally { $retHold.Dispose() }
+    $retSaved = if (Test-Path -LiteralPath $retSummaryPath) { Get-Content -LiteralPath $retSummaryPath -Raw | ConvertFrom-Json } else { $null }
+    Assert-Case 'JournalRetirementFailureIsAFailedSavedOutcomeWithTheLockReleased' ($retError -match 'journal retirement failed' -and $null -ne $retSaved -and $retSaved.status -eq 'integrity-failed' -and $retSaved.scenarioStatus -eq 'passed' -and $retSaved.lockReleased -eq $true -and $retSaved.journalRetired -eq $false -and -not (Test-Path -LiteralPath $retLock) -and (Test-Path -LiteralPath $retLab.Journal))
+    Restore-InterruptedRun $retLab 6>$null
+    Assert-Case 'RecoveryRetiresTheReleaseJournalAfterTheHandleCloses' (-not (Test-Path -LiteralPath $retLab.Journal) -and -not (Test-Path -LiteralPath $retLock))
+    # R5-F3: after a handoff to run B (B's lock, ordinary journal and staged folder), a delayed finalizer of run A and a
+    # delayed restoration for A change nothing of B's, and recovery while B's runner process is alive (a helper process
+    # stands in for it) changes nothing either; once B's process has ended, recovery clears B's transaction.
+    $hoLab = & $newLab 'handoff lab'
+    $hoStaged = & $newOrdinary $hoLab 'fixture-B'
+    $bProcess = Start-Process -FilePath powershell.exe -ArgumentList @('-NoLogo', '-NoProfile', '-Command', 'Start-Sleep -Seconds 300') -PassThru -WindowStyle Hidden
+    Start-Sleep -Milliseconds 500
+    [IO.File]::WriteAllText($hoLab.Lock, "runId=fixture-B`npid=$($bProcess.Id)`nstartedUtc=$((Get-Date).ToUniversalTime().ToString('o'))`n")
+    $bState = { (Get-Sha256 $hoLab.Lock) + ';' + (Get-Sha256 $hoLab.Journal) + ';' + (Test-Path -LiteralPath (Join-Path $hoStaged 'staged.txt')) }
+    $bBefore = & $bState
+    $staleError = ''
+    try { Complete-NativeRun $hoLab $hoLab.Lock $true ([ordered]@{ status = 'passed'; restored = $true }) (Join-Path $fixtures 'stale evidence\host-summary.json') $null 'fixture-A' 3>$null } catch { $staleError = $_.Exception.Message }
+    Assert-Case 'DelayedFinalizerOfAnotherRunLeavesTheSuccessorUntouched' ($staleError -match "belongs to run 'fixture-B', not 'fixture-A'" -and (& $bState) -ceq $bBefore)
+    $staleRestore = ''
+    try { $staleLock = Open-OwnedRuntimeLock $hoLab 'fixture-A'; if ($staleLock) { $staleLock.Dispose() } } catch { $staleRestore = $_.Exception.Message }
+    Assert-Case 'DelayedRestorationOfAnotherRunCannotHoldTheSuccessorsLock' ($staleRestore -match "belongs to run 'fixture-B', not 'fixture-A'" -and (& $bState) -ceq $bBefore)
+    $activeError = ''
+    try { & { . $noGame; Restore-InterruptedRun $hoLab 6>$null } } catch { $activeError = $_.Exception.Message }
+    Assert-Case 'RecoveryWhileTheOwningRunIsActiveChangesNothing' ($activeError -match 'is still active \(process' -and (& $bState) -ceq $bBefore)
+    Stop-Process -Id $bProcess.Id -Force; $bProcess.WaitForExit()
+    & { . $noGame; Restore-InterruptedRun $hoLab 6>$null }
+    Assert-Case 'RecoveryAfterTheOwningRunEndedClearsItsTransaction' (-not (Test-Path -LiteralPath $hoStaged) -and -not (Test-Path -LiteralPath $hoLab.Lock) -and -not (Test-Path -LiteralPath $hoLab.Journal))
+    # R6-F2: a folder with a sentinel claims the product destination after the existence check and before creation (a
+    # line breakpoint in a separate process; no hook in the runner): staging refuses and its cleanup keeps the sentinel;
+    # recovery of a run that recorded the destination as planned but never created it keeps the sentinel too.
+    $claimLab = & $newLab 'claim lab'
+    $claimMods = Join-Path (Split-Path -Parent $claimLab.State) 'Mods'; New-Item -ItemType Directory -Path $claimMods -Force | Out-Null
+    $claimTarget = Join-Path $claimMods 'KingmakerCutsceneSkip'
+    $nativeScript = Join-Path $PSScriptRoot 'runtime\NativeProduct.ps1'
+    $nativeLines = [IO.File]::ReadAllLines($nativeScript)
+    $newItemLine = 0; for ($i = 0; $i -lt $nativeLines.Length; $i++) { if ($nativeLines[$i].TrimStart().StartsWith('New-Item -ItemType Directory -Path $target | Out-Null')) { $newItemLine = $i + 1; break } }
+    if ($newItemLine -eq 0) { throw 'NativeProduct.ps1 creation anchor not found.' }
+    $claimInfo = Join-Path $fixtures 'claim Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $claimInfo
+    $claimDriver = Join-Path $fixtures ('claim-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    [IO.File]::WriteAllText($claimDriver, ("`$ErrorActionPreference = 'Stop'`r`n. $(& $q (Join-Path $PSScriptRoot 'Common.ps1'))`r`n. $(& $q $nativeScript)`r`n" +
+        "`$product = [pscustomobject]@{ Mode = 'dll'; File = $(& $q $genuine); Info = $(& $q $claimInfo); Validation = [pscustomobject]@{ dll_sha256 = $(& $q (Get-Sha256 $genuine)); info_sha256 = $(& $q (Get-Sha256 $claimInfo)) } }`r`n" +
+        "Set-PSBreakpoint -Script $(& $q $nativeScript) -Line $newItemLine -Action { New-Item -ItemType Directory -Path $(& $q $claimTarget) | Out-Null; Set-Content -LiteralPath $(& $q (Join-Path $claimTarget 'sentinel.txt')) -Value 'claimed' } | Out-Null`r`n" +
+        "try { Install-ValidatedNativeProduct `$product $(& $q $claimMods) | Out-Null; `$outcome = 'staged' } catch { `$outcome = 'refused: ' + `$_.Exception.Message }`r`n" +
+        "Write-Output (""OUTCOME="" + `$outcome + "" SENTINEL="" + (Test-Path -LiteralPath $(& $q (Join-Path $claimTarget 'sentinel.txt'))))`r`n"))
+    $previous = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $claimOutput = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $claimDriver 2>&1) | ForEach-Object { "$_" }) -join ' ' } finally { $ErrorActionPreference = $previous }
+    Assert-Case 'ClaimedProductDestinationIsRefusedAndTheSentinelKept' ($claimOutput -match 'OUTCOME=refused: .* SENTINEL=True' -and (Get-Content -LiteralPath (Join-Path $claimTarget 'sentinel.txt') -Raw).Trim() -eq 'claimed')
+    New-Item -ItemType Directory -Path $claimLab.State -Force | Out-Null
+    Save-Journal $claimLab ([ordered]@{ runId = 'fixture-claim'; modsDir = $claimMods; staged = @($claimTarget); created = @(); modsOriginal = $null; paramsBackup = $null; paramsTarget = $null; registryBackup = $null; completedSteps = @() })
+    [void](Enter-RuntimeLock $claimLab 'fixture-claim')
+    & { . $noGame; Restore-InterruptedRun $claimLab 6>$null }
+    Assert-Case 'RecoveryKeepsAFolderTheRunDidNotCreate' ((Test-Path -LiteralPath (Join-Path $claimTarget 'sentinel.txt')) -and -not (Test-Path -LiteralPath $claimLab.Lock) -and -not (Test-Path -LiteralPath $claimLab.Journal))
     # A no-product control never inherits Cutscene Skip from the owner profile it copies (with or without a comparison
     # ZIP); the owner's source set is left intact; a profile already containing it is refused.
     $pristine = Join-Path $fixtures 'owner pristine'

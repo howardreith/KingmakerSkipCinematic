@@ -52,7 +52,7 @@ function New-ValidatedNativeProduct($Plan, [string] $Validator, [string] $InfoPa
 # digest, and only its four package entries are written, from the snapshot, into the product folder (any other entry
 # refuses before anything is written). DLL: copied with the validated Info.json. In both routes the staged manifest must
 # be the validated one before any explicit -ProductManagerVersion override; on any failure the product folder is removed.
-function Install-ValidatedNativeProduct($Product, [string] $ModsDir) {
+function Install-ValidatedNativeProduct($Product, [string] $ModsDir, [scriptblock] $OnCreated = $null) {
     $target = Join-Path $ModsDir 'KingmakerCutsceneSkip'
     if (Test-Path -LiteralPath $target) { throw "The product folder already exists: $target" }
     $entries = $null
@@ -78,8 +78,12 @@ function Install-ValidatedNativeProduct($Product, [string] $ModsDir) {
         finally { $archive.Dispose(); $stream.Dispose() }
         if ($entries.Count -ne $allowed.Count) { throw 'The product ZIP does not contain the four package entries; nothing was staged.' }
     }
+    $created = $false
     try {
+        # New-Item refuses an existing folder, so a folder that appeared after the check above is never claimed.
         New-Item -ItemType Directory -Path $target | Out-Null
+        $created = $true
+        if ($OnCreated) { & $OnCreated $target }
         if ($Product.Mode -eq 'zip') {
             foreach ($name in @($entries.Keys)) { [IO.File]::WriteAllBytes((Join-Path $target ($name.Substring('KingmakerCutsceneSkip/'.Length))), [byte[]]$entries[$name]) }
         }
@@ -94,7 +98,7 @@ function Install-ValidatedNativeProduct($Product, [string] $ModsDir) {
         return $staged
     }
     catch {
-        if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+        if ($created -and (Test-Path -LiteralPath $target)) { Remove-Item -LiteralPath $target -Recurse -Force }
         throw
     }
 }
@@ -150,11 +154,11 @@ function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [s
     if ($Restored) {
         # Only this run's lock is released. If that fails, the outcome is part of the summary and a release-only recovery
         # journal is kept, so -RecoverOnly can retry the release for this run (and only this run).
+        $released = $false
         try {
             Exit-RuntimeLock $Lab $Lock $RunId
             $Summary['lockReleased'] = $true
-            # Release confirmed: retire this run's release-lock journal (written when restoration completed).
-            try { Remove-ReleaseLockJournal $Lab $RunId } catch { $failures.Add("release-lock journal removal failed: $($_.Exception.Message)") }
+            $released = $true
         }
         catch {
             $failures.Add("lock release failed: $($_.Exception.Message)")
@@ -163,8 +167,24 @@ function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [s
             if (-not $Summary.Contains('scenarioStatus')) { $Summary['scenarioStatus'] = $Summary['status'] }
             $Summary['status'] = 'integrity-failed'
             $Summary['integrityFailures'] = @(@($(if ($Summary.Contains('integrityFailures')) { $Summary['integrityFailures'] })) + @("lock release failed: $($_.Exception.Message)") | Where-Object { $_ })
-            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock' }) }
-            catch { $failures.Add("release-lock journal write failed: $($_.Exception.Message)") }
+            # The retryable release-lock journal is kept for this run only while this run still owns the lock (never over
+            # another run's journal: Save-Journal refuses that).
+            if ([string]::Equals((Get-RuntimeLockOwner $Lab), $RunId, [StringComparison]::Ordinal)) {
+                try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock' }) }
+                catch { $failures.Add("release-lock journal write failed: $($_.Exception.Message)") }
+            }
+        }
+        if ($released) {
+            # Release confirmed: retire this run's release-lock journal. A failure is an integrity failure of the saved
+            # outcome (the journal stays for -RecoverOnly, which retires it once it can).
+            try { Remove-ReleaseLockJournal $Lab $RunId; $Summary['journalRetired'] = $true }
+            catch {
+                $failures.Add("release-lock journal retirement failed: $($_.Exception.Message)")
+                $Summary['journalRetired'] = $false
+                if (-not $Summary.Contains('scenarioStatus')) { $Summary['scenarioStatus'] = $Summary['status'] }
+                $Summary['status'] = 'integrity-failed'
+                $Summary['integrityFailures'] = @(@($(if ($Summary.Contains('integrityFailures')) { $Summary['integrityFailures'] })) + @("release-lock journal retirement failed: $($_.Exception.Message)") | Where-Object { $_ })
+            }
         }
     }
     try { Write-JsonFile $SummaryPath $Summary } catch { $failures.Add("summary write failed: $($_.Exception.Message)") }
@@ -198,8 +218,10 @@ function Enter-NativeRunDirectories($Lab, [string] $RunId) {
         try { Exit-RuntimeLock $Lab $lock $RunId }
         catch {
             # The same recoverable handoff as a completed run: a release-only journal for this run.
-            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock' }) } catch { }
-            throw "Run setup failed ($($setupError.Exception.Message)) and its lock could not be released ($($_.Exception.Message)); run -RecoverOnly."
+            $releaseError = $_.Exception.Message
+            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock' }) }
+            catch { throw "Run setup failed ($($setupError.Exception.Message)), its lock could not be released ($releaseError) and no recovery journal could be written ($($_.Exception.Message)); the lock $lock needs manual inspection." }
+            throw "Run setup failed ($($setupError.Exception.Message)) and its lock could not be released ($releaseError); run -RecoverOnly."
         }
         throw $setupError
     }

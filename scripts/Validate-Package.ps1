@@ -69,6 +69,40 @@ if ($loaderPin.Count -ne 1) { throw 'The pins do not name exactly one UnityModMa
 $result = [ordered]@{ status = 'validated'; input = $inputPath; input_sha256 = Get-BytesSha256 $inputBytes }
 # The load target is the product's fixed identity (Common.ps1), never taken from the manifest being checked.
 $loadIdentity = Get-ProductLoadIdentity
+# The top-level member names of a JSON object as written (before ConvertFrom-Json, which keeps only the last of repeated
+# names): a small scanner over strings and nesting depth.
+function Get-JsonTopLevelMemberNames([string] $Text) {
+    $names = New-Object System.Collections.Generic.List[string]
+    $depth = 0; $i = 0; $expectKey = $false
+    while ($i -lt $Text.Length) {
+        $c = $Text[$i]
+        if ($c -eq '"') {
+            $sb = New-Object System.Text.StringBuilder; $i++
+            while ($i -lt $Text.Length -and $Text[$i] -ne '"') {
+                if ($Text[$i] -eq '\') { [void]$sb.Append($Text[$i]); $i++ }
+                if ($i -lt $Text.Length) { [void]$sb.Append($Text[$i]); $i++ }
+            }
+            $i++
+            if ($depth -eq 1 -and $expectKey) {
+                $j = $i; while ($j -lt $Text.Length -and [char]::IsWhiteSpace($Text[$j])) { $j++ }
+                if ($j -lt $Text.Length -and $Text[$j] -eq ':') { $names.Add(('"' + $sb.ToString() + '"' | ConvertFrom-Json)) }
+            }
+            $expectKey = $false
+            continue
+        }
+        if ($c -eq '{' -or $c -eq '[') { $depth++; $expectKey = ($c -eq '{' -and $depth -eq 1) }
+        elseif ($c -eq '}' -or $c -eq ']') { $depth-- }
+        elseif ($c -eq ',' -and $depth -eq 1) { $expectKey = $true }
+        $i++
+    }
+    return $names.ToArray()
+}
+function Assert-ManifestMembersDeclaredOnce([string] $Text, [string] $Label) {
+    $written = @(Get-JsonTopLevelMemberNames $Text)
+    foreach ($field in @('Id', 'Version', 'ManagerVersion', 'AssemblyName', 'EntryMethod')) {
+        if (@($written | Where-Object { Test-OrdinalEqual $_ $field }).Count -gt 1) { throw "$Label declares $field more than once." }
+    }
+}
 function Assert-ManifestIdentity($Manifest, [string] $Label) {
     # Member names are compared ordinally (PowerShell member lookup ignores case): each required field must be present
     # under exactly its declared spelling, once, before any value is read.
@@ -99,7 +133,9 @@ if ($PackagePath) {
             try { $entryStream.CopyTo($buffer); return , $buffer.ToArray() } finally { $buffer.Dispose(); $entryStream.Dispose() }
         }
         $packagedInfoBytes = Read-Entry 'KingmakerCutsceneSkip/Info.json'
-        $packagedInfo = [Text.Encoding]::UTF8.GetString($packagedInfoBytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+        $packagedInfoText = [Text.Encoding]::UTF8.GetString($packagedInfoBytes).TrimStart([char]0xFEFF)
+        Assert-ManifestMembersDeclaredOnce $packagedInfoText 'Packaged Info.json'
+        $packagedInfo = $packagedInfoText | ConvertFrom-Json
         $dllBytes = Read-Entry 'KingmakerCutsceneSkip/KingmakerCutsceneSkip.dll'
     }
     finally { $archive.Dispose(); $stream.Dispose() }
@@ -114,7 +150,9 @@ else {
         # The bare route's manifest, read once through one handle (its identity is protected like the input's).
         $infoBytes = $null
         $infoId = [KmcsFileIdentity]::ReadSnapshot($InfoPath, [ref]$infoBytes)
-        $bareInfo = [Text.Encoding]::UTF8.GetString($infoBytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+        $bareInfoText = [Text.Encoding]::UTF8.GetString($infoBytes).TrimStart([char]0xFEFF)
+        Assert-ManifestMembersDeclaredOnce $bareInfoText 'Info.json'
+        $bareInfo = $bareInfoText | ConvertFrom-Json
         Assert-ManifestIdentity $bareInfo 'Info.json'
         $result.info = $InfoPath
         $result.info_sha256 = Get-BytesSha256 $infoBytes
