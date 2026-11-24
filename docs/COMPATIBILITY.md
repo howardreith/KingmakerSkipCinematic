@@ -14,7 +14,8 @@ coexistence. A user whose newer Unity Mod Manager already works does not need to
 | 0.33.0 | tested |
 | 0.32.4 | tested |
 | 0.31.1 | tested (declared minimum) |
-| 0.33.1 and later | not run; the audited member surface is present in 0.33.2 |
+| 0.33.4 (newest stable on the author's NuGet feed, 2026-11-19) | static API audit only: every bound member resolves (2026-11-24, below); **native not run** (prerequisite below) |
+| 0.33.1-0.33.3 | not run; the audited member surface is present in 0.33.2 |
 | other 0.31.x, 0.32.0-0.32.3 as published | **not tested** |
 | 0.27.12 | loaded and passed a smoke test only with a staged `ManagerVersion` override; no coexistence run, not supported |
 | 0.27.10 | **unavailable** to this work; no claim |
@@ -31,6 +32,41 @@ Member audit (metadata, `private/contract-tool` in the lab): the mod binds only 
 (constructor, `Load<T>`, `Save`, `Save<T>`), and Harmony 1.2's `HarmonyInstance.Create`/`Patch`/`UnpatchAll` and
 `HarmonyMethod`. All exist in UMM 0.27.12, 0.31.1, 0.32.3, 0.32.4, 0.33.0 and 0.33.2. `0Harmony12.dll` is byte-identical
 across those versions, and the members it binds exist in Harmony 2.3.1.1, 2.3.3, 2.3.5 and 2.3.6.
+
+## Current checks (2026-11-24)
+
+These apply to the released v0.1.2 package (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`, DLL
+`a2a8706b…a1ba`, MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`); the records are in
+[`docs/evidence/umm-0311/`](evidence/umm-0311/INDEX.md).
+
+- **Package contract.** `scripts/Validate-Package.ps1 -PackagePath <zip>` passes for the released ZIP: its DLL references
+  exactly `UnityModManager, Version=0.31.1.0, Culture=neutral, PublicKeyToken=null` and
+  `0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null` (`published-0.1.2-validation.json`).
+- **Static API audit across four profiles.** The DLL's references into UnityModManager and 0Harmony12 (types and members,
+  by name and decoded signature, inherited members included) all resolve against: UMM 0.31.1 with Harmony 2.3.1.1, UMM
+  0.32.4 with Harmony 2.3.6, the owner's installed UMM 0.33.0 (Harmony 2.3.6) and UMM 0.33.4 with Harmony 2.4.3
+  (`api-audit.json`; profile components and hashes in `loader-profiles.md`). The 0.31.1, 0.32.4 and 0.33.4 profiles are
+  assembled from the author's NuGet `UnityModManager` package and the matching `Lib.Harmony` package plus the pinned
+  `0Harmony12.dll`; the 0.33.0 profile is a read-only copy of the owner's installed loader folder. Static evidence only.
+  To reproduce, build the audit tool from its two committed sources with the .NET 8 SDK and run it on the DLL:
+  ```powershell
+  New-Item -ItemType Directory audit | Out-Null
+  Copy-Item docs\evidence\umm-0311\loader-api-audit-Program.cs.txt audit\Program.cs
+  Copy-Item docs\evidence\umm-0311\loader-api-audit-csproj.txt audit\LoaderApiAudit.csproj
+  dotnet build -c Release audit\LoaderApiAudit.csproj
+  audit\bin\Release\net8.0\LoaderApiAudit.exe --mod <KingmakerCutsceneSkip.dll> --json api-audit.json --assemblies UnityModManager,0Harmony12,0Harmony `
+    --profile "0.31.1=<p>\0.31.1\UnityModManager.dll;<p>\0.31.1\0Harmony.dll;<p>\0.31.1\0Harmony12.dll" `
+    --profile "0.32.4=<p>\0.32.4\UnityModManager.dll;<p>\0.32.4\0Harmony.dll;<p>\0.32.4\0Harmony12.dll" `
+    --profile "owner-0.33.0=<owner copy>\UnityModManager.dll;<owner copy>\0Harmony.dll;<owner copy>\0Harmony12.dll" `
+    --profile "0.33.4=<p>\0.33.4\UnityModManager.dll;<p>\0.33.4\0Harmony.dll;<p>\0.33.4\0Harmony12.dll"
+  ```
+- **Native.** No native run was made for this change (the product is unchanged). The guarded disposable-copy route is
+  `scripts\runtime\Invoke-NativeRun.ps1 -GameCopy <copy> -LoaderProfile <profile> -Scenario <scenario> [-ProductZip <zip>]`.
+  **0.33.4 prerequisite:** the reviewed harness profiles in `scripts/runtime/loader-profiles.json` are `umm-0.27.12`,
+  `umm-0.31.1`, `umm-0.32.3`, `umm-0.32.4` and the synthetic 0.32.3/2.3.5 set (plus `owner-0.33.0`); there is no
+  `umm-0.33.4` profile, so `-LoaderProfile umm-0.33.4` is refused ("Unknown loader profile"). A 0.33.4 row needs a
+  reviewed profile with SHA-256-verified UMM 0.33.4, Harmony 2.4.3 and the matching dnlib/doorstop components first.
+- The loader and combined-stack results below are the 2026-11-08 runs (`20261108T…`), historical but on the same DLL.
 
 ## The early-0.32 failure reports
 

@@ -2,25 +2,37 @@
 
 ## Package contract: the packaged DLL's actual loader references (2026-11-24)
 
-`scripts/Validate-Package.ps1` is the standalone check of what will be installed. For a ZIP it requires exactly the four
-package entries (`Info.json`, `KingmakerCutsceneSkip.dll`, `README.md`, `LICENSE` under `KingmakerCutsceneSkip/`; no
-loader, Harmony, game or other DLL), the packaged `Info.json` with this checkout's Id and version and `ManagerVersion`
-equal to the pinned loader floor (0.31.1), and a packaged DLL that defines the assembly `KingmakerCutsceneSkip` and whose
-AssemblyRef table names exactly the pinned `UnityModManager 0.31.1.0` and `0Harmony12 1.2.0.1` and no other
-UnityModManager or Harmony assembly. Before this, packaging compared only the build receipt with the pins; nothing read
-the packaged DLL. `scripts/Package.ps1` now validates the ZIP it builds (and removes a refused ZIP), and records the
-references in its manifest; `scripts/runtime/Invoke-NativeRun.ps1` validates the product before it takes the run lock (a
-ZIP is copied once into a private folder, and that validated copy is the one installed; the staged DLL must equal it) or,
-on the built-DLL route, validates the DLL. The product, its build and the declared minimum are unchanged.
+`scripts/Validate-Package.ps1` is the standalone check of what will be installed. It reads the input once, through one
+handle, into memory, and takes the digest and every inspection from that snapshot. For a ZIP it requires exactly the four
+package entries (`Info.json`, `KingmakerCutsceneSkip.dll`, `README.md`, `LICENSE` under `KingmakerCutsceneSkip/`), and a
+packaged `Info.json` whose `Id`, `Version`, `AssemblyName` and `EntryMethod` are this checkout's shipping identity and
+whose `ManagerVersion` equals the pinned floor (0.31.1). The DLL (packaged, or bare with `-DllPath`) must define
+`KingmakerCutsceneSkip` with a file version belonging to the shipping version, and its AssemblyRef table must name,
+within the UnityModManager and Harmony families (any suffix), exactly the pinned references with their full binding
+identity: `UnityModManager, Version=0.31.1.0, Culture=neutral, PublicKeyToken=null` and
+`0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null`. The report is written through one handle whose
+identity is checked against the input first, so neither another spelling nor a hard link of the input can be overwritten.
 
-- The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`, the GitHub release
-  asset) passes: DLL `a2a8706b…a1ba`, MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, references `0Harmony12 1.2.0.1` and
-  `UnityModManager 0.31.1.0`.
-- `scripts/Test-Provenance.ps1` (run by `scripts/Test.ps1`): 21/21. The ten new cases use stub assemblies compiled with
-  the .NET Framework compiler: references to the pinned files accepted (ZIP and bare DLL); a DLL compiled against the
-  installed loader (0.33.0) refused (ZIP and bare DLL); an additional Harmony 2 reference, another assembly name, a
-  packaged loader assembly and a packaged `ManagerVersion` of 0.33.0 refused; a report path equal to the package refused
-  with the package unchanged; and the native runner validates before locking and installs the validated copy.
+- `scripts/Package.ps1` validates the ZIP it builds (a refused ZIP is removed) and records the validated ZIP digest and
+  references in its manifest. Its provenance check now also treats the build and reference helpers
+  (`scripts/Build.ps1`, `scripts/Common.ps1`) as product inputs; documentation-only commits still reuse the frozen DLL.
+- The reference cache refuses an existing entry that does not match its pin (remove it explicitly to re-fetch); only an
+  absent entry is downloaded.
+- `scripts/runtime/Invoke-NativeRun.ps1` decides once whether a product is staged (`-NoProduct` wins; a ZIP given with it
+  is recorded as a comparison archive only), freezes the product (the ZIP or the built DLL) as a private copy, validates
+  that copy before taking the run lock and installs exactly that copy (the staged DLL must equal the validated one).
+  Preparation failures remove the private copy; a failure after the lock is taken releases only this run's lock.
+- The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
+  MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
+- `scripts/Test.ps1`: 55/55 unit, provenance 32/32, package provenance 6/6. Provenance cases compile every fixture with
+  the .NET Framework compiler against the pinned files or disposable stub loaders of known identity (newer UMM 0.33.0.0,
+  a 0.31.1.0 with another culture, Harmony 2, an extra UMM-family assembly), so no case depends on the installed loader;
+  they also cover a wrong assembly name, `AssemblyName`, `EntryMethod`, file version, an extra loader payload, a raised
+  minimum, report aliases, and the runner's preparation (no-product with and without a ZIP, the bare-DLL route staging the
+  validated bytes after the build output changed, cleanup after a refused product, lock release after a post-lock setup
+  failure with another lab's lock untouched). Package provenance runs the real build and packaging commands in a
+  temporary checkout: genuine package, build-helper change refused then rebuilt, documentation-only reuse, corrupt cache
+  refused before compilation, a DLL differing from its receipt refused.
 
 ## Candidate 0.1.2 (UMM compatibility and cinematic safety)
 
