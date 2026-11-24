@@ -5,7 +5,8 @@ param([string] $ReportPath)
 # reference cache copied from this checkout, so nothing is downloaded): a genuine package without any provenance
 # override; a committed build-helper change invalidating the old receipt and a fresh build passing; a
 # documentation-only commit reusing the frozen DLL; a corrupt cache entry refused before compilation; and packaging
-# refused for a DLL that differs from its receipt. This checkout's artifacts are not touched.
+# refused for a DLL that differs from its receipt; direct MSBuild builds verifying their compiler inputs, refusing a
+# substituted cache file and a rewritten resolved reference. This checkout's artifacts are not touched.
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $source = Get-RepositoryRoot
 $commit = (& git -C $source rev-parse HEAD).Trim()
@@ -51,7 +52,8 @@ try {
     [IO.File]::AppendAllText((Join-Path $clone 'README.md'), "`r`n<!-- documentation-only change -->`r`n")
     & $git @('commit', '-q', '-am', 'test: documentation only') | Out-Null
     $p = Invoke-Script $package
-    $manifest = Get-Content -LiteralPath (Join-Path $clone 'artifacts\package\KingmakerCutsceneSkip-0.1.2.manifest.json') -Raw | ConvertFrom-Json
+    $cloneVersion = [string](Get-Content -LiteralPath (Join-Path $clone 'Info.json') -Raw | ConvertFrom-Json).Version
+    $manifest = Get-Content -LiteralPath (Join-Path $clone "artifacts\package\KingmakerCutsceneSkip-$cloneVersion.manifest.json") -Raw | ConvertFrom-Json
     Add-Case 'DocumentationOnlyChangeReusesTheFrozenDll' ($p.ExitCode -eq 0 -and $manifest.dll_sha256 -eq $frozenDll -and $manifest.build_commit -ne $manifest.package_commit) "build $($manifest.build_commit.Substring(0, 7)), package $($manifest.package_commit.Substring(0, 7)), DLL $($manifest.dll_sha256)"
 
     # A corrupt cache entry is refused before compilation (the DLL is not rebuilt).
@@ -70,6 +72,33 @@ try {
     $p = Invoke-Script $package
     Add-Case 'DllDifferingFromItsReceiptRefusedAtPackaging' ($p.ExitCode -ne 0 -and $p.Output -match 'does not match the build receipt') (Get-Reason $p.Output)
     [IO.File]::WriteAllBytes($dll, $dllBytes)
+
+    # Direct production builds (MSBuild on the project, without Build.ps1) apply the same pins: a genuine rebuild passes
+    # and records its compiler inputs; a substituted cache file is refused before compilation; a repository-level hook at
+    # the CoreCompile boundary that points a loader reference elsewhere is refused by the final check.
+    $project = Join-Path $clone 'src\KingmakerCutsceneSkip\KingmakerCutsceneSkip.csproj'
+    $direct = { param([string] $Target) $previous = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $o = ((& dotnet msbuild $project '/nologo' "/t:$Target" '/p:Configuration=Release' '/p:Platform=AnyCPU' 2>&1) | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $previous }
+        [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($o -join "`n") } }
+    $pinsByFile = @{}; foreach ($pin in @(Get-PinnedReferenceDefinitions (Join-Path $clone 'scripts\reference-pins.json'))) { $pinsByFile[[string]$pin.File] = [string]$pin.Sha256 }
+    $d = & $direct 'Rebuild'
+    $inputs = @([regex]::Matches($d.Output, 'Loader compiler input: (\S.*?\.dll) ([0-9a-f]{64})') | ForEach-Object { [pscustomobject]@{ path = $_.Groups[1].Value; sha256 = $_.Groups[2].Value } })
+    $inputsMatch = $inputs.Count -eq 2 -and @($inputs | Where-Object { $pinsByFile[[IO.Path]::GetFileName($_.path)] -ceq $_.sha256 -and $_.path.StartsWith((Join-Path $clone 'artifacts\references'), [StringComparison]::OrdinalIgnoreCase) }).Count -eq 2
+    Add-Case 'DirectProductionRebuildVerifiesItsCompilerInputs' ($d.ExitCode -eq 0 -and $d.Output -match 'Pinned reference cache: PASS' -and $inputsMatch) (($inputs | ForEach-Object { $_.path.Substring($clone.Length + 1) + ' ' + $_.sha256 }) -join '; ')
+    $umm = Join-Path $clone 'artifacts\references\UnityModManager.dll'; $ummBytes = [IO.File]::ReadAllBytes($umm)
+    [IO.File]::Copy((Join-Path $clone 'artifacts\references\0Harmony12.dll'), $umm, $true)
+    $d = & $direct 'Rebuild'
+    [IO.File]::WriteAllBytes($umm, $ummBytes)
+    Add-Case 'DirectRebuildRefusesASubstitutedCacheFile' ($d.ExitCode -ne 0 -and $d.Output -match 'UnityModManager\.dll does not match its pin' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') (Get-Reason ($d.Output -replace '\s+', ' '))
+    $elsewhere = Join-Path $temp 'elsewhere'; New-Item -ItemType Directory -Path $elsewhere | Out-Null
+    $elsewhereUmm = Join-Path $elsewhere 'UnityModManager.dll'; [IO.File]::WriteAllBytes($elsewhereUmm, $ummBytes)
+    $hook = Join-Path $clone 'Directory.Build.targets'
+    [IO.File]::WriteAllText($hook, "<Project><Target Name=`"KmcsTestRewrite`" BeforeTargets=`"CoreCompile`"><ItemGroup><_KmcsTestUmm Include=`"@(ReferencePathWithRefAssemblies)`" Condition=`"'%(Filename)' == 'UnityModManager'`" /><ReferencePathWithRefAssemblies Remove=`"@(_KmcsTestUmm)`" /><ReferencePathWithRefAssemblies Include=`"$elsewhereUmm`" /></ItemGroup></Target></Project>")
+    $d = & $direct 'Build'
+    Remove-Item -LiteralPath $hook
+    Add-Case 'ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused' ($d.ExitCode -ne 0 -and $d.Output -match 'Loader compiler references must be the pinned files' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') ([regex]::Match($d.Output, 'Loader compiler references must be the pinned files[^\n]{0,160}').Value)
+    $d = & $direct 'Rebuild'
+    Add-Case 'DirectRebuildPassesAgainAfterRestoringTheCache' ($d.ExitCode -eq 0 -and $d.Output -match 'Loader compiler input: ') "exit $($d.ExitCode)"
 
     $failedCases = @($cases | Where-Object { -not $_.passed })
     $summary = [ordered]@{ schema = 'ksc.package-provenance-tests.v1'; commit = $commit; frozen_dll_sha256 = $frozenDll; passed = $cases.Count - $failedCases.Count; total = $cases.Count; cases = @($cases) }

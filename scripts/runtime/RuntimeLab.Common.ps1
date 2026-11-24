@@ -327,11 +327,13 @@ function Install-LoaderProfile($lab, $paths, [string] $profileName) {
 }
 
 # Rebuilds the copy's Mods folder from the pristine set: none, the named mods, or all of them.
-function Set-GameCopyMods($paths, [string] $modProfile, [string[]] $modSet) {
+function Set-GameCopyMods($paths, [string] $modProfile, [string[]] $modSet, [string[]] $ExcludeNames = @()) {
     if (Test-Path -LiteralPath $paths.ModsDir) { Remove-Item -LiteralPath $paths.ModsDir -Recurse -Force }
     New-Item -ItemType Directory -Path $paths.ModsDir | Out-Null
     $pristineMods = Join-Path $paths.Pristine 'Mods'
     $names = if ($modProfile -eq 'owner') { @(Get-ChildItem -LiteralPath $pristineMods -Directory | ForEach-Object Name) } else { @($modSet | Where-Object { $_ }) }
+    # Excluded mods (the shipping mod for a no-product control) are never copied from the pristine set.
+    $names = @($names | Where-Object { $ExcludeNames -notcontains $_ })
     foreach ($name in $names) {
         $source = Join-Path $pristineMods $name
         if (-not (Test-Path -LiteralPath $source)) { throw "Mod not found in the pristine set: $name" }

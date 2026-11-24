@@ -34,10 +34,19 @@ public static class KmcsFileIdentity {
             return id;
         }
     }
-    public static string WriteChecked(string path, string[] protectedIds, byte[] content) {
+    public static string WriteChecked(string path, string[] protectedIds, byte[] content) { return WriteChecked(path, protectedIds, new string[0], content); }
+    // protectedPaths: files whose identity at the moment of writing (the destination handle already held) is also protected,
+    // so a destination that aliases the input's current file is refused even if the input was replaced since its snapshot.
+    public static string WriteChecked(string path, string[] protectedIds, string[] protectedPaths, byte[] content) {
         using (var f = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read)) {
             string id = IdOf(f.SafeFileHandle);
             foreach (var p in protectedIds) if (p != null && string.Equals(p, id, StringComparison.Ordinal)) throw new InvalidOperationException("The report path must not be the validated input (file identity " + id + ").");
+            foreach (var p in protectedPaths) {
+                if (p == null || !File.Exists(p)) continue;
+                string current;
+                try { current = Of(p); } catch (IOException) { throw new InvalidOperationException("The identity of the input " + p + " could not be read; the report is not written."); }
+                if (string.Equals(current, id, StringComparison.Ordinal)) throw new InvalidOperationException("The report path must not be the current input file (file identity " + id + ").");
+            }
             f.SetLength(0);
             f.Write(content, 0, content.Length);
             return id;

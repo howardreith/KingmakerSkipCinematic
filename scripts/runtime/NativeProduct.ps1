@@ -20,20 +20,25 @@ function Resolve-NativeProductPlan([switch] $NoProduct, [string] $ProductZip, [s
 
 # Freezes the product first (a private copy of the ZIP or of the built DLL), validates that copy with the standalone
 # validator in its own process and returns it with the validator's report. The private folder is removed on any failure.
-function New-ValidatedNativeProduct($Plan, [string] $Validator) {
+# The bare-DLL route freezes Info.json with the DLL (-InfoPath, default the checkout's) and validates the pair.
+function New-ValidatedNativeProduct($Plan, [string] $Validator, [string] $InfoPath = (Join-Path (Get-RepositoryRoot) 'Info.json'), [string] $TempRoot = [IO.Path]::GetTempPath()) {
     if ($Plan.Mode -eq 'none') { return $null }
-    $private = Join-Path ([IO.Path]::GetTempPath()) ('kmcs-product-' + [Guid]::NewGuid().ToString('N'))
+    $private = Join-Path $TempRoot ('kmcs-product-' + [Guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Path $private | Out-Null
         $copy = Join-Path $private $(if ($Plan.Mode -eq 'zip') { 'product.zip' } else { 'KingmakerCutsceneSkip.dll' })
         [IO.File]::Copy($Plan.Source, $copy)
         $report = Join-Path $private 'validation.json'
         $kind = if ($Plan.Mode -eq 'zip') { '-PackagePath' } else { '-DllPath' }
-        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Validator $kind $copy -ReportPath $report | Out-Host
+        $extra = @()
+        $infoCopy = $null
+        if ($Plan.Mode -eq 'dll') { $infoCopy = Join-Path $private 'Info.json'; [IO.File]::Copy($InfoPath, $infoCopy); $extra = @('-InfoPath', $infoCopy) }
+        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Validator $kind $copy @extra -ReportPath $report | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'The product failed package validation; nothing was locked or staged.' }
         $validation = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
         if ((Get-Sha256 $copy) -cne [string]$validation.input_sha256) { throw 'The private product copy changed after validation.' }
-        return [pscustomobject]@{ Mode = $Plan.Mode; PrivateDirectory = $private; File = $copy; Validation = $validation }
+        if ($infoCopy -and (Get-Sha256 $infoCopy) -cne [string]$validation.info_sha256) { throw 'The private manifest copy changed after validation.' }
+        return [pscustomobject]@{ Mode = $Plan.Mode; PrivateDirectory = $private; File = $copy; Info = $infoCopy; Validation = $validation }
     }
     catch {
         if (Test-Path -LiteralPath $private) { Remove-Item -LiteralPath $private -Recurse -Force }
@@ -43,24 +48,47 @@ function New-ValidatedNativeProduct($Plan, [string] $Validator) {
 
 # Stages exactly the validated bytes into <ModsDir>\KingmakerCutsceneSkip (ZIP: extracted; DLL: copied with the given
 # Info.json) and returns the staged DLL digest, which must equal the validated DLL.
-function Install-ValidatedNativeProduct($Product, [string] $ModsDir, [string] $InfoPath) {
+function Install-ValidatedNativeProduct($Product, [string] $ModsDir) {
     $target = Join-Path $ModsDir 'KingmakerCutsceneSkip'
     if ($Product.Mode -eq 'zip') { Expand-Archive -LiteralPath $Product.File -DestinationPath $ModsDir }
     else {
         New-Item -ItemType Directory -Path $target | Out-Null
         Copy-Item -LiteralPath $Product.File -Destination $target
-        Copy-Item -LiteralPath $InfoPath -Destination (Join-Path $target 'Info.json')
+        Copy-Item -LiteralPath $Product.Info -Destination (Join-Path $target 'Info.json')
     }
     $staged = Get-Sha256 (Join-Path $target 'KingmakerCutsceneSkip.dll')
     if ($staged -cne [string]$Product.Validation.dll_sha256) { throw 'The staged product DLL differs from the validated product.' }
     return $staged
 }
 
+# A no-product control must not inherit the shipping mod from the profile it stages.
+function Assert-NoProductControlMods([string] $ModsDir) {
+    $inherited = Join-Path $ModsDir 'KingmakerCutsceneSkip'
+    if (Test-Path -LiteralPath $inherited) { throw "The no-product control would include an installed Cutscene Skip ($inherited); refusing the control." }
+}
+
+# Final steps of a run, each independent: the summary is written and the private copy removed, and this run's own lock is
+# released whenever restoration succeeded, even if one of those steps failed (the first failure is surfaced afterwards).
+# On incomplete restoration the lock and journal are kept for -RecoverOnly.
+function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, [scriptblock] $WriteSummary, $Product) {
+    $ErrorActionPreference = 'Stop'
+    $failures = New-Object System.Collections.Generic.List[string]
+    try { & $WriteSummary } catch { $failures.Add("summary write failed: $($_.Exception.Message)") }
+    try { Remove-ValidatedNativeProduct $Product } catch { $failures.Add("private product cleanup failed: $($_.Exception.Message)") }
+    if ($Restored) { Exit-RuntimeLock $Lab $Lock }
+    else { Write-Warning 'Run lock and recovery journal kept; run Invoke-NativeRun.ps1 -RecoverOnly after resolving the error.' }
+    if ($failures.Count -gt 0) { throw ($failures -join '; ') }
+}
+
 function Remove-ValidatedNativeProduct($Product) {
     if ($null -eq $Product) { return }
     $private = [string]$Product.PrivateDirectory
-    if ((Split-Path -Leaf $private) -like 'kmcs-product-*' -and (Test-Path -LiteralPath $private)) { Remove-Item -LiteralPath $private -Recurse -Force }
+    if ((Split-Path -Leaf $private) -like 'kmcs-product-*' -and (Test-Path -LiteralPath $private)) { Remove-Item -LiteralPath $private -Recurse -Force -ErrorAction Stop }
 }
+
+# The mods a game copy must not inherit from the profile it copies: the shipping mod, for a no-product control (with or
+# without a comparison ZIP).
+function Get-NoProductModExclusions($Plan) { if ($Plan.Mode -eq 'none') { return @('KingmakerCutsceneSkip') } return @() }
 
 # Takes this run's lock and creates its evidence and backup folders. A failure after the lock is taken releases only this
 # invocation's lock (nothing was changed yet) and rethrows; another lab's lock is never touched.

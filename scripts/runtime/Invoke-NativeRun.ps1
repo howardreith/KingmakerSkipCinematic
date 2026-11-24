@@ -122,7 +122,7 @@ try {
         Initialize-GameCopy $copyPaths
         $loaderIdentity = Install-LoaderProfile $lab $copyPaths $LoaderProfile
         Write-JsonFile (Join-Path $evidence 'loader-install.json') $loaderIdentity
-        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet)
+        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet -ExcludeNames @(Get-NoProductModExclusions $productPlan))
     }
     elseif ($ModProfile -eq 'isolated') {
         # Persist the planned move first: recovery inspects both locations, so an interruption on either side of the
@@ -136,6 +136,8 @@ try {
         Save-Journal $lab $journal
         New-Item -ItemType Directory -Path $game.ModsDir | Out-Null
     }
+    # A no-product control must not run with an inherited Cutscene Skip (game copies exclude it; a live profile refuses).
+    if ($productPlan.Mode -eq 'none') { Assert-NoProductControlMods $game.ModsDir }
     $deploy = @(@{ Source = $harnessDir; Name = 'KingmakerCutsceneSkipRuntimeHarness'; Info = Join-Path $root 'tools\RuntimeHarness\Info.json' })
     # The product itself is staged below from the validated private copy (never from the build output).
     foreach ($item in $deploy) {
@@ -155,7 +157,7 @@ try {
         if (Test-Path -LiteralPath $productTarget) { throw "Refusing to overwrite an existing mod folder: $productTarget" }
         $journal.staged += $productTarget
         Save-Journal $lab $journal
-        $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir (Join-Path $root 'Info.json')
+        $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir
     }
     if ($ProductManagerVersion -and -not $NoProduct) {
         $stagedInfo = Join-Path $game.ModsDir 'KingmakerCutsceneSkip\Info.json'
@@ -251,11 +253,8 @@ finally {
         $summary.status = 'integrity-failed'
         $summary.integrityFailures = $integrityFailures
     }
-    Write-JsonFile (Join-Path $evidence 'host-summary.json') $summary
-    # The private validated copy is never part of the installation; it is removed in every outcome.
-    Remove-ValidatedNativeProduct $validatedProduct
-    if ($restored) { Exit-RuntimeLock $lab $lock }
-    else { Write-Warning "Run lock and recovery journal kept; run '$PSCommandPath -RecoverOnly' after resolving the error." }
+    # Summary, private-copy cleanup and lock release are independent; the lock is released whenever restoration succeeded.
+    Complete-NativeRun $lab $lock ([bool]$restored) { Write-JsonFile (Join-Path $evidence 'host-summary.json') $summary } $validatedProduct
     Write-Host "Run $runId finished: $($summary.status) $($summary.failure) $(if ($integrityFailures.Count -gt 0) { '[' + ($integrityFailures -join '; ') + ']' })"
     Write-Host "Evidence: $evidence"
 }

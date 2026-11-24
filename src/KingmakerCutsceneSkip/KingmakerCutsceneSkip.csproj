@@ -20,6 +20,8 @@
     <Error Condition="!Exists('$(KingmakerManagedDir)\Assembly-CSharp.dll')" Text="GamePath.props must point to the Kingmaker 2.1.7b Managed directory." />
     <Error Condition="!Exists('$(PinnedReferenceDir)\UnityModManager.dll')" Text="Pinned UnityModManager.dll is missing; build with scripts\Build.ps1." />
     <Error Condition="!Exists('$(PinnedReferenceDir)\0Harmony12.dll')" Text="Pinned 0Harmony12.dll is missing; build with scripts\Build.ps1." />
+    <!-- The cache is verified against the parsed pin definition before references resolve (direct builds included). -->
+    <Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\scripts\Assert-PinnedReferences.ps1&quot; -ReferenceDirectory &quot;$(PinnedReferenceDir)&quot;" />
   </Target>
   <ItemGroup>
     <Reference Include="System" />
@@ -36,4 +38,5 @@
     <Compile Include="**\*.cs" Exclude="bin\**;obj\**" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\..\LoaderReferences.Final.targets" />
 </Project>

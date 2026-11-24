@@ -95,6 +95,23 @@ function New-FixtureZip([string] $Name, [string] $Dll, [scriptblock] $EditInfo, 
     finally { $archive.Dispose() }
     return $zip
 }
+# Runs the validator in its own process with an action at the first execution of the line starting with $Anchor (a
+# PowerShell line breakpoint: no hook in the validator). Used to replace or alias files mid-validation.
+function Invoke-ValidatorWithAction([string] $Anchor, [string] $Action, [string[]] $Arguments) {
+    $lines = [IO.File]::ReadAllLines($validator)
+    $line = 0; for ($i = 0; $i -lt $lines.Length; $i++) { if ($lines[$i].TrimStart().StartsWith($Anchor)) { $line = $i + 1; break } }
+    if ($line -eq 0) { throw "Validator anchor not found: $Anchor" }
+    $q = { param([string] $t) "'" + $t.Replace("'", "''") + "'" }
+    $driver = Join-Path $fixtures ('driver-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    [IO.File]::WriteAllText($driver, ("`$ErrorActionPreference = 'Stop'`r`n`$global:kmcsHit = `$false`r`n" +
+        "Set-PSBreakpoint -Script $(& $q $validator) -Line $line -Action { if (-not `$global:kmcsHit) { `$global:kmcsHit = `$true; $Action } } | Out-Null`r`n" +
+        "& $(& $q $validator) $(($Arguments | ForEach-Object { if ($_ -cmatch '\A-[A-Za-z]+\z') { $_ } else { & $q $_ } }) -join ' ')`r`n" +
+        "if (-not `$global:kmcsHit) { throw 'The validation action was never reached.' }`r`n"))
+    $previous = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $output = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $driver 2>&1) | ForEach-Object { "$_" }) -join ' ' }
+    finally { $ErrorActionPreference = $previous }
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -replace '\s+', ' ') }
+}
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 . (Join-Path $PSScriptRoot 'runtime\NativeProduct.ps1')
 . (Join-Path $PSScriptRoot 'runtime\RuntimeLab.Common.ps1')
@@ -139,6 +156,54 @@ try {
     Assert-Case 'PackageCarryingALoaderAssemblyIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match "entries outside the mod's four files: KingmakerCutsceneSkip/0Harmony12\.dll")
     $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'raised-manager' $genuine { param($i) $i.ManagerVersion = '0.33.0' } $null))
     Assert-Case 'PackagedManagerVersionAbovePinIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'ManagerVersion 0\.33\.0 must equal the pinned loader floor 0\.31\.1')
+    # An additional loader reference that differs from a pin only by case (a distinct binding identity under ordinal
+    # comparison), beside the genuine references. The fixture is compiled against a stub of the same name length and its
+    # AssemblyRef name is then rewritten in the #Strings heap.
+    foreach ($variantVersion in @('0.31.1.0', '0.33.0.0')) {
+        $stubQ = New-Assembly "stub-case-$variantVersion" "[assembly: System.Reflection.AssemblyTitle(`"QnityModManager`")] [assembly: System.Reflection.AssemblyVersion(`"$variantVersion`")] namespace QStub { public class Helper { } }"
+        $builtQ = New-Assembly "case-variant-$variantVersion" ($productHeader + 'public static class Probe { public static System.Type[] Types = { typeof(UnityModManagerNet.UnityModManager), typeof(Harmony12.HarmonyInstance), typeof(QStub.Helper) }; }') ($pinnedRefs + @($stubQ))
+        $bytesQ = [IO.File]::ReadAllBytes($builtQ)
+        $latin = [Text.Encoding]::GetEncoding(28591).GetString($bytesQ)
+        $hits = [regex]::Matches($latin, "QnityModManager`0").Count
+        if ($hits -ne 1) { throw "Case-variant fixture: expected one AssemblyRef name, found $hits." }
+        $patch = [Text.Encoding]::ASCII.GetBytes('unitymodmanager')
+        [Array]::Copy($patch, 0, $bytesQ, $latin.IndexOf("QnityModManager`0"), $patch.Length)
+        $patchedDir = Join-Path $fixtures "case-variant-patched-$variantVersion"; New-Item -ItemType Directory -Path $patchedDir | Out-Null
+        $patched = Join-Path $patchedDir 'KingmakerCutsceneSkip.dll'; [IO.File]::WriteAllBytes($patched, $bytesQ)
+        $r = Invoke-Validator @('-PackagePath', (New-FixtureZip "case-variant-$variantVersion" $patched $null $null))
+        Assert-Case "AdditionalCaseVariantLoaderReference$($variantVersion.Replace('.', '_'))IsRejected" ($r.ExitCode -ne 0 -and $r.Output -match "unpinned loader or Harmony assembly: unitymodmanager, Version=$([regex]::Escape($variantVersion))")
+        $r = Invoke-Validator @('-DllPath', $patched)
+        Assert-Case "BareDllWithCaseVariantLoaderReference$($variantVersion.Replace('.', '_'))IsRejected" ($r.ExitCode -ne 0 -and $r.Output -match 'unpinned loader or Harmony assembly: unitymodmanager')
+    }
+    # Declared pins are authoritative: in a disposable validator root, the genuine package passes with and without a
+    # cache; a declared version that disagrees with the authenticated cached assembly is refused, and without a cache the
+    # DLL is checked against the declaration.
+    $altRoot = Join-Path $fixtures 'alternate root'
+    New-Item -ItemType Directory -Path $altRoot | Out-Null
+    Copy-Item -LiteralPath $PSScriptRoot -Destination (Join-Path $altRoot 'scripts') -Recurse
+    Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $altRoot
+    $altValidator = Join-Path $altRoot 'scripts\Validate-Package.ps1'
+    $altPins = Join-Path $altRoot 'scripts\reference-pins.json'; $altPinsGenuine = [IO.File]::ReadAllText($altPins)
+    $altCache = Join-Path $altRoot 'artifacts\references'
+    $genuineZipPath = Join-Path $fixtures 'genuine.zip'
+    $saved = $validator; $validator = $altValidator
+    try {
+        $r = Invoke-Validator @('-PackagePath', $genuineZipPath)
+        Assert-Case 'GenuinePackageAcceptedWithoutACache' ($r.ExitCode -eq 0 -and -not (Test-Path -LiteralPath $altCache))
+        [void][IO.Directory]::CreateDirectory($altCache)
+        Copy-Item -Path (Join-Path $pinnedDir '*.dll') -Destination $altCache
+        $r = Invoke-Validator @('-PackagePath', $genuineZipPath)
+        Assert-Case 'GenuinePackageAcceptedWithTheCache' ($r.ExitCode -eq 0)
+        $disagreeing = $altPinsGenuine | ConvertFrom-Json
+        @($disagreeing.references | Where-Object { $_.Name -eq '0Harmony12' })[0].Version = '1.2.0.2'
+        [IO.File]::WriteAllText($altPins, ($disagreeing | ConvertTo-Json -Depth 5))
+        $r = Invoke-Validator @('-PackagePath', $genuineZipPath)
+        Assert-Case 'DeclaredPinVersionDisagreeingWithTheCachedAssemblyIsRefused' ($r.ExitCode -ne 0 -and $r.Output -match 'The pinned file 0Harmony12\.dll is 0Harmony12, Version=1\.2\.0\.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1\.2\.0\.2')
+        Remove-Item -LiteralPath $altCache -Recurse -Force
+        $r = Invoke-Validator @('-PackagePath', $genuineZipPath)
+        Assert-Case 'WithoutACacheTheDllIsCheckedAgainstTheDeclaredPin' ($r.ExitCode -ne 0 -and $r.Output -match 'references 0Harmony12, Version=1\.2\.0\.1, Culture=neutral, PublicKeyToken=null, not the pinned 0Harmony12, Version=1\.2\.0\.2')
+    }
+    finally { $validator = $saved }
     $r = Invoke-Validator @('-DllPath', $genuine)
     Assert-Case 'BuiltDllWithPinnedReferencesIsAccepted' ($r.ExitCode -eq 0)
     $r = Invoke-Validator @('-DllPath', $newerUmm)
@@ -156,27 +221,76 @@ try {
     $r = Invoke-Validator @('-PackagePath', $genuineZip, '-ReportPath', $reportFile)
     $report = Get-Content -LiteralPath $reportFile -Raw | ConvertFrom-Json
     Assert-Case 'ReportDigestAndMetadataComeFromOneSnapshot' ($r.ExitCode -eq 0 -and $report.input_sha256 -eq $before -and $report.dll_sha256 -eq (Get-Sha256 $genuine))
+    $nestedReport = Join-Path $fixtures ('fresh ' + [guid]::NewGuid().ToString('N') + '\nested\report.json')
+    $r = Invoke-Validator @('-PackagePath', $genuineZip, '-ReportPath', $nestedReport)
+    Assert-Case 'ReportBelowAFreshSubdirectoryIsWritten' ($r.ExitCode -eq 0 -and (Test-Path -LiteralPath $nestedReport -PathType Leaf))
+    # The input replaced during validation (right after its snapshot), in place and by rename: every report field still
+    # comes from the genuine snapshot (the reference report above, apart from the input path), while the file on disk is
+    # now the other package.
+    $genuineFields = ($report | Select-Object -Property * -ExcludeProperty input | ConvertTo-Json -Depth 5 -Compress)
+    $otherZip = Join-Path $fixtures 'newer-umm.zip'
+    $replacements = [ordered]@{
+        'InPlace' = { param($target) "[IO.File]::WriteAllBytes('$($target.Replace("'", "''"))', [IO.File]::ReadAllBytes('$($otherZip.Replace("'", "''"))'))" }
+        'ByRename' = { param($target) "Remove-Item -LiteralPath '$($target.Replace("'", "''"))'; Copy-Item -LiteralPath '$($otherZip.Replace("'", "''"))' -Destination '$($target.Replace("'", "''")).new'; Move-Item -LiteralPath '$($target.Replace("'", "''")).new' -Destination '$($target.Replace("'", "''"))'" } }
+    foreach ($kind in $replacements.Keys) {
+        $target = Join-Path $fixtures "replaced $kind.zip"; Copy-Item -LiteralPath $genuineZip -Destination $target
+        $replacedReport = Join-Path $fixtures "replaced $kind report.json"
+        $r = Invoke-ValidatorWithAction '$info = Get-ProductInfo' (& $replacements[$kind] $target) @('-PackagePath', $target, '-ReportPath', $replacedReport)
+        $fields = if (Test-Path -LiteralPath $replacedReport) { Get-Content -LiteralPath $replacedReport -Raw | ConvertFrom-Json | Select-Object -Property * -ExcludeProperty input | ConvertTo-Json -Depth 5 -Compress } else { '' }
+        Assert-Case "InputReplaced${kind}DuringValidationReportsOnlyTheSnapshot" ($r.ExitCode -eq 0 -and $fields -ceq $genuineFields -and (Get-Sha256 $target) -eq (Get-Sha256 $otherZip))
+    }
+    # A report destination that becomes an alias of the input at publication (hard link created just before the write) is
+    # refused and the package bytes survive; likewise when the input was replaced by rename and the destination aliases
+    # the current input file.
+    $aliasInput = Join-Path $fixtures 'alias input.zip'; Copy-Item -LiteralPath $genuineZip -Destination $aliasInput
+    $aliasReport = Join-Path $fixtures 'alias at publication.json'
+    $r = Invoke-ValidatorWithAction '$reportBytes = ' "New-Item -ItemType HardLink -Path '$($aliasReport.Replace("'", "''"))' -Target '$($aliasInput.Replace("'", "''"))' | Out-Null" @('-PackagePath', $aliasInput, '-ReportPath', $aliasReport)
+    Assert-Case 'ReportAliasingTheInputAtPublicationIsRefused' ($r.ExitCode -ne 0 -and $r.Output -match 'must not be the validated input' -and (Get-Sha256 $aliasInput) -eq $before)
+    $currentInput = Join-Path $fixtures 'current input.zip'; Copy-Item -LiteralPath $genuineZip -Destination $currentInput
+    $currentReport = Join-Path $fixtures 'alias of current input.json'
+    $swap = "Remove-Item -LiteralPath '$($currentInput.Replace("'", "''"))'; Copy-Item -LiteralPath '$($otherZip.Replace("'", "''"))' -Destination '$($currentInput.Replace("'", "''"))'; New-Item -ItemType HardLink -Path '$($currentReport.Replace("'", "''"))' -Target '$($currentInput.Replace("'", "''"))' | Out-Null"
+    $r = Invoke-ValidatorWithAction '$reportBytes = ' $swap @('-PackagePath', $currentInput, '-ReportPath', $currentReport)
+    Assert-Case 'ReportAliasingTheReplacedCurrentInputIsRefused' ($r.ExitCode -ne 0 -and $r.Output -match 'must not be the current input file' -and (Get-Sha256 $currentInput) -eq (Get-Sha256 $otherZip))
 
     # Native runner product preparation (scripts/runtime/NativeProduct.ps1) with real temporary files.
+    # Private copies of this invocation go below its own temporary root, so other runs' folders cannot affect a case.
+    $runTemp = Join-Path $fixtures 'run temp'; New-Item -ItemType Directory -Path $runTemp | Out-Null
     $plan = Resolve-NativeProductPlan -NoProduct -ProductZip $genuineZip -ProductDll (Join-Path $fixtures 'absent.dll')
-    Assert-Case 'NoProductWithZipIsAComparisonOnly' ($plan.Mode -eq 'none' -and $plan.ComparisonZip -eq $genuineZip -and $null -eq (New-ValidatedNativeProduct $plan $validator))
+    Assert-Case 'NoProductWithZipIsAComparisonOnly' ($plan.Mode -eq 'none' -and $plan.ComparisonZip -eq $genuineZip -and $null -eq (New-ValidatedNativeProduct $plan $validator -TempRoot $runTemp))
     $plan = Resolve-NativeProductPlan -NoProduct -ProductDll (Join-Path $fixtures 'absent.dll')
     Assert-Case 'NoProductWithoutZipNeedsNoProduct' ($plan.Mode -eq 'none' -and $null -eq $plan.ComparisonZip)
     $buildOutput = Join-Path $fixtures 'build output'; New-Item -ItemType Directory -Path $buildOutput | Out-Null
     Copy-Item -LiteralPath $genuine -Destination (Join-Path $buildOutput 'KingmakerCutsceneSkip.dll')
     $plan = Resolve-NativeProductPlan -ProductDll (Join-Path $buildOutput 'KingmakerCutsceneSkip.dll')
-    $product = New-ValidatedNativeProduct $plan $validator
+    # The bare route's manifest: a mismatched Info.json is refused before anything is staged.
+    foreach ($mismatch in @(@('Version', '9.9.9'), @('ManagerVersion', '0.33.0'), @('Id', 'Other'))) {
+        $badInfo = Join-Path $fixtures "bare-$($mismatch[0]).json"
+        $bi = Get-Content -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Raw | ConvertFrom-Json; $bi.($mismatch[0]) = $mismatch[1]
+        $bi | ConvertTo-Json | Set-Content -LiteralPath $badInfo -Encoding UTF8
+        $refusedBare = $false; try { New-ValidatedNativeProduct $plan $validator -InfoPath $badInfo -TempRoot $runTemp | Out-Null } catch { $refusedBare = $_.Exception.Message -match 'failed package validation' }
+        Assert-Case "BareManifestWithMismatched$($mismatch[0])IsRefused" ($refusedBare -and @(Get-ChildItem -LiteralPath $runTemp -Directory -Filter 'kmcs-product-*').Count -eq 0)
+    }
+    # The checkout's manifest (here a fixture copy) is frozen with the DLL: changing it after preparation does not change
+    # what is staged.
+    $checkoutInfo = Join-Path $fixtures 'checkout Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $checkoutInfo
+    $checkoutInfoSha = Get-Sha256 $checkoutInfo
+    $product = New-ValidatedNativeProduct $plan $validator -InfoPath $checkoutInfo -TempRoot $runTemp
+    (Get-Content -LiteralPath $checkoutInfo -Raw).Replace('"ManagerVersion"', '"Unvalidated": "x", "ManagerVersion"') | Set-Content -LiteralPath $checkoutInfo -Encoding UTF8
     Copy-Item -LiteralPath $otherVersion -Destination (Join-Path $buildOutput 'KingmakerCutsceneSkip.dll') -Force
     $mods = Join-Path $fixtures 'Mods'; New-Item -ItemType Directory -Path $mods | Out-Null
-    $staged = Install-ValidatedNativeProduct $product $mods (Join-Path (Get-RepositoryRoot) 'Info.json')
+    $staged = Install-ValidatedNativeProduct $product $mods
+    Assert-Case 'ManifestChangedAfterPreparationDoesNotAlterTheStagedManifest' ((Get-Sha256 (Join-Path $mods 'KingmakerCutsceneSkip\Info.json')) -eq $checkoutInfoSha -and (Get-Sha256 $checkoutInfo) -ne $checkoutInfoSha -and $product.Validation.info_sha256 -eq $checkoutInfoSha)
     $privateDir = $product.PrivateDirectory
     Remove-ValidatedNativeProduct $product
     Assert-Case 'BareDllRouteStagesTheValidatedBytesAfterTheBuildOutputChanged' ($staged -eq (Get-Sha256 $genuine) -and (Get-Sha256 (Join-Path $mods 'KingmakerCutsceneSkip\KingmakerCutsceneSkip.dll')) -eq (Get-Sha256 $genuine) -and -not (Test-Path -LiteralPath $privateDir))
     $badPlan = Resolve-NativeProductPlan -ProductZip (Join-Path $fixtures 'newer-umm.zip')
-    $before = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'kmcs-product-*').Count
-    $refused = $false; try { New-ValidatedNativeProduct $badPlan $validator | Out-Null } catch { $refused = $_.Exception.Message -match 'failed package validation' }
-    $after = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'kmcs-product-*').Count
-    Assert-Case 'PreparationFailureRemovesThePrivateCopy' ($refused -and $after -eq $before)
+    $before = @(Get-ChildItem -LiteralPath $runTemp -Directory -Filter 'kmcs-product-*').Count
+    # Another invocation creating its private folder in the shared temporary directory meanwhile cannot change the result.
+    $decoy = Join-Path ([IO.Path]::GetTempPath()) ('kmcs-product-decoy-' + [guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $decoy | Out-Null
+    $refused = $false; try { New-ValidatedNativeProduct $badPlan $validator -TempRoot $runTemp | Out-Null } catch { $refused = $_.Exception.Message -match 'failed package validation' }
+    Remove-Item -LiteralPath $decoy -Recurse -Force
+    $after = @(Get-ChildItem -LiteralPath $runTemp -Directory -Filter 'kmcs-product-*').Count
+    Assert-Case 'PreparationFailureRemovesThePrivateCopy' ($refused -and $before -eq 0 -and $after -eq 0)
     # A failure after this run took its lock (an evidence path that cannot be created) releases only its own lock.
     $labRoot = Join-Path $fixtures 'lab'; $foreign = Join-Path $fixtures 'other lab\runtime.lock'
     New-Item -ItemType Directory -Path (Split-Path -Parent $foreign) -Force | Out-Null; Set-Content -LiteralPath $foreign -Value 'foreign'
@@ -184,6 +298,42 @@ try {
     New-Item -ItemType Directory -Path $labRoot -Force | Out-Null; Set-Content -LiteralPath $fakeLab.Evidence -Value 'a file where the evidence folder belongs'
     $setupFailed = $false; try { Enter-NativeRunDirectories $fakeLab 'fixture-run' | Out-Null } catch { $setupFailed = $true }
     Assert-Case 'PostLockSetupFailureReleasesOwnLockAndKeepsForeignLock' ($setupFailed -and -not (Test-Path -LiteralPath $fakeLab.Lock) -and (Test-Path -LiteralPath $foreign))
+    # Final cleanup after a successful restoration: a summary-write failure and a private-copy deletion failure are both
+    # surfaced, and this run's lock is still released (a foreign lock survives). On incomplete restoration the lock and
+    # the recovery journal are kept.
+    $doneLab = [pscustomobject]@{ State = Join-Path $fixtures 'done lab\state'; Lock = Join-Path $fixtures 'done lab\state\runtime.lock'; Journal = Join-Path $fixtures 'done lab\state\journal.json' }
+    $doneLock = Enter-RuntimeLock $doneLab 'fixture-complete'
+    Set-Content -LiteralPath $doneLab.Journal -Value '{"runId":"fixture-complete"}'
+    $heldPrivate = Join-Path $runTemp ('kmcs-product-' + [guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $heldPrivate | Out-Null
+    Set-Content -LiteralPath (Join-Path $heldPrivate 'product.zip') -Value 'copy'
+    $held = [IO.File]::Open((Join-Path $heldPrivate 'held.bin'), [IO.FileMode]::Create, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    $blocked = Join-Path $fixtures 'summary blocked'; Set-Content -LiteralPath $blocked -Value 'a file where the evidence folder belongs'
+    $completeError = ''
+    try { Complete-NativeRun $doneLab $doneLock $true { Write-JsonFile (Join-Path $blocked 'host-summary.json') ([ordered]@{ status = 'passed' }) } ([pscustomobject]@{ PrivateDirectory = $heldPrivate }) 3>$null }
+    catch { $completeError = $_.Exception.Message }
+    finally { $held.Dispose() }
+    Assert-Case 'RestoredRunReleasesOwnLockDespiteSummaryAndCleanupFailures' ($completeError -match 'summary write failed' -and $completeError -match 'private product cleanup failed' -and -not (Test-Path -LiteralPath $doneLock) -and (Test-Path -LiteralPath $foreign))
+    Remove-Item -LiteralPath $heldPrivate -Recurse -Force
+    $keptLock = Enter-RuntimeLock $doneLab 'fixture-incomplete'
+    $incompleteError = ''
+    try { Complete-NativeRun $doneLab $keptLock $false { Write-JsonFile (Join-Path $fixtures 'incomplete summary.json') ([ordered]@{ status = 'failed' }) } $null 3>$null } catch { $incompleteError = $_.Exception.Message }
+    Assert-Case 'IncompleteRestorationKeepsLockAndJournal' ($incompleteError -eq '' -and (Test-Path -LiteralPath $keptLock) -and (Test-Path -LiteralPath $doneLab.Journal) -and (Test-Path -LiteralPath (Join-Path $fixtures 'incomplete summary.json')))
+    Exit-RuntimeLock $doneLab $keptLock
+    # A no-product control never inherits Cutscene Skip from the owner profile it copies (with or without a comparison
+    # ZIP); the owner's source set is left intact; a profile already containing it is refused.
+    $pristine = Join-Path $fixtures 'owner pristine'
+    foreach ($modName in @('KingmakerCutsceneSkip', 'OtherOwnerMod')) { $d = Join-Path $pristine "Mods\$modName"; New-Item -ItemType Directory -Path $d -Force | Out-Null; Set-Content -LiteralPath (Join-Path $d 'Info.json') -Value "{`"Id`":`"$modName`"}" }
+    $sourceListing = { (Get-ChildItem -LiteralPath (Join-Path $pristine 'Mods') -Recurse -File | ForEach-Object { $_.FullName.Substring($pristine.Length) + '=' + (Get-Sha256 $_.FullName) }) -join ';' }
+    $sourceBefore = & $sourceListing
+    foreach ($withZip in @($true, $false)) {
+        $npPlan = if ($withZip) { Resolve-NativeProductPlan -NoProduct -ProductZip $genuineZip } else { Resolve-NativeProductPlan -NoProduct }
+        $copyPaths = [pscustomobject]@{ ModsDir = Join-Path $fixtures "copy mods $withZip"; Pristine = $pristine }
+        $copied = @(Set-GameCopyMods $copyPaths 'owner' @() -ExcludeNames @(Get-NoProductModExclusions $npPlan))
+        $controlOk = $true; try { Assert-NoProductControlMods $copyPaths.ModsDir } catch { $controlOk = $false }
+        Assert-Case "NoProductControlExcludesInheritedCutsceneSkip$(if ($withZip) { 'WithComparisonZip' } else { 'WithoutZip' })" ($copied -notcontains 'KingmakerCutsceneSkip' -and $copied -contains 'OtherOwnerMod' -and -not (Test-Path -LiteralPath (Join-Path $copyPaths.ModsDir 'KingmakerCutsceneSkip')) -and $controlOk)
+    }
+    $refusedControl = $false; try { Assert-NoProductControlMods (Join-Path $pristine 'Mods') } catch { $refusedControl = $_.Exception.Message -match 'refusing the control' }
+    Assert-Case 'NoProductControlWithAnInstalledCutsceneSkipIsRefusedAndTheSourceIsIntact' ($refusedControl -and (& $sourceListing) -ceq $sourceBefore)
 }
 finally { Remove-Item -LiteralPath $fixtures -Recurse -Force -ErrorAction SilentlyContinue }
 

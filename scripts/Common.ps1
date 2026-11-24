@@ -137,7 +137,7 @@ function Get-GitMetadata {
 # Repository paths whose content determines the product DLL or the packaged mod identity, including the build and
 # reference helpers that select and verify what the compiler receives (scripts/Build.ps1, scripts/Common.ps1). Changes anywhere else
 # (documentation, tests, native tooling) do not require rebuilding the validated binary.
-$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1')
+$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1', 'scripts/Assert-PinnedReferences.ps1', 'LoaderReferences.Final.targets')
 
 function Get-ProductInputPaths { return $script:ProductInputPaths }
 
