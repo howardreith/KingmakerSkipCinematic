@@ -3,6 +3,7 @@
     "input":  "<temp>\\skip-rel-fN4t\\KingmakerCutsceneSkip-0.1.2.zip",
     "input_sha256":  "c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb",
     "manager_version":  "0.31.1",
+    "info_sha256":  "d65cedf989f5a2d89a2d2717992bf270ea188774384ca480bc6fba7c17d1dc87",
     "dll_assembly_name":  "KingmakerCutsceneSkip",
     "dll_file_version":  "0.1.2.0",
     "dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",

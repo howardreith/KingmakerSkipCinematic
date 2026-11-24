@@ -1,13 +1,13 @@
 {
  "schema": "ksc.test-results.v2",
- "recorded_at_utc": "2026-11-24T06:16:03Z",
+ "recorded_at_utc": "2026-11-24T15:28:45Z",
  "command": "scripts/Test.ps1 (Release): unit runner, Test-Provenance.ps1, Test-PackageProvenance.ps1",
- "commit": "883fb6e",
+ "commit": "91da7b6",
  "note": "Later commits change only documentation and evidence.",
  "results": [
   "RESULT total=55 passed=55 failed=0",
-  "RESULT provenance total=81 failed=0",
-  "RESULT package-provenance total=16 failed=0"
+  "RESULT provenance total=97 failed=0",
+  "RESULT package-provenance total=20 failed=0"
  ],
  "unit_cases": [
   {
@@ -268,6 +268,21 @@
    "detail": ""
   },
   {
+   "name": "Provenance.RecordedPinDigestBooleanIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecordedPinDigestEmptyArrayIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecordedPinDigestTrailingLineFeedIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
    "name": "Provenance.PinManifestIsAProductInput",
    "passed": true,
    "detail": ""
@@ -403,6 +418,21 @@
    "detail": ""
   },
   {
+   "name": "Provenance.PackagedManifestWithLowercaseManagerVersionMemberIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestWithLowercaseEntryMethodMemberIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManifestWithDeclaredMemberNamesIsAccepted",
+   "passed": true,
+   "detail": ""
+  },
+  {
    "name": "Provenance.GenuineBarePairIsAccepted",
    "passed": true,
    "detail": ""
@@ -528,6 +558,21 @@
    "detail": ""
   },
   {
+   "name": "Provenance.ZipReplacedAfterValidationWithChangedManifestIsRefusedWithNothingStaged",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ZipReplacedAfterValidationWithAdditionalEntryIsRefusedWithNothingStaged",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.GenuineZipStagesExactlyTheValidatedEntries",
+   "passed": true,
+   "detail": ""
+  },
+  {
    "name": "Provenance.PreparationFailureRemovesThePrivateCopy",
    "passed": true,
    "detail": ""
@@ -564,6 +609,41 @@
   },
   {
    "name": "Provenance.ReleaseRecoveryClearsOnlyThatRunsLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.OrdinaryRecoveryWithTheLockHeldRestoresAndKeepsARetryableReleaseJournal",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.OrdinaryRecoveryRetryAfterTheHandleClosesClearsOnlyThatTransaction",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.OrdinaryJournalWithAnotherRunsLockLeavesStagedFilesUntouched",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseJournalWithAForeignLockPathPreservesBothLocks",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseJournalWithAnEmptyRunIdPreservesBothLocks",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.LockReplacedBeforeTheExclusiveOpenIsKeptForItsOwner",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.LockReplacementAfterTheOwnershipCheckIsRefusedAndOnlyTheVerifiedLockIsRemoved",
    "passed": true,
    "detail": ""
   },
@@ -647,7 +727,7 @@
   {
    "name": "PackageProvenance.BuildHelperChangeInvalidatesThePriorReceipt",
    "passed": true,
-   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 883fb6efa11a9d8d4b0dd2871b35931d936fd6e5: scripts/Build"
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 91da7b6335a4feb04b6e18cd2ada7d65a0ab9f47: scripts/Build"
   },
   {
    "name": "PackageProvenance.FreshBuildAfterHelperChangePasses",
@@ -657,12 +737,12 @@
   {
    "name": "PackageProvenance.DocumentationOnlyChangeReusesTheFrozenDll",
    "passed": true,
-   "detail": "build bc0b322, package 6ec04de, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
+   "detail": "build f054886, package 27a862b, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
   },
   {
    "name": "PackageProvenance.DirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
    "passed": true,
-   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit bc0b322bc2cfcc33b14245a577d978a5f74ade85: Directory"
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit f054886844f7a3723d1c985273f2c9cc868e197c: Directory"
   },
   {
    "name": "PackageProvenance.FreshBuildAfterDirectoryBuildTargetsChangePasses",
@@ -672,7 +752,7 @@
   {
    "name": "PackageProvenance.SrcDirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
    "passed": true,
-   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit eaad28f87d1d4e4f79fa21c3301c0743adf362e0: src/Directory"
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 49ac94613c7f0cb4405ae418b2a60cc6cca92503: src/Directory"
   },
   {
    "name": "PackageProvenance.FreshBuildAfterSrcDirectoryBuildTargetsChangePasses",
@@ -682,7 +762,7 @@
   {
    "name": "PackageProvenance.DocumentationOnlyChangeAfterTheSrcInputStillReusesTheFrozenDll",
    "passed": true,
-   "detail": "build a93ee9b, package ee3848f"
+   "detail": "build 29c278a, package a97f7e9"
   },
   {
    "name": "PackageProvenance.CorruptCacheEntryRefusedBeforeCompilation",
@@ -693,6 +773,26 @@
    "name": "PackageProvenance.DllDifferingFromItsReceiptRefusedAtPackaging",
    "passed": true,
    "detail": "does not match the build receipt (a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba); rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.DifferentBaselineCompatibleDllBuilt",
+   "passed": true,
+   "detail": "build exit 0; other DLL c632b236013598e1fb72e73f206b3dbf3c292b8d4ed892acd81712b1376dde44"
+  },
+  {
+   "name": "PackageProvenance.ReceiptBooleanDllDigestWithADifferentDllRefused",
+   "passed": true,
+   "detail": "The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.ReceiptEmptyArrayDllDigestWithADifferentDllRefused",
+   "passed": true,
+   "detail": "The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.GenuineReceiptAndDllPackageAgain",
+   "passed": true,
+   "detail": "package exit 0"
   },
   {
    "name": "PackageProvenance.DirectProductionRebuildVerifiesItsCompilerInputs",
@@ -707,12 +807,12 @@
   {
    "name": "PackageProvenance.ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused",
    "passed": true,
-   "detail": "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+   "detail": "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-bde907d1eae04484add68bb28251788a\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-bde907d1eae04484add68bb28251788a\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-bde907d1eae04484add68bb28251788a\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
   },
   {
    "name": "PackageProvenance.DirectRebuildRefusesADeclaredVersionDisagreeingWithThePinnedBytes",
    "passed": true,
-   "detail": "is 0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1.2.0.2, Culture=neutral, PublicKeyToken=null. [<temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+   "detail": "is 0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1.2.0.2, Culture=neutral, PublicKeyToken=null. [<temp>\\kmcs-package-provenance-bde907d1eae04484add68bb28251788a\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
   },
   {
    "name": "PackageProvenance.DirectRebuildPassesAgainAfterRestoringTheCache",
