@@ -1,11 +1,13 @@
 {
- "schema": "ksc.test-results.v1",
- "recorded_at_utc": "2026-11-24T03:21:35Z",
- "command": "scripts/Test.ps1 (Release; unit runner then scripts/Test-Provenance.ps1)",
- "commit": "5efdcb068f29183c3b29fc007477fa2658b7c9b7",
+ "schema": "ksc.test-results.v2",
+ "recorded_at_utc": "2026-11-24T04:16:04Z",
+ "command": "scripts/Test.ps1 (Release): unit runner, Test-Provenance.ps1, Test-PackageProvenance.ps1",
+ "commit": "42b61a9",
+ "note": "65a182e and later change only documentation and evidence.",
  "results": [
   "RESULT total=55 passed=55 failed=0",
-  "RESULT provenance total=21 failed=0"
+  "RESULT provenance total=32 failed=0",
+  "RESULT package-provenance total=6 failed=0"
  ],
  "unit_cases": [
   {
@@ -232,87 +234,195 @@
  "provenance_cases": [
   {
    "name": "Provenance.MatchingReceiptHasNoProblems",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.ChangedHashIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.ChangedSourceIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.MissingIdentityIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.UnpinnedIdentityIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.ReceiptWithoutReferencesIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.ManagerVersionMustEqualThePinnedLoader",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.PinManifestIsAProductInput",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.EffectivePinsComeFromTheManifest",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.CommittedManifestDeclaresBothLoaderReferences",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.CommittedManifestAgreesWithInfoJson",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.PackageWithPinnedReferencesIsAccepted",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
-   "name": "Provenance.PackagedDllCompiledAgainstInstalledLoaderIsRejected",
-   "passed": true
+   "name": "Provenance.PackagedDllCompiledAgainstNewerStubLoaderIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.SameNameSameVersionDifferentBindingIdentityIsRejected",
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.PackagedDllWithHarmony2ReferenceIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.AdditionalUmmFamilyReferenceIsRejected",
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.PackagedDllWithAnotherAssemblyNameIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedDllWithConflictingFileVersionIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedWrongAssemblyTargetIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedWrongEntryMethodIsRejected",
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.PackageCarryingALoaderAssemblyIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.PackagedManagerVersionAbovePinIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.BuiltDllWithPinnedReferencesIsAccepted",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
-   "name": "Provenance.BuiltDllCompiledAgainstInstalledLoaderIsRejected",
-   "passed": true
+   "name": "Provenance.BuiltDllCompiledAgainstNewerStubLoaderIsRejected",
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "Provenance.ReportPathEqualToPackageIsRejected",
-   "passed": true
+   "passed": true,
+   "detail": ""
   },
   {
-   "name": "Provenance.NativeRunnerValidatesBeforeLockingAndInstallsTheValidatedCopy",
-   "passed": true
+   "name": "Provenance.ReportPathHardLinkToPackageIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportDigestAndMetadataComeFromOneSnapshot",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductWithZipIsAComparisonOnly",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductWithoutZipNeedsNoProduct",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareDllRouteStagesTheValidatedBytesAfterTheBuildOutputChanged",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PreparationFailureRemovesThePrivateCopy",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PostLockSetupFailureReleasesOwnLockAndKeepsForeignLock",
+   "passed": true,
+   "detail": ""
+  }
+ ],
+ "package_provenance_cases": [
+  {
+   "name": "PackageProvenance.GenuineBuildAndPackageWithoutOverride",
+   "passed": true,
+   "detail": "build exit 0; package exit 0"
+  },
+  {
+   "name": "PackageProvenance.BuildHelperChangeInvalidatesThePriorReceipt",
+   "passed": true,
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 42b61a9c33beac91a091e3cd24fac56da4d0fd15: scripts/Build"
+  },
+  {
+   "name": "PackageProvenance.FreshBuildAfterHelperChangePasses",
+   "passed": true,
+   "detail": "build exit 0; package exit 0; DLL unchanged: True"
+  },
+  {
+   "name": "PackageProvenance.DocumentationOnlyChangeReusesTheFrozenDll",
+   "passed": true,
+   "detail": "build 4669505, package 504f519, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
+  },
+  {
+   "name": "PackageProvenance.CorruptCacheEntryRefusedBeforeCompilation",
+   "passed": true,
+   "detail": "does not match its pin; remove it explicitly before retrying"
+  },
+  {
+   "name": "PackageProvenance.DllDifferingFromItsReceiptRefusedAtPackaging",
+   "passed": true,
+   "detail": "does not match the build receipt (a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba); rebuild with scripts\\Build"
   }
  ]
 }

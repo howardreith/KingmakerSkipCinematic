@@ -1,0 +1,283 @@
+// Static loader API audit: resolves every type and member reference that a mod assembly makes into the
+// selected loader assemblies (UnityModManager, 0Harmony12, 0Harmony, ...) against each loader profile's
+// real DLLs. Static evidence only: it proves the referenced names/signatures exist; it does not prove
+// binding policy, reflection by string, Harmony patch behavior, Unity integration or save compatibility.
+using System.Collections.Immutable;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
+using System.Text.Json;
+
+static class Program
+{
+    static int Main(string[] args)
+    {
+        string mod = null, json = null;
+        var targets = new HashSet<string>(StringComparer.Ordinal) { "UnityModManager", "0Harmony12", "0Harmony" };
+        var profiles = new List<(string Label, string[] Paths)>();
+        for (int i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--mod": mod = args[++i]; break;
+                case "--json": json = args[++i]; break;
+                case "--assemblies": targets = new HashSet<string>(args[++i].Split(','), StringComparer.Ordinal); break;
+                case "--profile":
+                    var spec = args[++i]; var eq = spec.IndexOf('=');
+                    profiles.Add((spec[..eq], spec[(eq + 1)..].Split(';', StringSplitOptions.RemoveEmptyEntries)));
+                    break;
+                default: Console.Error.WriteLine("unknown argument " + args[i]); return 4;
+            }
+        }
+        if (mod == null || profiles.Count == 0) { Console.Error.WriteLine("usage: --mod <dll> --profile label=a.dll;b.dll [...] [--assemblies A,B] [--json out]"); return 4; }
+
+        var refs = ModReferences.Read(mod, targets);
+        var report = new Dictionary<string, object>
+        {
+            ["schema"] = "kingmaker.loader-api-audit.v1",
+            ["mod"] = Path.GetFileName(mod),
+            ["mod_sha256"] = Sha(mod),
+            ["mod_mvid"] = refs.Mvid,
+            ["mod_assembly_references"] = refs.AssemblyRefs,
+            ["type_references"] = refs.Types.Count,
+            ["member_references"] = refs.Members.Count,
+            ["method"] = "static metadata resolution of TypeRef/MemberRef (name + decoded signature, base-type walk, type forwarders)",
+        };
+        var results = new List<object>();
+        int exit = 0;
+        foreach (var (label, paths) in profiles)
+        {
+            var profile = new LoaderProfile(paths);
+            var missing = new List<string>();
+            foreach (var t in refs.Types) if (!profile.HasType(t.Assembly, t.FullName)) missing.Add($"type {t.Assembly}:{t.FullName}");
+            foreach (var m in refs.Members) if (!profile.HasMember(m)) missing.Add($"{m.Kind} {m.Assembly}:{m.Owner}::{m.Name} {m.Signature}");
+            if (missing.Count > 0) exit = 1;
+            results.Add(new Dictionary<string, object>
+            {
+                ["profile"] = label,
+                ["assemblies"] = profile.Identities,
+                ["resolved"] = missing.Count == 0,
+                ["unresolved"] = missing,
+            });
+            Console.WriteLine($"{label}: {(missing.Count == 0 ? "RESOLVED" : "UNRESOLVED " + missing.Count)} ({refs.Types.Count} types, {refs.Members.Count} members)");
+            foreach (var x in missing) Console.WriteLine("   " + x);
+        }
+        report["profiles"] = results;
+        var text = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
+        if (json != null) File.WriteAllText(json, text); else Console.WriteLine(text);
+        return exit;
+    }
+
+    internal static string Sha(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+}
+
+record TypeRefInfo(string Assembly, string FullName);
+record MemberRefInfo(string Kind, string Assembly, string Owner, string Name, string Signature, int GenericArity);
+
+// Renders signatures with assembly-agnostic full type names so a reference and a definition compare equal.
+sealed class NameProvider : ISignatureTypeProvider<string, object>
+{
+    public static readonly NameProvider Instance = new();
+    public string GetArrayType(string e, ArrayShape s) => e + "[" + new string(',', s.Rank - 1) + "]";
+    public string GetByReferenceType(string e) => e + "&";
+    public string GetFunctionPointerType(MethodSignature<string> s) => "fnptr(" + string.Join(",", s.ParameterTypes) + ")" + s.ReturnType;
+    public string GetGenericInstantiation(string g, ImmutableArray<string> a) => g + "<" + string.Join(",", a) + ">";
+    public string GetGenericMethodParameter(object c, int i) => "!!" + i;
+    public string GetGenericTypeParameter(object c, int i) => "!" + i;
+    public string GetModifiedType(string m, string u, bool r) => u;
+    public string GetPinnedType(string e) => e;
+    public string GetPointerType(string e) => e + "*";
+    public string GetPrimitiveType(PrimitiveTypeCode t) => t switch
+    {
+        PrimitiveTypeCode.Void => "System.Void", PrimitiveTypeCode.Boolean => "System.Boolean", PrimitiveTypeCode.Char => "System.Char",
+        PrimitiveTypeCode.SByte => "System.SByte", PrimitiveTypeCode.Byte => "System.Byte", PrimitiveTypeCode.Int16 => "System.Int16",
+        PrimitiveTypeCode.UInt16 => "System.UInt16", PrimitiveTypeCode.Int32 => "System.Int32", PrimitiveTypeCode.UInt32 => "System.UInt32",
+        PrimitiveTypeCode.Int64 => "System.Int64", PrimitiveTypeCode.UInt64 => "System.UInt64", PrimitiveTypeCode.Single => "System.Single",
+        PrimitiveTypeCode.Double => "System.Double", PrimitiveTypeCode.String => "System.String", PrimitiveTypeCode.Object => "System.Object",
+        PrimitiveTypeCode.IntPtr => "System.IntPtr", PrimitiveTypeCode.UIntPtr => "System.UIntPtr", PrimitiveTypeCode.TypedReference => "System.TypedReference",
+        _ => t.ToString(),
+    };
+    public string GetSZArrayType(string e) => e + "[]";
+    public string GetTypeFromDefinition(MetadataReader r, TypeDefinitionHandle h, byte k) => Names.Def(r, h);
+    public string GetTypeFromReference(MetadataReader r, TypeReferenceHandle h, byte k) => Names.Ref(r, h);
+    public string GetTypeFromSpecification(MetadataReader r, object c, TypeSpecificationHandle h, byte k) => r.GetTypeSpecification(h).DecodeSignature(this, c);
+}
+
+static class Names
+{
+    public static string Def(MetadataReader r, TypeDefinitionHandle h)
+    {
+        var d = r.GetTypeDefinition(h);
+        var name = r.GetString(d.Name);
+        var decl = d.GetDeclaringType();
+        if (!decl.IsNil) return Def(r, decl) + "/" + name;
+        var ns = r.GetString(d.Namespace);
+        return ns.Length == 0 ? name : ns + "." + name;
+    }
+    public static string Ref(MetadataReader r, TypeReferenceHandle h)
+    {
+        var t = r.GetTypeReference(h);
+        var name = r.GetString(t.Name);
+        if (t.ResolutionScope.Kind == HandleKind.TypeReference) return Ref(r, (TypeReferenceHandle)t.ResolutionScope) + "/" + name;
+        var ns = r.GetString(t.Namespace);
+        return ns.Length == 0 ? name : ns + "." + name;
+    }
+    public static string ScopeAssembly(MetadataReader r, TypeReferenceHandle h)
+    {
+        var t = r.GetTypeReference(h);
+        while (t.ResolutionScope.Kind == HandleKind.TypeReference) t = r.GetTypeReference((TypeReferenceHandle)t.ResolutionScope);
+        return t.ResolutionScope.Kind == HandleKind.AssemblyReference
+            ? r.GetString(r.GetAssemblyReference((AssemblyReferenceHandle)t.ResolutionScope).Name) : null;
+    }
+}
+
+sealed class ModReferences
+{
+    public string Mvid;
+    public List<string> AssemblyRefs = new();
+    public List<TypeRefInfo> Types = new();
+    public List<MemberRefInfo> Members = new();
+
+    public static ModReferences Read(string path, HashSet<string> targets)
+    {
+        var result = new ModReferences();
+        using var pe = new PEReader(File.OpenRead(path));
+        var r = pe.GetMetadataReader();
+        result.Mvid = r.GetGuid(r.GetModuleDefinition().Mvid).ToString();
+        foreach (var h in r.AssemblyReferences)
+        {
+            var a = r.GetAssemblyReference(h);
+            result.AssemblyRefs.Add($"{r.GetString(a.Name)} {a.Version}");
+        }
+        var seenTypes = new HashSet<string>();
+        foreach (var h in r.TypeReferences)
+        {
+            var asm = Names.ScopeAssembly(r, h);
+            if (asm == null || !targets.Contains(asm)) continue;
+            var name = Names.Ref(r, h);
+            if (seenTypes.Add(asm + ":" + name)) result.Types.Add(new TypeRefInfo(asm, name));
+        }
+        var seenMembers = new HashSet<string>();
+        foreach (var h in r.MemberReferences)
+        {
+            var m = r.GetMemberReference(h);
+            string owner, asm;
+            if (m.Parent.Kind == HandleKind.TypeReference)
+            {
+                asm = Names.ScopeAssembly(r, (TypeReferenceHandle)m.Parent);
+                owner = Names.Ref(r, (TypeReferenceHandle)m.Parent);
+            }
+            else if (m.Parent.Kind == HandleKind.TypeSpecification)
+            {
+                // Generic instantiation: resolve against its generic type definition.
+                var blob = r.GetBlobReader(r.GetTypeSpecification((TypeSpecificationHandle)m.Parent).Signature);
+                if (blob.ReadSignatureTypeCode() != SignatureTypeCode.GenericTypeInstance) continue;
+                blob.ReadCompressedInteger();
+                var gh = blob.ReadTypeHandle();
+                if (gh.Kind != HandleKind.TypeReference) continue;
+                asm = Names.ScopeAssembly(r, (TypeReferenceHandle)gh);
+                owner = Names.Ref(r, (TypeReferenceHandle)gh);
+            }
+            else continue;
+            if (asm == null || !targets.Contains(asm)) continue;
+            var name = r.GetString(m.Name);
+            string kind, sig; int arity = 0;
+            if (m.GetKind() == MemberReferenceKind.Field) { kind = "field"; sig = m.DecodeFieldSignature(NameProvider.Instance, null); }
+            else
+            {
+                kind = "method";
+                var ms = m.DecodeMethodSignature(NameProvider.Instance, null);
+                arity = ms.GenericParameterCount;
+                sig = MethodText(ms);
+            }
+            var info = new MemberRefInfo(kind, asm, owner, name, sig, arity);
+            if (seenMembers.Add(info.ToString())) result.Members.Add(info);
+        }
+        return result;
+    }
+
+    public static string MethodText(MethodSignature<string> s) =>
+        (s.Header.IsInstance ? "instance " : "static ") + s.ReturnType + " (" + string.Join(",", s.ParameterTypes) + ")" + (s.GenericParameterCount > 0 ? "`" + s.GenericParameterCount : "");
+}
+
+sealed class LoaderProfile
+{
+    readonly Dictionary<string, (MetadataReader R, Dictionary<string, TypeDefinitionHandle> Types, Dictionary<string, string> Forwarded)> assemblies = new(StringComparer.Ordinal);
+    public List<string> Identities = new();
+    readonly List<PEReader> keep = new();
+
+    public LoaderProfile(string[] paths)
+    {
+        foreach (var p in paths)
+        {
+            var pe = new PEReader(new MemoryStream(File.ReadAllBytes(p)));
+            keep.Add(pe);
+            var r = pe.GetMetadataReader();
+            var def = r.GetAssemblyDefinition();
+            var name = r.GetString(def.Name);
+            var types = new Dictionary<string, TypeDefinitionHandle>(StringComparer.Ordinal);
+            foreach (var h in r.TypeDefinitions) types[Names.Def(r, h)] = h;
+            var fwd = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var h in r.ExportedTypes)
+            {
+                var e = r.GetExportedType(h);
+                if (e.Implementation.Kind != HandleKind.AssemblyReference) continue;
+                var ns = r.GetString(e.Namespace);
+                fwd[(ns.Length == 0 ? "" : ns + ".") + r.GetString(e.Name)] = r.GetString(r.GetAssemblyReference((AssemblyReferenceHandle)e.Implementation).Name);
+            }
+            assemblies[name] = (r, types, fwd);
+            Identities.Add($"{name} {def.Version} {Path.GetFileName(p)} sha256={Program.Sha(p)}");
+        }
+    }
+
+    bool TryType(string asm, string fullName, out MetadataReader r, out TypeDefinitionHandle h)
+    {
+        r = null; h = default;
+        for (int hop = 0; hop < 4 && asm != null; hop++)
+        {
+            if (!assemblies.TryGetValue(asm, out var a)) return false;
+            if (a.Types.TryGetValue(fullName, out h)) { r = a.R; return true; }
+            if (!a.Forwarded.TryGetValue(fullName, out asm)) return false;
+        }
+        return false;
+    }
+
+    public bool HasType(string asm, string fullName) => TryType(asm, fullName, out _, out _);
+
+    public bool HasMember(MemberRefInfo m)
+    {
+        if (!TryType(m.Assembly, m.Owner, out var r, out var h)) return false;
+        for (int depth = 0; depth < 16; depth++)
+        {
+            var t = r.GetTypeDefinition(h);
+            if (m.Kind == "field")
+            {
+                foreach (var fh in t.GetFields())
+                {
+                    var f = r.GetFieldDefinition(fh);
+                    if (r.GetString(f.Name) == m.Name && f.DecodeSignature(NameProvider.Instance, null) == m.Signature) return true;
+                }
+            }
+            else
+            {
+                foreach (var mh in t.GetMethods())
+                {
+                    var d = r.GetMethodDefinition(mh);
+                    if (r.GetString(d.Name) != m.Name) continue;
+                    if (ModReferences.MethodText(d.DecodeSignature(NameProvider.Instance, null)) == m.Signature) return true;
+                }
+            }
+            // Walk to the base type when it is defined in a profile assembly.
+            var b = t.BaseType;
+            if (b.IsNil) return false;
+            string asm, name;
+            if (b.Kind == HandleKind.TypeDefinition) { h = (TypeDefinitionHandle)b; continue; }
+            if (b.Kind != HandleKind.TypeReference) return false;
+            asm = Names.ScopeAssembly(r, (TypeReferenceHandle)b);
+            name = Names.Ref(r, (TypeReferenceHandle)b);
+            if (asm == null || !TryType(asm, name, out r, out h)) return false;
+        }
+        return false;
+    }
+}
