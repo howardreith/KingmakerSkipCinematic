@@ -56,7 +56,12 @@ function Initialize-PinnedReferences {
     [IO.Directory]::CreateDirectory($directory) | Out-Null
     foreach ($reference in (Get-PinnedReferenceDefinitions)) {
         $target = Join-Path $directory $reference.File
-        if ((Test-Path -LiteralPath $target) -and (Get-Sha256 $target) -eq $reference.Sha256) { continue }
+        if (Test-Path -LiteralPath $target) {
+            # An existing entry must already be byte-exact: a corrupt or substituted file is refused (remove it explicitly
+            # to re-fetch), never silently replaced. Only an absent entry is acquired.
+            if ((Get-Sha256 $target) -ne $reference.Sha256) { throw "Cached pinned reference $target does not match its pin; remove it explicitly before retrying." }
+            continue
+        }
         $download = Join-Path $directory ($reference.Name + '.download')
         Invoke-WebRequest -Uri $reference.Url -OutFile $download -UseBasicParsing
         try {
@@ -129,9 +134,10 @@ function Get-GitMetadata {
     return [pscustomobject]@{ Commit = ([string] $commit).Trim(); Dirty = [bool] $status }
 }
 
-# Repository paths whose content determines the product DLL or the packaged mod identity. Changes anywhere else
+# Repository paths whose content determines the product DLL or the packaged mod identity, including the build and
+# reference helpers that select and verify what the compiler receives (scripts/Build.ps1, scripts/Common.ps1). Changes anywhere else
 # (documentation, tests, native tooling) do not require rebuilding the validated binary.
-$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json')
+$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1')
 
 function Get-ProductInputPaths { return $script:ProductInputPaths }
 

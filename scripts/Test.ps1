@@ -31,3 +31,4 @@ Write-JsonFile (Join-Path $root 'artifacts\qualification\tests.json') ([ordered]
 })
 if ($exitCode -ne 0) { throw "Tests failed (exit=$exitCode)." }
 & (Join-Path $PSScriptRoot 'Test-Provenance.ps1')
+& (Join-Path $PSScriptRoot 'Test-PackageProvenance.ps1')

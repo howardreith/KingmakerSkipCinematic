@@ -66,41 +66,25 @@ if ($GameCopy) {
 $root = Get-RepositoryRoot
 $productDir = Join-Path $root "artifacts\bin\$Configuration\KingmakerCutsceneSkip"
 $harnessDir = Join-Path $root "artifacts\bin\$Configuration\RuntimeHarness"
-if ($ProductZip) { Assert-FileExists $ProductZip 'Product ZIP' } else { Assert-FileExists (Join-Path $productDir 'KingmakerCutsceneSkip.dll') 'Built product DLL (run scripts\Build.ps1)' }
+. (Join-Path $PSScriptRoot 'NativeProduct.ps1')
+# One product decision for requirements, summary and staging (-NoProduct wins; a ZIP given with it is a comparison only).
+$productPlan = Resolve-NativeProductPlan -NoProduct:$NoProduct -ProductZip $ProductZip -ProductDll (Join-Path $productDir 'KingmakerCutsceneSkip.dll')
 Assert-FileExists (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll') 'Built harness DLL'
-# The product is checked before anything is locked or staged (standalone validator, its own process): a ZIP is copied
-# once into a private folder and that copy is validated and later installed; a built DLL must define the product
-# assembly and reference exactly the pinned loader assemblies.
-$validatedProduct = $null
-$privateProduct = $null
-if (-not $NoProduct) {
-    $privateProduct = Join-Path ([IO.Path]::GetTempPath()) ('kmcs-product-' + [Guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $privateProduct | Out-Null
-    $productReport = Join-Path $privateProduct 'validation.json'
-    if ($ProductZip) {
-        $ProductZip = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ProductZip)
-        $privateZip = Join-Path $privateProduct 'product.zip'
-        Copy-Item -LiteralPath $ProductZip -Destination $privateZip
-        $validateArguments = @('-PackagePath', $privateZip)
-    }
-    else { $validateArguments = @('-DllPath', (Join-Path $productDir 'KingmakerCutsceneSkip.dll')) }
-    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path (Split-Path -Parent $PSScriptRoot) 'Validate-Package.ps1') @validateArguments -ReportPath $productReport
-    if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $privateProduct -Recurse -Force; throw 'The product failed package validation; nothing was locked or staged.' }
-    $validatedProduct = Get-Content -LiteralPath $productReport -Raw | ConvertFrom-Json
-}
-
+# The product (ZIP or built DLL) is frozen as a private copy and validated before anything is locked or staged; that copy
+# is what is installed. The private copy is removed in every outcome.
+$validatedProduct = New-ValidatedNativeProduct $productPlan (Join-Path (Split-Path -Parent $PSScriptRoot) 'Validate-Package.ps1')
 try {
     Assert-RuntimePreflight $lab
-    $lock = Enter-RuntimeLock $lab $runId
+    $runDirectories = Enter-NativeRunDirectories $lab $runId
 }
 catch {
-    if ($privateProduct -and (Test-Path -LiteralPath $privateProduct)) { Remove-Item -LiteralPath $privateProduct -Recurse -Force }
+    Remove-ValidatedNativeProduct $validatedProduct
     throw
 }
-$evidence = Join-Path $lab.Evidence $runId
-$backup = Join-Path $lab.Backups $runId
-New-Item -ItemType Directory -Force -Path $evidence, $backup | Out-Null
-$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started'; failure = $null }
+$lock = $runDirectories.Lock
+$evidence = $runDirectories.Evidence
+$backup = $runDirectories.Backup
+$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = ($productPlan.Mode -eq 'none'); productMode = $productPlan.Mode; status = 'started'; failure = $null }
 $journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
 $savesBefore = $null
 $installBefore = $null
@@ -111,8 +95,9 @@ try {
     $summary.ownerInstallFileCount = @($installBefore).Count
     $summary.gameRoot = $game.InstallDir
     $summary.loaderProfile = $(if ($GameCopy) { $LoaderProfile } else { 'owner installation' })
-    if ($ProductZip) { $summary.productZipSha256 = [string]$validatedProduct.input_sha256 }
-    elseif (-not $NoProduct) { $summary.productDllSha256 = Get-Sha256 (Join-Path $productDir 'KingmakerCutsceneSkip.dll') }
+    if ($productPlan.Mode -eq 'zip') { $summary.productZipSha256 = [string]$validatedProduct.Validation.input_sha256 }
+    if ($productPlan.Mode -ne 'none') { $summary.validatedProductDllSha256 = [string]$validatedProduct.Validation.dll_sha256 }
+    if ($productPlan.ComparisonZip) { $summary.comparisonZipSha256 = Get-Sha256 $productPlan.ComparisonZip }
     $summary.harnessDllSha256 = Get-Sha256 (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll')
     $summary.git = Get-GitMetadata
 
@@ -152,7 +137,7 @@ try {
         New-Item -ItemType Directory -Path $game.ModsDir | Out-Null
     }
     $deploy = @(@{ Source = $harnessDir; Name = 'KingmakerCutsceneSkipRuntimeHarness'; Info = Join-Path $root 'tools\RuntimeHarness\Info.json' })
-    if (-not $NoProduct -and -not $ProductZip) { $deploy += @{ Source = $productDir; Name = 'KingmakerCutsceneSkip'; Info = Join-Path $root 'Info.json' } }
+    # The product itself is staged below from the validated private copy (never from the build output).
     foreach ($item in $deploy) {
         $target = Join-Path $game.ModsDir $item.Name
         if (Test-Path -LiteralPath $target) { throw "Refusing to overwrite an existing mod folder: $target" }
@@ -164,15 +149,13 @@ try {
         Copy-Item -LiteralPath $item.Info -Destination (Join-Path $target 'Info.json')
     }
 
-    if ($ProductZip -and -not $NoProduct) {
-        # The packaged candidate, installed exactly as a user would: the ZIP's single top-level mod folder.
+    if ($productPlan.Mode -ne 'none') {
+        # The validated private copy, installed exactly as validated (ZIP: its single top-level mod folder).
         $productTarget = Join-Path $game.ModsDir 'KingmakerCutsceneSkip'
         if (Test-Path -LiteralPath $productTarget) { throw "Refusing to overwrite an existing mod folder: $productTarget" }
         $journal.staged += $productTarget
         Save-Journal $lab $journal
-        Expand-Archive -LiteralPath $privateZip -DestinationPath $game.ModsDir
-        $summary.productDllSha256 = Get-Sha256 (Join-Path $productTarget 'KingmakerCutsceneSkip.dll')
-        if ($summary.productDllSha256 -cne [string]$validatedProduct.dll_sha256) { throw 'The staged product DLL differs from the validated package.' }
+        $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir (Join-Path $root 'Info.json')
     }
     if ($ProductManagerVersion -and -not $NoProduct) {
         $stagedInfo = Join-Path $game.ModsDir 'KingmakerCutsceneSkip\Info.json'
@@ -270,7 +253,7 @@ finally {
     }
     Write-JsonFile (Join-Path $evidence 'host-summary.json') $summary
     # The private validated copy is never part of the installation; it is removed in every outcome.
-    if ($privateProduct -and (Test-Path -LiteralPath $privateProduct)) { Remove-Item -LiteralPath $privateProduct -Recurse -Force -ErrorAction SilentlyContinue }
+    Remove-ValidatedNativeProduct $validatedProduct
     if ($restored) { Exit-RuntimeLock $lab $lock }
     else { Write-Warning "Run lock and recovery journal kept; run '$PSCommandPath -RecoverOnly' after resolving the error." }
     Write-Host "Run $runId finished: $($summary.status) $($summary.failure) $(if ($integrityFailures.Count -gt 0) { '[' + ($integrityFailures -join '; ') + ']' })"
