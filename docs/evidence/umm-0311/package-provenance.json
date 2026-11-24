@@ -1,0 +1,59 @@
+{
+    "schema":  "ksc.package-provenance-tests.v1",
+    "commit":  "879c19d3fdb86491809eee127aec4fb5ceac81c7",
+    "frozen_dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
+    "passed":  10,
+    "total":  10,
+    "cases":  [
+                  {
+                      "name":  "GenuineBuildAndPackageWithoutOverride",
+                      "passed":  true,
+                      "detail":  "build exit 0; package exit 0"
+                  },
+                  {
+                      "name":  "BuildHelperChangeInvalidatesThePriorReceipt",
+                      "passed":  true,
+                      "detail":  "provenance check failed (rebuild from the current commit): product inputs changed since build commit 879c19d3fdb86491809eee127aec4fb5ceac81c7: scripts/Build"
+                  },
+                  {
+                      "name":  "FreshBuildAfterHelperChangePasses",
+                      "passed":  true,
+                      "detail":  "build exit 0; package exit 0; DLL unchanged: True"
+                  },
+                  {
+                      "name":  "DocumentationOnlyChangeReusesTheFrozenDll",
+                      "passed":  true,
+                      "detail":  "build 6ae44f9, package faf36a0, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
+                  },
+                  {
+                      "name":  "CorruptCacheEntryRefusedBeforeCompilation",
+                      "passed":  true,
+                      "detail":  "does not match its pin; remove it explicitly before retrying"
+                  },
+                  {
+                      "name":  "DllDifferingFromItsReceiptRefusedAtPackaging",
+                      "passed":  true,
+                      "detail":  "does not match the build receipt (a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba); rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "DirectProductionRebuildVerifiesItsCompilerInputs",
+                      "passed":  true,
+                      "detail":  "artifacts\\references\\UnityModManager.dll 2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4; artifacts\\references\\0Harmony12.dll aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+                  },
+                  {
+                      "name":  "DirectRebuildRefusesASubstitutedCacheFile",
+                      "passed":  true,
+                      "detail":  "does not match its pin"
+                  },
+                  {
+                      "name":  "ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused",
+                      "passed":  true,
+                      "detail":  "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-af189a46a065452d847aef2b93f8c49e\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-af189a46a065452d847aef2b93f8c49e\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-af189a46a065452d847aef2b93f8c49e\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+                  },
+                  {
+                      "name":  "DirectRebuildPassesAgainAfterRestoringTheCache",
+                      "passed":  true,
+                      "detail":  "exit 0"
+                  }
+              ]
+}
