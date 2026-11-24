@@ -1,0 +1,31 @@
+{
+    "product":  "KingmakerCutsceneSkip",
+    "version":  "0.1.2",
+    "build_commit":  "6c1d65aba5bb4624a7e23819210400d0c281054e",
+    "package_commit":  "5efdcb068f29183c3b29fc007477fa2658b7c9b7",
+    "dirty":  false,
+    "provenance_verified":  true,
+    "provenance_problems":  [
+
+                            ],
+    "zip":  "<repo>\\artifacts\\package\\KingmakerCutsceneSkip-0.1.2.zip",
+    "zip_sha256":  "f4bc5727101e2fb67c6d65d91b8f26956b4f8a4e8cb735d7cac2ea1111b5e3eb",
+    "dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
+    "dll_loader_references":  [
+                                  {
+                                      "name":  "0Harmony12",
+                                      "version":  "1.2.0.1"
+                                  },
+                                  {
+                                      "name":  "UnityModManager",
+                                      "version":  "0.31.1.0"
+                                  }
+                              ],
+    "package_validation":  "KingmakerCutsceneSkip-0.1.2.validation.json",
+    "contents":  [
+                     "KingmakerCutsceneSkip/Info.json",
+                     "KingmakerCutsceneSkip/KingmakerCutsceneSkip.dll",
+                     "KingmakerCutsceneSkip/README.md",
+                     "KingmakerCutsceneSkip/LICENSE"
+                 ]
+}

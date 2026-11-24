@@ -1,0 +1,14 @@
+{
+  "project": "kingmaker-skip-cinematic",
+  "problems": [],
+  "repo_root": "<repo>",
+  "origin": "https://github.com/howardreith/KingmakerSkipCinematic.git",
+  "actor": "howardreith",
+  "default_branch": "main",
+  "permission": "ADMIN",
+  "branch_pattern": "^claude/[a-z0-9][a-z0-9._/-]*$",
+  "push": "built-in guarded push",
+  "gates": [
+    "test"
+  ]
+}

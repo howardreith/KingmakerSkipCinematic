@@ -1,0 +1,318 @@
+{
+ "schema": "ksc.test-results.v1",
+ "recorded_at_utc": "2026-11-24T03:21:35Z",
+ "command": "scripts/Test.ps1 (Release; unit runner then scripts/Test-Provenance.ps1)",
+ "commit": "5efdcb068f29183c3b29fc007477fa2658b7c9b7",
+ "results": [
+  "RESULT total=55 passed=55 failed=0",
+  "RESULT provenance total=21 failed=0"
+ ],
+ "unit_cases": [
+  {
+   "name": "CutsceneSkipControllerTests.AbortForDisableReleasesEverything",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.AccelerationBeginsOnlyWhenScreenIsFullyBlack",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.BoundaryDuringFadeOutReleasesEverything",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.CancelOutsideSkipIsNotConsumed",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.CancelRevealsWithoutTouchingTheScene",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ContinueAdvancingIsTrueUntilABoundaryThenEndsTheSkip",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ContinueAdvancingProbeExceptionEndsWithError",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ExceptionDuringTickRevealsAndLogs",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.FadeTimeoutRevealsWithoutEverAccelerating",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ImmediateNotificationEndsWithinTheSameTick",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.IneligibleRequestIsDeclinedWithoutSideEffects",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.InteractionBoundaryReleasesEverything",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.LoadResetDuringSkipIsNotDoubleReleased",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.MissingFadeDeclinesInsteadOfSkippingVisibly",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.MutingDisabledLeavesAudioAlone",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.NonBoundaryNotificationIsIgnored",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.RevealCompletesThenGuardsInputBriefly",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.RevealTimeoutReturnsToIdle",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.SecondStartWhileActiveIsRejected",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ShutdownReleasesEverythingAndReturnsToIdle",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.StalledProgressRevealsNormalPlayback",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.StartAcquiresFadeAndAudioButNotTimeScale",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.StartedOperationsCountsOnlyAcceptedStarts",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.TotalWatchdogRevealsEvenWithProgress",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.AcceleratedFrameMatchesNormalFramesWhenCutsceneTicksBeforeMovement",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.AcceleratedFrameMatchesNormalFramesWhenMovementTicksBeforeCutscene",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.PerControllerBatchingWouldChangeTheBranchResult",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.StopRequestEndsTheFrameAfterACompleteTick",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.SubstepCountIsBoundedAndSmallFramesAreNotSplit",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.TimeAdvancesInEqualStepsAndOncePerFrameControllersTickOnce",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.GapBetweenLoadingProcessesGivesNoVerdict",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.LoadThatNeverBecomesPlayableFails",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.LoadingThatLeavesTheOldStateFails",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.MarkerSurvivingTheLoadFails",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.RealLoadCompletesAfterStateIsReplacedAndMarkerUndone",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.RejectedRequestIsNeverComplete",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.WithoutAnExpectedValueTheReplacedStateIsEnough",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.AudioRestoreReappliesLivePlayerSetting",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.FadeClaimIsVoidedByGameReset",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.FadeReleaseIsIdempotent",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.ProgressWatchdogDistinguishesStallFromProgress",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleIgnoresAReplacedController",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleLeavesAnotherOwnersChange",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleNeverSlowsAFasterPriorScale",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleRestoresCapturedPriorValue",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.ClaimCoversTheReleaseFrameThenEnds",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.DisabledGateClaimsNothing",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.EnterInCinematicStartsOneSkipAndIsHidden",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.EnterOutsideCinematicReachesTheGame",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.EscapeCancelsOnlyDuringASkip",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.HeldEnterDoesNotStartAnotherOperation",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.KeypadEnterAlsoStartsASkip",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.PollingTwiceInOneFrameActsOnce",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.PressRightAfterRevealIsSwallowedThenNormal",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.RepeatedPressesDuringSkipAreSwallowed",
+   "passed": true
+  }
+ ],
+ "provenance_cases": [
+  {
+   "name": "Provenance.MatchingReceiptHasNoProblems",
+   "passed": true
+  },
+  {
+   "name": "Provenance.ChangedHashIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.ChangedSourceIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.MissingIdentityIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.UnpinnedIdentityIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.ReceiptWithoutReferencesIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.ManagerVersionMustEqualThePinnedLoader",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PinManifestIsAProductInput",
+   "passed": true
+  },
+  {
+   "name": "Provenance.EffectivePinsComeFromTheManifest",
+   "passed": true
+  },
+  {
+   "name": "Provenance.CommittedManifestDeclaresBothLoaderReferences",
+   "passed": true
+  },
+  {
+   "name": "Provenance.CommittedManifestAgreesWithInfoJson",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PackageWithPinnedReferencesIsAccepted",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PackagedDllCompiledAgainstInstalledLoaderIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PackagedDllWithHarmony2ReferenceIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PackagedDllWithAnotherAssemblyNameIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PackageCarryingALoaderAssemblyIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.PackagedManagerVersionAbovePinIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.BuiltDllWithPinnedReferencesIsAccepted",
+   "passed": true
+  },
+  {
+   "name": "Provenance.BuiltDllCompiledAgainstInstalledLoaderIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.ReportPathEqualToPackageIsRejected",
+   "passed": true
+  },
+  {
+   "name": "Provenance.NativeRunnerValidatesBeforeLockingAndInstallsTheValidatedCopy",
+   "passed": true
+  }
+ ]
+}
