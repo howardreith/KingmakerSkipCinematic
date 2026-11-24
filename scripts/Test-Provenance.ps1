@@ -21,26 +21,33 @@ function New-Identity([string] $File, [string] $Sha, [string] $Url) {
     return [pscustomobject]@{ role = 'pinned loader reference'; file = $File; assembly_version = '1.0.0.0'; sha256 = $Sha; source = $Url }
 }
 
-$pins = @((New-Pin 'UnityModManager.dll' 'aaa' 'u1' 'UnityModManager' '0.31.1'), (New-Pin '0Harmony12.dll' 'bbb' 'u2' '0Harmony12' '1.2.0.1'))
+$shaA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; $shaB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+$pins = @((New-Pin 'UnityModManager.dll' $shaA 'u1' 'UnityModManager' '0.31.1'), (New-Pin '0Harmony12.dll' $shaB 'u2' '0Harmony12' '1.2.0.1'))
 $game = [pscustomobject]@{ role = 'local game reference'; file = 'Assembly-CSharp.dll'; sha256 = 'ccc' }
-$good = @((New-Identity 'UnityModManager.dll' 'aaa' 'u1'), (New-Identity '0Harmony12.dll' 'bbb' 'u2'), $game)
+$good = @((New-Identity 'UnityModManager.dll' $shaA 'u1'), (New-Identity '0Harmony12.dll' $shaB 'u2'), $game)
 
 Assert-Case 'MatchingReceiptHasNoProblems' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $good }) $pins '0.31.1').Count -eq 0)
 
-$changed = @((New-Identity 'UnityModManager.dll' 'zzz' 'u1'), (New-Identity '0Harmony12.dll' 'bbb' 'u2'))
+$changed = @((New-Identity 'UnityModManager.dll' 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' 'u1'), (New-Identity '0Harmony12.dll' $shaB 'u2'))
 Assert-Case 'ChangedHashIsRejected' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $changed }) $pins '0.31.1').Count -gt 0)
 
-$otherSource = @((New-Identity 'UnityModManager.dll' 'aaa' 'elsewhere'), (New-Identity '0Harmony12.dll' 'bbb' 'u2'))
+$otherSource = @((New-Identity 'UnityModManager.dll' $shaA 'elsewhere'), (New-Identity '0Harmony12.dll' $shaB 'u2'))
 Assert-Case 'ChangedSourceIsRejected' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $otherSource }) $pins '0.31.1').Count -gt 0)
 
-$missing = @((New-Identity 'UnityModManager.dll' 'aaa' 'u1'))
+$missing = @((New-Identity 'UnityModManager.dll' $shaA 'u1'))
 Assert-Case 'MissingIdentityIsRejected' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $missing }) $pins '0.31.1').Count -gt 0)
 
-$extra = $good + @(New-Identity 'Unexpected.dll' 'ddd' 'u3')
+$extra = $good + @(New-Identity 'Unexpected.dll' 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd' 'u3')
 Assert-Case 'UnpinnedIdentityIsRejected' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $extra }) $pins '0.31.1').Count -gt 0)
 
 Assert-Case 'ReceiptWithoutReferencesIsRejected' (@(Get-ReferencePinProblems ([pscustomobject]@{ status = 'passed' }) $pins '0.31.1').Count -gt 0)
 Assert-Case 'ManagerVersionMustEqualThePinnedLoader' (@(Get-ReferencePinProblems ([pscustomobject]@{ references = $good }) $pins '0.33.0').Count -gt 0)
+# Recorded pin digests are typed: a boolean, an empty array or a digest with a trailing line feed is a problem, never a match.
+foreach ($malformed in @(@('Boolean', $true), @('EmptyArray', @()), @('TrailingLineFeed', ($shaA + "`n")))) {
+    $typed = @([pscustomobject]@{ role = 'pinned loader reference'; file = 'UnityModManager.dll'; assembly_version = '1.0.0.0'; sha256 = $malformed[1]; source = 'u1' }, (New-Identity '0Harmony12.dll' $shaB 'u2'))
+    $found = @(Get-ReferencePinProblems ([pscustomobject]@{ references = $typed }) $pins '0.31.1')
+    Assert-Case "RecordedPinDigest$($malformed[0])IsAProblem" ($found.Count -gt 0 -and ($found -join ' ') -match 'not a SHA-256 string')
+}
 
 $productPaths = Get-ProductInputPaths
 Assert-Case 'PinManifestIsAProductInput' ($productPaths -contains 'scripts/reference-pins.json')
@@ -218,6 +225,18 @@ try {
         $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $softInfo)
         Assert-Case "BareManifest$($soft[0])WithASoftHyphenIsRejected" ($r.ExitCode -ne 0 -and $r.Output -match "$($soft[0])")
     }
+    # Required members are matched by their declared names: ManagerVersion spelled managerversion in a ZIP manifest and
+    # EntryMethod spelled entrymethod in a bare manifest (values unchanged) are refused.
+    $renameMember = { param($i, [string] $From, [string] $To) $v = $i.$From; [void]$i.PSObject.Properties.Remove($From); $i | Add-Member -NotePropertyName $To -NotePropertyValue $v }
+    $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'lowercase-managerversion' $genuine { param($i) & $renameMember $i 'ManagerVersion' 'managerversion' } $null))
+    Assert-Case 'PackagedManifestWithLowercaseManagerVersionMemberIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'must contain the member ManagerVersion with exactly that name')
+    $lowerInfo = Join-Path $fixtures 'lowercase-entrymethod Info.json'
+    $li = Get-Content -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Raw | ConvertFrom-Json; & $renameMember $li 'EntryMethod' 'entrymethod'
+    [IO.File]::WriteAllText($lowerInfo, ($li | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $lowerInfo)
+    Assert-Case 'BareManifestWithLowercaseEntryMethodMemberIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'must contain the member EntryMethod with exactly that name')
+    $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'declared-names-control' $genuine $null $null))
+    Assert-Case 'PackagedManifestWithDeclaredMemberNamesIsAccepted' ($r.ExitCode -eq 0)
     $genuineInfoCopy = Join-Path $fixtures 'genuine bare Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $genuineInfoCopy
     $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $genuineInfoCopy)
     Assert-Case 'GenuineBarePairIsAccepted' ($r.ExitCode -eq 0)
@@ -352,6 +371,27 @@ Remove-ValidatedNativeProduct $product
     $privateDir = $product.PrivateDirectory
     Remove-ValidatedNativeProduct $product
     Assert-Case 'BareDllRouteStagesTheValidatedBytesAfterTheBuildOutputChanged' ($staged -eq (Get-Sha256 $genuine) -and (Get-Sha256 (Join-Path $mods 'KingmakerCutsceneSkip\KingmakerCutsceneSkip.dll')) -eq (Get-Sha256 $genuine) -and -not (Test-Path -LiteralPath $privateDir))
+    # ZIP route: the prepared private ZIP replaced after validation by an archive with the same product DLL and Id but a
+    # changed manifest, or with an additional top-level entry, is refused and nothing is left in the destination; the
+    # genuine ZIP stages exactly its four entries with the validated DLL and manifest.
+    $zipPlan = Resolve-NativeProductPlan -ProductZip $genuineZip
+    $swaps = @(@('ChangedManifest', (New-FixtureZip 'swap-manifest' $genuine { param($i) $i | Add-Member -NotePropertyName Unvalidated -NotePropertyValue 'x' } $null)),
+        @('AdditionalEntry', (New-FixtureZip 'swap-extra' $genuine $null @("Extra/added.txt|$(Join-Path (Get-RepositoryRoot) 'README.md')"))))
+    foreach ($swap in $swaps) {
+        $swapProduct = New-ValidatedNativeProduct $zipPlan $validator -TempRoot $runTemp 6>$null
+        [IO.File]::Copy($swap[1], $swapProduct.File, $true)
+        $swapMods = Join-Path $fixtures "swap mods $($swap[0])"; New-Item -ItemType Directory -Path $swapMods | Out-Null
+        $swapError = ''; try { Install-ValidatedNativeProduct $swapProduct $swapMods | Out-Null } catch { $swapError = $_.Exception.Message }
+        Remove-ValidatedNativeProduct $swapProduct
+        Assert-Case "ZipReplacedAfterValidationWith$($swap[0])IsRefusedWithNothingStaged" ($swapError -match 'not the validated archive; nothing was staged' -and @(Get-ChildItem -LiteralPath $swapMods -Force).Count -eq 0)
+    }
+    $zipProduct = New-ValidatedNativeProduct $zipPlan $validator -TempRoot $runTemp 6>$null
+    $zipMods = Join-Path $fixtures 'zip mods'; New-Item -ItemType Directory -Path $zipMods | Out-Null
+    $zipStaged = Install-ValidatedNativeProduct $zipProduct $zipMods
+    $zipTop = @(Get-ChildItem -LiteralPath $zipMods -Force | ForEach-Object { $_.Name })
+    $zipFiles = @(Get-ChildItem -LiteralPath (Join-Path $zipMods 'KingmakerCutsceneSkip') -Force | ForEach-Object { $_.Name } | Sort-Object)
+    Assert-Case 'GenuineZipStagesExactlyTheValidatedEntries' ($zipStaged -eq [string]$zipProduct.Validation.dll_sha256 -and ($zipTop -join ',') -eq 'KingmakerCutsceneSkip' -and ($zipFiles -join ',') -eq 'Info.json,KingmakerCutsceneSkip.dll,LICENSE,README.md' -and (Get-Sha256 (Join-Path $zipMods 'KingmakerCutsceneSkip\Info.json')) -eq [string]$zipProduct.Validation.info_sha256)
+    Remove-ValidatedNativeProduct $zipProduct
     $badPlan = Resolve-NativeProductPlan -ProductZip (Join-Path $fixtures 'newer-umm.zip')
     $before = @(Get-ChildItem -LiteralPath $runTemp -Directory -Filter 'kmcs-product-*').Count
     # Another invocation creating its private folder in the shared temporary directory meanwhile cannot change the result.
@@ -422,6 +462,73 @@ Remove-ValidatedNativeProduct $product
     [IO.File]::WriteAllText($releaseLock, $otherRunLock)
     Restore-InterruptedRun $doneLab 6>$null
     Assert-Case 'ReleaseRecoveryClearsOnlyThatRunsLock' (-not (Test-Path -LiteralPath $releaseLock) -and -not (Test-Path -LiteralPath $doneLab.Journal) -and (Test-Path -LiteralPath $foreign))
+    # Ordinary interrupted-run recovery in disposable labs (fixture Mods folders; no Params or registry backup). These labs
+    # have no game, so inside these blocks only, the shared wait for a running Kingmaker sees an empty process list.
+    $noGame = { function Get-Process { } }
+    $newLab = { param([string] $Name) $state = Join-Path $fixtures "$Name\state"; [pscustomobject]@{ State = $state; Lock = Join-Path $state 'runtime.lock'; Journal = Join-Path $state 'active-run.json' } }
+    $newOrdinary = { param($Lab, [string] $RunId)
+        $modsDir = Join-Path (Split-Path -Parent $Lab.State) 'Mods'; $stagedDir = Join-Path $modsDir 'KingmakerCutsceneSkip'
+        New-Item -ItemType Directory -Path $stagedDir -Force | Out-Null; Set-Content -LiteralPath (Join-Path $stagedDir 'staged.txt') -Value 'staged'
+        New-Item -ItemType Directory -Path $Lab.State -Force | Out-Null
+        Save-Journal $Lab ([ordered]@{ runId = $RunId; modsDir = $modsDir; staged = @($stagedDir); modsOriginal = $null; paramsBackup = $null; paramsTarget = $null; registryBackup = $null; completedSteps = @() })
+        return $stagedDir }
+    # The owned lock held open (read sharing only) during recovery: restoration completes, the first attempt fails at the
+    # release and leaves a release-lock journal for this run with the lock; after the handle closes, a second attempt
+    # clears only that transaction.
+    $heldLab = & $newLab 'held lab'
+    $heldStaged = & $newOrdinary $heldLab 'fixture-held'
+    $heldLock = Enter-RuntimeLock $heldLab 'fixture-held'
+    $holder = [IO.File]::Open($heldLock, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $firstError = ''
+    try { & { . $noGame; Restore-InterruptedRun $heldLab 6>$null } } catch { $firstError = $_.Exception.Message } finally { $holder.Dispose() }
+    $heldJournal = if (Test-Path -LiteralPath $heldLab.Journal) { Get-Content -LiteralPath $heldLab.Journal -Raw | ConvertFrom-Json } else { $null }
+    Assert-Case 'OrdinaryRecoveryWithTheLockHeldRestoresAndKeepsARetryableReleaseJournal' ($firstError -match 'cannot be opened exclusively' -and -not (Test-Path -LiteralPath $heldStaged) -and (Test-Path -LiteralPath $heldLock) -and $null -ne $heldJournal -and $heldJournal.phase -eq 'release-lock' -and $heldJournal.runId -eq 'fixture-held')
+    & { . $noGame; Restore-InterruptedRun $heldLab 6>$null }
+    Assert-Case 'OrdinaryRecoveryRetryAfterTheHandleClosesClearsOnlyThatTransaction' (-not (Test-Path -LiteralPath $heldLock) -and -not (Test-Path -LiteralPath $heldLab.Journal) -and (Test-Path -LiteralPath $foreign))
+    # Ownership before change: an ordinary journal for run A while this lab's lock records run B is refused before any
+    # restoration (staged files, journal and lock unchanged).
+    $labA = & $newLab 'lab A'; $labB = & $newLab 'lab B'
+    $stagedA = & $newOrdinary $labA 'fixture-A'
+    [void](Enter-RuntimeLock $labA 'fixture-B')
+    $journalBefore = Get-Sha256 $labA.Journal
+    $ownerError = ''; try { & { . $noGame; Restore-InterruptedRun $labA 6>$null } } catch { $ownerError = $_.Exception.Message }
+    Assert-Case 'OrdinaryJournalWithAnotherRunsLockLeavesStagedFilesUntouched' ($ownerError -match "belongs to run 'fixture-B', not 'fixture-A'; nothing was changed" -and (Test-Path -LiteralPath (Join-Path $stagedA 'staged.txt')) -and (Get-Sha256 $labA.Journal) -eq $journalBefore -and (Test-Path -LiteralPath $labA.Lock))
+    # A release-only journal naming another lab's lock path: only this lab's lock is the authority (here another run's),
+    # so it is refused and both locks are kept, including the other lab's lock that records the journal's own run.
+    [void](Enter-RuntimeLock $labB 'fixture-A')
+    Save-Journal $labA ([ordered]@{ runId = 'fixture-A'; phase = 'release-lock'; lock = $labB.Lock })
+    $foreignPathError = ''; try { Restore-InterruptedRun $labA 6>$null } catch { $foreignPathError = $_.Exception.Message }
+    Assert-Case 'ReleaseJournalWithAForeignLockPathPreservesBothLocks' ($foreignPathError -match "belongs to run 'fixture-B', not 'fixture-A'" -and (Test-Path -LiteralPath $labA.Lock) -and (Test-Path -LiteralPath $labB.Lock) -and (Test-Path -LiteralPath $labA.Journal))
+    Save-Journal $labA ([ordered]@{ runId = ''; phase = 'release-lock'; lock = $labA.Lock })
+    $emptyIdError = ''; try { Restore-InterruptedRun $labA 6>$null } catch { $emptyIdError = $_.Exception.Message }
+    Assert-Case 'ReleaseJournalWithAnEmptyRunIdPreservesBothLocks' ($emptyIdError -match 'names no run' -and (Test-Path -LiteralPath $labA.Lock) -and (Test-Path -LiteralPath $labB.Lock) -and (Test-Path -LiteralPath $labA.Journal))
+    # Replacement of the lock between inspection and removal, in a child process with a line breakpoint (no hook in the
+    # runner). Before the exclusive open: a successor's lock written there is read through the handle and kept. After the
+    # ownership check, before the deletion: the replacement is refused by the exclusive handle and the verified lock is
+    # removed.
+    $raceScript = Join-Path $PSScriptRoot 'runtime\RuntimeLab.Common.ps1'
+    $raceLines = [IO.File]::ReadAllLines($raceScript)
+    $lineOf = { param([string] $Anchor) for ($i = 0; $i -lt $raceLines.Length; $i++) { if ($raceLines[$i].TrimStart().StartsWith($Anchor)) { return $i + 1 } }; throw "Anchor not found: $Anchor" }
+    $q = { param([string] $t) "'" + $t.Replace("'", "''") + "'" }
+    foreach ($race in @(@('BeforeTheExclusiveOpen', '$lockStream = [KmcsRuntimeLock]::OpenExclusive($lock)'), @('AfterTheOwnershipCheck', '[KmcsRuntimeLock]::DeleteWhenClosed($lockStream)'))) {
+        $raceLab = & $newLab "race lab $($race[0])"
+        $driver = Join-Path $fixtures ('race-' + [guid]::NewGuid().ToString('N') + '.ps1')
+        [IO.File]::WriteAllText($driver, ("`$ErrorActionPreference = 'Stop'`r`n" +
+            ". $(& $q (Join-Path $PSScriptRoot 'Common.ps1'))`r`n. $(& $q $raceScript)`r`n" +
+            "`$lab = [pscustomobject]@{ State = $(& $q $raceLab.State); Lock = $(& $q $raceLab.Lock); Journal = $(& $q $raceLab.Journal) }`r`n" +
+            "[void](Enter-RuntimeLock `$lab 'fixture-race')`r`n`$global:replaced = 'not reached'`r`n" +
+            "Set-PSBreakpoint -Script $(& $q $raceScript) -Line $(& $lineOf $race[1]) -Action { if (`$global:replaced -eq 'not reached') { try { [IO.File]::WriteAllText(`$lab.Lock, ""runId=fixture-successor``n""); `$global:replaced = 'written' } catch { `$global:replaced = 'refused' } } } | Out-Null`r`n" +
+            "try { Exit-RuntimeLock `$lab `$lab.Lock 'fixture-race'; `$outcome = 'released' } catch { `$outcome = 'refused: ' + `$_.Exception.Message }`r`n" +
+            "Write-Output (""REPLACEMENT="" + `$global:replaced + "" OUTCOME="" + `$outcome + "" LOCK="" + `$(if (Test-Path -LiteralPath `$lab.Lock) { [IO.File]::ReadAllText(`$lab.Lock).Trim() } else { 'absent' }))`r`n"))
+        $previous = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $raceOutput = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $driver 2>&1) | ForEach-Object { "$_" }) -join ' ' } finally { $ErrorActionPreference = $previous }
+        if ($race[0] -eq 'BeforeTheExclusiveOpen') {
+            Assert-Case 'LockReplacedBeforeTheExclusiveOpenIsKeptForItsOwner' ($raceOutput -match "REPLACEMENT=written OUTCOME=refused: .*belongs to run 'fixture-successor'.* LOCK=runId=fixture-successor")
+        }
+        else {
+            Assert-Case 'LockReplacementAfterTheOwnershipCheckIsRefusedAndOnlyTheVerifiedLockIsRemoved' ($raceOutput -match 'REPLACEMENT=refused OUTCOME=released LOCK=absent')
+        }
+    }
     # A no-product control never inherits Cutscene Skip from the owner profile it copies (with or without a comparison
     # ZIP); the owner's source set is left intact; a profile already containing it is refused.
     $pristine = Join-Path $fixtures 'owner pristine'

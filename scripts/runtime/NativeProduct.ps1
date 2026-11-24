@@ -1,5 +1,6 @@
 # Product preparation for the native runner, kept separate so it can be exercised with temporary files.
 Set-StrictMode -Version Latest
+if (-not ('KmcsFileIdentity' -as [type])) { . (Join-Path $PSScriptRoot '..\FileIdentity.ps1') }
 
 # One decision for requirements, summary and staging: no product (-NoProduct; a supplied ZIP is then only a comparison
 # archive, recorded but never validated or staged), the packaged candidate (-ProductZip) or the built DLL.
@@ -46,21 +47,56 @@ function New-ValidatedNativeProduct($Plan, [string] $Validator, [string] $InfoPa
     }
 }
 
-# Stages exactly the validated bytes into <ModsDir>\KingmakerCutsceneSkip (ZIP: extracted; DLL: copied with the given
-# Info.json) and returns the staged DLL digest, which must equal the validated DLL.
+# Stages exactly the validated bytes into <ModsDir>\KingmakerCutsceneSkip and returns the staged DLL digest, which must
+# equal the validated DLL. ZIP: the private archive is read once into memory, that snapshot must have the validated
+# digest, and only its four package entries are written, from the snapshot, into the product folder (any other entry
+# refuses before anything is written). DLL: copied with the validated Info.json. In both routes the staged manifest must
+# be the validated one before any explicit -ProductManagerVersion override; on any failure the product folder is removed.
 function Install-ValidatedNativeProduct($Product, [string] $ModsDir) {
     $target = Join-Path $ModsDir 'KingmakerCutsceneSkip'
-    if ($Product.Mode -eq 'zip') { Expand-Archive -LiteralPath $Product.File -DestinationPath $ModsDir }
-    else {
-        New-Item -ItemType Directory -Path $target | Out-Null
-        Copy-Item -LiteralPath $Product.File -Destination $target
-        Copy-Item -LiteralPath $Product.Info -Destination (Join-Path $target 'Info.json')
-        # The staged manifest is the validated one (before any explicit -ProductManagerVersion override is applied).
-        if (-not (Test-OrdinalEqual (Get-Sha256 (Join-Path $target 'Info.json')) ([string]$Product.Validation.info_sha256))) { throw 'The staged Info.json differs from the validated manifest.' }
+    if (Test-Path -LiteralPath $target) { throw "The product folder already exists: $target" }
+    $entries = $null
+    if ($Product.Mode -eq 'zip') {
+        Add-Type -AssemblyName System.IO.Compression
+        $zipBytes = $null
+        [void][KmcsFileIdentity]::ReadSnapshot([string]$Product.File, [ref]$zipBytes)
+        $hasher = [Security.Cryptography.SHA256]::Create()
+        try { $zipSha = ([BitConverter]::ToString($hasher.ComputeHash($zipBytes))).Replace('-', '').ToLowerInvariant() } finally { $hasher.Dispose() }
+        if (-not (Test-OrdinalEqual $zipSha ([string]$Product.Validation.input_sha256))) { throw 'The private product ZIP is not the validated archive; nothing was staged.' }
+        $allowed = @('KingmakerCutsceneSkip/Info.json', 'KingmakerCutsceneSkip/KingmakerCutsceneSkip.dll', 'KingmakerCutsceneSkip/README.md', 'KingmakerCutsceneSkip/LICENSE')
+        $entries = [ordered]@{}
+        $stream = [IO.MemoryStream]::new($zipBytes, $false)
+        $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Read)
+        try {
+            foreach ($entry in $archive.Entries) {
+                $name = [string]$entry.FullName
+                if (@($allowed | Where-Object { Test-OrdinalEqual $_ $name }).Count -ne 1 -or $entries.Contains($name)) { throw "The product ZIP has an entry outside the validated package: $name; nothing was staged." }
+                $reader = $entry.Open(); $buffer = [IO.MemoryStream]::new()
+                try { $reader.CopyTo($buffer); $entries[$name] = $buffer.ToArray() } finally { $buffer.Dispose(); $reader.Dispose() }
+            }
+        }
+        finally { $archive.Dispose(); $stream.Dispose() }
+        if ($entries.Count -ne $allowed.Count) { throw 'The product ZIP does not contain the four package entries; nothing was staged.' }
     }
-    $staged = Get-Sha256 (Join-Path $target 'KingmakerCutsceneSkip.dll')
-    if (-not (Test-OrdinalEqual $staged ([string]$Product.Validation.dll_sha256))) { throw 'The staged product DLL differs from the validated product.' }
-    return $staged
+    try {
+        New-Item -ItemType Directory -Path $target | Out-Null
+        if ($Product.Mode -eq 'zip') {
+            foreach ($name in @($entries.Keys)) { [IO.File]::WriteAllBytes((Join-Path $target ($name.Substring('KingmakerCutsceneSkip/'.Length))), [byte[]]$entries[$name]) }
+        }
+        else {
+            Copy-Item -LiteralPath $Product.File -Destination $target
+            Copy-Item -LiteralPath $Product.Info -Destination (Join-Path $target 'Info.json')
+        }
+        # The staged manifest is the validated one (before any explicit -ProductManagerVersion override is applied).
+        if (-not (Test-Sha256String $Product.Validation.info_sha256) -or -not (Test-OrdinalEqual (Get-Sha256 (Join-Path $target 'Info.json')) ([string]$Product.Validation.info_sha256))) { throw 'The staged Info.json differs from the validated manifest.' }
+        $staged = Get-Sha256 (Join-Path $target 'KingmakerCutsceneSkip.dll')
+        if (-not (Test-OrdinalEqual $staged ([string]$Product.Validation.dll_sha256))) { throw 'The staged product DLL differs from the validated product.' }
+        return $staged
+    }
+    catch {
+        if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+        throw
+    }
 }
 
 # The UMM Id in one mod folder's Info.json (UMM's manifest); $null when the folder has none. A manifest that cannot be
@@ -114,7 +150,12 @@ function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [s
     if ($Restored) {
         # Only this run's lock is released. If that fails, the outcome is part of the summary and a release-only recovery
         # journal is kept, so -RecoverOnly can retry the release for this run (and only this run).
-        try { Exit-RuntimeLock $Lab $Lock $RunId; $Summary['lockReleased'] = $true }
+        try {
+            Exit-RuntimeLock $Lab $Lock $RunId
+            $Summary['lockReleased'] = $true
+            # Release confirmed: retire this run's release-lock journal (written when restoration completed).
+            try { Remove-ReleaseLockJournal $Lab $RunId } catch { $failures.Add("release-lock journal removal failed: $($_.Exception.Message)") }
+        }
         catch {
             $failures.Add("lock release failed: $($_.Exception.Message)")
             $Summary['lockReleased'] = $false
@@ -122,7 +163,7 @@ function Complete-NativeRun($Lab, [string] $Lock, [bool] $Restored, $Summary, [s
             if (-not $Summary.Contains('scenarioStatus')) { $Summary['scenarioStatus'] = $Summary['status'] }
             $Summary['status'] = 'integrity-failed'
             $Summary['integrityFailures'] = @(@($(if ($Summary.Contains('integrityFailures')) { $Summary['integrityFailures'] })) + @("lock release failed: $($_.Exception.Message)") | Where-Object { $_ })
-            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock'; lock = $Lock }) }
+            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock' }) }
             catch { $failures.Add("release-lock journal write failed: $($_.Exception.Message)") }
         }
     }
@@ -153,7 +194,13 @@ function Enter-NativeRunDirectories($Lab, [string] $RunId) {
         return [pscustomobject]@{ Lock = $lock; Evidence = $evidence; Backup = $backup }
     }
     catch {
-        Exit-RuntimeLock $Lab $lock $RunId
-        throw
+        $setupError = $_
+        try { Exit-RuntimeLock $Lab $lock $RunId }
+        catch {
+            # The same recoverable handoff as a completed run: a release-only journal for this run.
+            try { Save-Journal $Lab ([ordered]@{ runId = $RunId; phase = 'release-lock' }) } catch { }
+            throw "Run setup failed ($($setupError.Exception.Message)) and its lock could not be released ($($_.Exception.Message)); run -RecoverOnly."
+        }
+        throw $setupError
     }
 }

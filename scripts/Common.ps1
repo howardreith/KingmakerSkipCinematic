@@ -10,6 +10,9 @@ function Get-ProductLoadIdentity { return $script:ProductLoadIdentity }
 # Exact ordinal string equality. PowerShell's -ceq/-cne compare with culture rules, under which ignorable characters
 # (a soft hyphen, for example) make different strings equal; identities, digests and load targets use this instead.
 function Test-OrdinalEqual([string] $A, [string] $B) { return [string]::Equals($A, $B, [StringComparison]::Ordinal) }
+# A recorded digest is accepted only as a JSON string of 64 lowercase hexadecimal characters (no boolean, array, number,
+# padding or trailing line feed), so a malformed receipt field can never compare as equal.
+function Test-Sha256String($Value) { return ($Value -is [string]) -and [regex]::IsMatch($Value, '\A[0-9a-f]{64}\z') }
 
 function Get-RepositoryRoot { return $script:RepositoryRoot }
 
@@ -200,13 +203,14 @@ function Get-ReferencePinProblems($Receipt, $Pins, [string] $ManagerVersion) {
         $recorded = @($Receipt.references | Where-Object { $_.role -eq 'pinned loader reference' })
     }
     foreach ($pin in $Pins) {
-        $matches = @($recorded | Where-Object { $_.file -eq $pin.File })
+        $matches = @($recorded | Where-Object { ($_.file -is [string]) -and (Test-OrdinalEqual $_.file ([string]$pin.File)) })
         if ($matches.Count -ne 1) { $problems += "the build receipt has $($matches.Count) identities for pinned reference $($pin.File)"; continue }
-        if ($matches[0].sha256 -ne $pin.Sha256) { $problems += "$($pin.File) was built with SHA-256 $($matches[0].sha256), but the pin is $($pin.Sha256)" }
-        if ($matches[0].source -ne $pin.Url) { $problems += "$($pin.File) was built from $($matches[0].source), but the pin is $($pin.Url)" }
+        if (-not (Test-Sha256String $matches[0].sha256)) { $problems += "the build receipt's SHA-256 for $($pin.File) is not a SHA-256 string" }
+        elseif (-not (Test-OrdinalEqual $matches[0].sha256 ([string]$pin.Sha256))) { $problems += "$($pin.File) was built with SHA-256 $($matches[0].sha256), but the pin is $($pin.Sha256)" }
+        if (-not ($matches[0].source -is [string]) -or -not (Test-OrdinalEqual $matches[0].source ([string]$pin.Url))) { $problems += "$($pin.File) was built from $($matches[0].source), but the pin is $($pin.Url)" }
     }
     foreach ($identity in $recorded) {
-        if (@($Pins | Where-Object { $_.File -eq $identity.file }).Count -eq 0) { $problems += "the build receipt records an unpinned loader reference: $($identity.file)" }
+        if (@($Pins | Where-Object { ($identity.file -is [string]) -and (Test-OrdinalEqual $identity.file ([string]$_.File)) }).Count -eq 0) { $problems += "the build receipt records an unpinned loader reference: $($identity.file)" }
     }
     $loader = @($Pins | Where-Object { $_.Name -eq 'UnityModManager' })
     if ($loader.Count -ne 1) { $problems += 'the pins do not name exactly one UnityModManager reference' }

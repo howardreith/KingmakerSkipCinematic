@@ -106,6 +106,32 @@ try {
     Add-Case 'DllDifferingFromItsReceiptRefusedAtPackaging' ($p.ExitCode -ne 0 -and $p.Output -match 'does not match the build receipt') (Get-Reason $p.Output)
     [IO.File]::WriteAllBytes($dll, $dllBytes)
 
+    # A receipt whose product digest is a boolean or an empty array, otherwise coherent with this commit, beside a
+    # different baseline-compatible DLL (a real build of an uncommitted source change, reverted before packaging) is
+    # refused without any override; the genuine receipt and DLL then package again.
+    $genuineReceiptText = [IO.File]::ReadAllText($receiptPath)
+    $genuineDllSha = Get-Sha256 $dll
+    $probeSource = Join-Path $clone ((@(& git -C $clone ls-files 'src/KingmakerCutsceneSkip/*.cs')[0]).Replace('/', '\'))
+    $probeOriginal = [IO.File]::ReadAllBytes($probeSource)
+    [IO.File]::AppendAllText($probeSource, "`r`nnamespace KmcsReceiptProbe { internal static class Marker { internal const int Value = 7; } }`r`n")
+    $b = Invoke-Script $build
+    [IO.File]::WriteAllBytes($probeSource, $probeOriginal)
+    $otherDll = [IO.File]::ReadAllBytes($dll)
+    $otherDllSha = Get-Sha256 $dll
+    Add-Case 'DifferentBaselineCompatibleDllBuilt' ($b.ExitCode -eq 0 -and $otherDllSha -ne $genuineDllSha -and @(& git -C $clone status --porcelain -- src).Count -eq 0) "build exit $($b.ExitCode); other DLL $otherDllSha"
+    foreach ($malformed in @(@('Boolean', $true), @('EmptyArray', @()))) {
+        $bad = $genuineReceiptText | ConvertFrom-Json
+        $bad.dll_sha256 = $malformed[1]
+        [IO.File]::WriteAllText($receiptPath, ($bad | ConvertTo-Json -Depth 8))
+        [IO.File]::WriteAllBytes($dll, $otherDll)
+        $p = Invoke-Script $package
+        Add-Case "Receipt$($malformed[0])DllDigestWithADifferentDllRefused" ($p.ExitCode -ne 0 -and $p.Output -match 'dll_sha256 is not a SHA-256 string') ([regex]::Match($p.Output, 'The build receipt dll_sha256[^.]*').Value)
+    }
+    [IO.File]::WriteAllText($receiptPath, $genuineReceiptText)
+    [IO.File]::WriteAllBytes($dll, $dllBytes)
+    $p = Invoke-Script $package
+    Add-Case 'GenuineReceiptAndDllPackageAgain' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"
+
     # Direct production builds (MSBuild on the project, without Build.ps1) apply the same pins: a genuine rebuild passes
     # and records its compiler inputs; a substituted cache file is refused before compilation; a repository-level hook at
     # the CoreCompile boundary that points a loader reference elsewhere is refused by the final check.

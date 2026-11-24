@@ -33,10 +33,12 @@ if (-not $fileVersion.StartsWith($info.Version + '.')) { throw "DLL file version
 Assert-FileExists $BuildReceipt 'Build receipt (run scripts\Build.ps1)'
 $receipt = Get-Content -LiteralPath $BuildReceipt -Raw | ConvertFrom-Json
 $dllSha256 = Get-Sha256 $dll
-if ($receipt.status -ne 'passed') { throw "Build receipt status is '$($receipt.status)', not passed." }
-if ($receipt.configuration -ne $Configuration) { throw "Build receipt is for $($receipt.configuration), not $Configuration." }
-if ($receipt.dll_sha256 -ne $dllSha256) { throw "DLL SHA-256 $dllSha256 does not match the build receipt ($($receipt.dll_sha256)); rebuild with scripts\Build.ps1." }
-if (-not $receipt.commit -or $receipt.commit -eq 'UNBORN') { throw 'Build receipt has no source commit.' }
+# Receipt fields are typed before they are compared: a boolean, array or other non-string value is never equal.
+if (-not ($receipt.status -is [string]) -or -not (Test-OrdinalEqual $receipt.status 'passed')) { throw "Build receipt status is '$($receipt.status)', not passed." }
+if (-not ($receipt.configuration -is [string]) -or -not (Test-OrdinalEqual $receipt.configuration $Configuration)) { throw "Build receipt is for $($receipt.configuration), not $Configuration." }
+if (-not (Test-Sha256String $receipt.dll_sha256)) { throw 'The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\Build.ps1.' }
+if (-not (Test-OrdinalEqual $receipt.dll_sha256 $dllSha256)) { throw "DLL SHA-256 $dllSha256 does not match the build receipt ($($receipt.dll_sha256)); rebuild with scripts\Build.ps1." }
+if (-not ($receipt.commit -is [string]) -or -not [regex]::IsMatch($receipt.commit, '\A[0-9a-f]{40}\z')) { throw 'Build receipt has no source commit.' }
 $receiptInputsDirty = if ($receipt.PSObject.Properties['product_inputs_dirty']) { [bool] $receipt.product_inputs_dirty } else { [bool] $receipt.dirty }
 $problems = @()
 if ($receiptInputsDirty) { $problems += "the DLL was built with uncommitted product changes" }

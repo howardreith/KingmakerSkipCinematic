@@ -70,8 +70,12 @@ $result = [ordered]@{ status = 'validated'; input = $inputPath; input_sha256 = G
 # The load target is the product's fixed identity (Common.ps1), never taken from the manifest being checked.
 $loadIdentity = Get-ProductLoadIdentity
 function Assert-ManifestIdentity($Manifest, [string] $Label) {
+    # Member names are compared ordinally (PowerShell member lookup ignores case): each required field must be present
+    # under exactly its declared spelling, once, before any value is read.
+    $memberNames = @($Manifest.PSObject.Properties | ForEach-Object { [string]$_.Name })
     foreach ($field in @('Id', 'Version', 'ManagerVersion', 'AssemblyName', 'EntryMethod')) {
-        if (-not $Manifest.PSObject.Properties[$field] -or -not ($Manifest.$field -is [string])) { throw "$Label $field must be a string." }
+        if (@($memberNames | Where-Object { Test-OrdinalEqual $_ $field }).Count -ne 1) { throw "$Label must contain the member $field with exactly that name." }
+        if (-not ($Manifest.$field -is [string])) { throw "$Label $field must be a string." }
     }
     foreach ($field in @('Id', 'AssemblyName', 'EntryMethod')) {
         if (-not (Test-OrdinalEqual $Manifest.$field ([string]$loadIdentity[$field]))) { throw "$Label $field is '$($Manifest.$field)', not the product's '$($loadIdentity[$field])'." }
@@ -94,12 +98,14 @@ if ($PackagePath) {
             $entryStream = $archive.GetEntry($Name).Open(); $buffer = [IO.MemoryStream]::new()
             try { $entryStream.CopyTo($buffer); return , $buffer.ToArray() } finally { $buffer.Dispose(); $entryStream.Dispose() }
         }
-        $packagedInfo = [Text.Encoding]::UTF8.GetString((Read-Entry 'KingmakerCutsceneSkip/Info.json')).TrimStart([char]0xFEFF) | ConvertFrom-Json
+        $packagedInfoBytes = Read-Entry 'KingmakerCutsceneSkip/Info.json'
+        $packagedInfo = [Text.Encoding]::UTF8.GetString($packagedInfoBytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
         $dllBytes = Read-Entry 'KingmakerCutsceneSkip/KingmakerCutsceneSkip.dll'
     }
     finally { $archive.Dispose(); $stream.Dispose() }
     Assert-ManifestIdentity $packagedInfo 'Packaged Info.json'
     $result.manager_version = $packagedInfo.ManagerVersion
+    $result.info_sha256 = Get-BytesSha256 $packagedInfoBytes
     $shippingVersion = $packagedInfo.Version
 }
 else {
