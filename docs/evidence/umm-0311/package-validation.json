@@ -1,7 +1,7 @@
 {
     "status":  "validated",
     "input":  "<repo>\\artifacts\\package\\KingmakerCutsceneSkip-0.1.2.zip",
-    "input_sha256":  "ff666d858218af0c1940cf39a7b2b2e6f2c48a106628d850ea7fae2188d6c69d",
+    "input_sha256":  "05f460cfe23e191f10f93aa43057907d4c9eb35c33aa9c084b32eca34ae8b86f",
     "manager_version":  "0.31.1",
     "dll_assembly_name":  "KingmakerCutsceneSkip",
     "dll_file_version":  "0.1.2.0",

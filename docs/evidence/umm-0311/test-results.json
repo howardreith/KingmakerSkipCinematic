@@ -1,13 +1,13 @@
 {
  "schema": "ksc.test-results.v2",
- "recorded_at_utc": "2026-11-24T05:54:18Z",
+ "recorded_at_utc": "2026-11-24T06:16:03Z",
  "command": "scripts/Test.ps1 (Release): unit runner, Test-Provenance.ps1, Test-PackageProvenance.ps1",
- "commit": "d2ca1d9",
+ "commit": "883fb6e",
  "note": "Later commits change only documentation and evidence.",
  "results": [
   "RESULT total=55 passed=55 failed=0",
-  "RESULT provenance total=65 failed=0",
-  "RESULT package-provenance total=13 failed=0"
+  "RESULT provenance total=81 failed=0",
+  "RESULT package-provenance total=16 failed=0"
  ],
  "unit_cases": [
   {
@@ -383,6 +383,31 @@
    "detail": ""
   },
   {
+   "name": "Provenance.PackagedEntryMethodWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManagerVersionWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestEntryMethodWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestManagerVersionWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.GenuineBarePairIsAccepted",
+   "passed": true,
+   "detail": ""
+  },
+  {
    "name": "Provenance.BuiltDllWithPinnedReferencesIsAccepted",
    "passed": true,
    "detail": ""
@@ -528,6 +553,21 @@
    "detail": ""
   },
   {
+   "name": "Provenance.LockReleaseFailureIsAFailedSavedOutcomeWithARecoveryJournal",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseRecoveryRefusesAnotherRunsLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseRecoveryClearsOnlyThatRunsLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
    "name": "Provenance.NoProductControlExcludesInheritedCutsceneSkipWithComparisonZip",
    "passed": true,
    "detail": ""
@@ -556,6 +596,46 @@
    "name": "Provenance.NoProductControlRefusesTheShippingIdUnderAnotherFolderNameAndKeepsTheSource",
    "passed": true,
    "detail": ""
+  },
+  {
+   "name": "Provenance.ProductRunZipLoadsOnlyTheValidatedCandidate",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ProductRunBareDllLoadsOnlyTheValidatedCandidate",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ProductRunRefusesALiveProfileWithAnOlderShippingIdAndKeepsTheSource",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlFindsTheShippingIdInFolderKeys",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlFindsTheShippingIdInFolderHiddenSkip",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlWithOnlyAnUnrelatedModPasses",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.UnselectedMalformedManifestDoesNotBlockAnIsolatedSelection",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.SelectedMalformedManifestIsRefused",
+   "passed": true,
+   "detail": ""
   }
  ],
  "package_provenance_cases": [
@@ -567,7 +647,7 @@
   {
    "name": "PackageProvenance.BuildHelperChangeInvalidatesThePriorReceipt",
    "passed": true,
-   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit d2ca1d9bf3571af35b94cfb99ea5b37276ad07cb: scripts/Build"
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 883fb6efa11a9d8d4b0dd2871b35931d936fd6e5: scripts/Build"
   },
   {
    "name": "PackageProvenance.FreshBuildAfterHelperChangePasses",
@@ -577,17 +657,32 @@
   {
    "name": "PackageProvenance.DocumentationOnlyChangeReusesTheFrozenDll",
    "passed": true,
-   "detail": "build 8b33ede, package 2843652, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
+   "detail": "build bc0b322, package 6ec04de, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
   },
   {
    "name": "PackageProvenance.DirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
    "passed": true,
-   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 8b33edee299ed5b60b70ac3fb0136e50b22cb67a: Directory"
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit bc0b322bc2cfcc33b14245a577d978a5f74ade85: Directory"
   },
   {
    "name": "PackageProvenance.FreshBuildAfterDirectoryBuildTargetsChangePasses",
    "passed": true,
    "detail": "build exit 0; package exit 0"
+  },
+  {
+   "name": "PackageProvenance.SrcDirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
+   "passed": true,
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit eaad28f87d1d4e4f79fa21c3301c0743adf362e0: src/Directory"
+  },
+  {
+   "name": "PackageProvenance.FreshBuildAfterSrcDirectoryBuildTargetsChangePasses",
+   "passed": true,
+   "detail": "build exit 0; package exit 0"
+  },
+  {
+   "name": "PackageProvenance.DocumentationOnlyChangeAfterTheSrcInputStillReusesTheFrozenDll",
+   "passed": true,
+   "detail": "build a93ee9b, package ee3848f"
   },
   {
    "name": "PackageProvenance.CorruptCacheEntryRefusedBeforeCompilation",
@@ -612,12 +707,12 @@
   {
    "name": "PackageProvenance.ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused",
    "passed": true,
-   "detail": "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-b1a0293e700a4456980fbc6b1189e1af\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-b1a0293e700a4456980fbc6b1189e1af\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-b1a0293e700a4456980fbc6b1189e1af\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+   "detail": "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
   },
   {
    "name": "PackageProvenance.DirectRebuildRefusesADeclaredVersionDisagreeingWithThePinnedBytes",
    "passed": true,
-   "detail": "is 0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1.2.0.2, Culture=neutral, PublicKeyToken=null. [<temp>\\kmcs-package-provenance-b1a0293e700a4456980fbc6b1189e1af\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+   "detail": "is 0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1.2.0.2, Culture=neutral, PublicKeyToken=null. [<temp>\\kmcs-package-provenance-24e0f7509fae4bd4b7572f873fa89083\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
   },
   {
    "name": "PackageProvenance.DirectRebuildPassesAgainAfterRestoringTheCache",
