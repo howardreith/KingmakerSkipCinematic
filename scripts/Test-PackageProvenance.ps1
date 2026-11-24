@@ -96,7 +96,7 @@ try {
     [IO.File]::WriteAllText($hook, "<Project><Target Name=`"KmcsTestRewrite`" BeforeTargets=`"CoreCompile`"><ItemGroup><_KmcsTestUmm Include=`"@(ReferencePathWithRefAssemblies)`" Condition=`"'%(Filename)' == 'UnityModManager'`" /><ReferencePathWithRefAssemblies Remove=`"@(_KmcsTestUmm)`" /><ReferencePathWithRefAssemblies Include=`"$elsewhereUmm`" /></ItemGroup></Target></Project>")
     $d = & $direct 'Build'
     Remove-Item -LiteralPath $hook
-    Add-Case 'ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused' ($d.ExitCode -ne 0 -and $d.Output -match 'Loader compiler references must be the pinned files' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') ([regex]::Match($d.Output, 'Loader compiler references must be the pinned files[^\n]{0,160}').Value)
+    Add-Case 'ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused' ($d.ExitCode -ne 0 -and $d.Output -match 'Loader compiler references must be the pinned files' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') ([regex]::Match($d.Output, 'Loader compiler references must be the pinned files[^\n]*').Value)
     $d = & $direct 'Rebuild'
     Add-Case 'DirectRebuildPassesAgainAfterRestoringTheCache' ($d.ExitCode -eq 0 -and $d.Output -match 'Loader compiler input: ') "exit $($d.ExitCode)"
 
