@@ -48,9 +48,15 @@ by rename.
 - The reference cache refuses an existing entry that does not match its pin (remove it explicitly to re-fetch); only an
   absent entry is downloaded.
 - Native runner: `scripts/runtime/RuntimeLab.Common.ps1` is unchanged from `main`, and `scripts/runtime/Invoke-NativeRun.ps1`
-  differs from `main` only by a narrow preflight (round 9): a product ZIP that will be installed (`-ProductZip` without
-  `-NoProduct`) is copied privately and validated by the standalone validator before any lock, backup or staging, and
-  that validated copy is what is installed (a ZIP given with `-NoProduct` stays a comparison archive). Round 8 removed
+  differs from `main` only by a narrow preflight (rounds 9-10, `scripts/runtime/ProductZip.ps1`): a product ZIP that will
+  be installed (`-ProductZip` without `-NoProduct`) is copied into a private folder and held open read-only (no writer,
+  rename or delete while held), validated by the standalone validator before any lock, backup or staging, and extracted
+  through the same handle, so the installed bytes are the validated bytes; one cleanup scope covers the copy from its
+  creation, and the runner's `finally` releases it. A ZIP given with `-NoProduct` stays a comparison archive. The
+  preflight's tests call it directly in a private fixture folder (refusal with the validator's reference diagnostic, a
+  genuine ZIP extracted from the held copy, write/rename/delete refused while held, no copy left after a setup failure
+  or after close) and check statically that the runner opens it before the lock and extracts only the held copy; they
+  never start the runner. Round 8 removed
   this change's other runner additions (`scripts/runtime/NativeProduct.ps1`, run-lock ownership, journal handoff and
   recovery) with their tests: native runs are outside this mission's scope and none was made, so no claim about the
   runner's staging or recovery is made here.

@@ -270,19 +270,37 @@ try {
     Assert-Case 'BareManifestWithBraceInSingleQuotedValueIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'unsupported string syntax')
     $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'declared-names-control' $genuine $null $null))
     Assert-Case 'PackagedManifestWithDeclaredMemberNamesIsAccepted' ($r.ExitCode -eq 0)
-    # R8-F1: the runner's product-present ZIP route refuses an archive that fails standalone validation before any lock,
-    # backup or staging (the lab lock is unchanged and no private copy remains).
-    $runner = Join-Path (Get-RepositoryRoot) 'scripts\runtime\Invoke-NativeRun.ps1'
-    $scenarioFile = Join-Path (Get-RepositoryRoot) 'tests\native\scenarios\chain-lifecycle.json'
-    $labLock = Join-Path ([IO.Path]::GetFullPath((Join-Path (Get-RepositoryRoot) '..\..'))) 'runtime-state\runtime.lock'
-    $lockBefore = Test-Path -LiteralPath $labLock
-    $copiesBefore = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -File -Filter 'kmcs-validated-product-*.zip' -ErrorAction SilentlyContinue).Count
-    $badZip = Join-Path $fixtures 'newer-umm.zip'
-    $previousPreference = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $runnerOutput = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -Scenario $scenarioFile -ProductZip $badZip 2>&1) | ForEach-Object { "$_" }) -join ' '; $runnerExit = $LASTEXITCODE }
-    finally { $ErrorActionPreference = $previousPreference }
-    $copiesAfter = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -File -Filter 'kmcs-validated-product-*.zip' -ErrorAction SilentlyContinue).Count
-    Assert-Case 'RunnerRefusesAProductZipThatFailsValidationBeforeLocking' ($runnerExit -ne 0 -and $runnerOutput -match 'The product ZIP failed standalone validation; nothing was locked or staged' -and (Test-Path -LiteralPath $labLock) -eq $lockBefore -and $copiesAfter -eq $copiesBefore)
+    # The runner's product-ZIP preflight (scripts\runtime\ProductZip.ps1), exercised directly in a private work folder of
+    # this fixture: the native runner is not started, so no case here can reach a lock, backup or game folder.
+    . (Join-Path (Get-RepositoryRoot) 'scripts\runtime\ProductZip.ps1')
+    $work = Join-Path $fixtures 'preflight-work'; New-Item -ItemType Directory -Path $work -Force | Out-Null
+    $refusal = $null
+    try { $held = Open-ValidatedProductZip -ProductZip (Join-Path $fixtures 'newer-umm.zip') -WorkRoot $work 6>$null; Close-ValidatedProductZip $held } catch { $refusal = $_.Exception.Message }
+    Assert-Case 'PreflightRefusesAZipWhoseDllReferencesAnUnpinnedLoader' ($refusal -match 'failed standalone validation; nothing was locked or staged' -and
+        $refusal -match 'references UnityModManager, Version=0\.33\.0\.0' -and @(Get-ChildItem -LiteralPath $work -Force).Count -eq 0)
+    $goodZip = New-FixtureZip 'preflight-genuine' $genuine $null $null
+    $held = Open-ValidatedProductZip -ProductZip $goodZip -WorkRoot $work 6>$null
+    $writeRefused = $false; $moveRefused = $false; $deleteRefused = $false; $handoff = $false
+    try {
+        try { [IO.File]::Open($held.Path, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::ReadWrite).Dispose() } catch { $writeRefused = $true }
+        try { [IO.File]::Move($held.Path, $held.Path + '.moved') } catch { $moveRefused = $true }
+        try { [IO.File]::Delete($held.Path) } catch { $deleteRefused = $true }
+        $mods = Join-Path $fixtures 'preflight-mods'; New-Item -ItemType Directory -Path $mods -Force | Out-Null
+        Expand-ValidatedProductZip $held $mods
+        $installed = Join-Path $mods 'KingmakerCutsceneSkip\KingmakerCutsceneSkip.dll'
+        $handoff = (Test-Path -LiteralPath $installed) -and (Get-Sha256 $installed) -eq (Get-Sha256 $genuine) -and $held.Sha256 -eq (Get-Sha256 $goodZip)
+    }
+    finally { Close-ValidatedProductZip $held }
+    Assert-Case 'PreflightHoldsTheValidatedCopyAgainstWriteRenameAndDelete' ($writeRefused -and $moveRefused -and $deleteRefused)
+    Assert-Case 'PreflightPassesAGenuineZipAndExtractsTheValidatedBytes' $handoff
+    Assert-Case 'PreflightCloseLeavesNoPrivateCopy' (@(Get-ChildItem -LiteralPath $work -Force).Count -eq 0)
+    $setupError = $null
+    try { $held = Open-ValidatedProductZip -ProductZip $goodZip -WorkRoot $work -ValidatorPath (Join-Path $fixtures 'missing-validator.ps1') 6>$null; Close-ValidatedProductZip $held } catch { $setupError = $_.Exception.Message }
+    Assert-Case 'PreflightSetupFailureAfterTheCopyLeavesNoPrivateCopy' ($setupError -match 'package validator was not found' -and @(Get-ChildItem -LiteralPath $work -Force).Count -eq 0)
+    $runnerText = Get-Content -LiteralPath (Join-Path (Get-RepositoryRoot) 'scripts\runtime\Invoke-NativeRun.ps1') -Raw
+    $openAt = $runnerText.IndexOf('Open-ValidatedProductZip -ProductZip'); $lockAt = $runnerText.IndexOf('Enter-RuntimeLock $lab')
+    Assert-Case 'RunnerValidatesBeforeLockingAndExtractsOnlyTheHeldCopy' ($openAt -gt 0 -and $openAt -lt $lockAt -and
+        $runnerText.Contains('Expand-ValidatedProductZip $validatedProduct $game.ModsDir') -and -not $runnerText.Contains('Expand-Archive'))
     $genuineInfoCopy = Join-Path $fixtures 'genuine bare Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $genuineInfoCopy
     $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $genuineInfoCopy)
     Assert-Case 'GenuineBarePairIsAccepted' ($r.ExitCode -eq 0)
