@@ -47,13 +47,16 @@ by rename.
   (normalized to four parts). A boolean, an array or a padded digest is refused, never compared.
 - The reference cache refuses an existing entry that does not match its pin (remove it explicitly to re-fetch); only an
   absent entry is downloaded.
-- Native runner: `scripts/runtime/Invoke-NativeRun.ps1` and `scripts/runtime/RuntimeLab.Common.ps1` are unchanged from
-  `main`. Round 8 (2026-11-26) removed this change's native-runner product validation, staging, run-lock and recovery
-  additions (`scripts/runtime/NativeProduct.ps1` and the related runner edits) with their tests: native runs are outside
-  this mission's scope and none was made, so no claim about the runner's staging or recovery is made here.
-- Manifest member names: a top-level member name that is not a double-quoted JSON string (single-quoted or unquoted,
-  both accepted by Windows PowerShell's decoder) is refused, so the duplicate check counts every declaration the decoder
-  accepts. Whichever dirty flag a receipt uses (`product_inputs_dirty`, or `dirty` in an older receipt), a clean claim
+- Native runner: `scripts/runtime/RuntimeLab.Common.ps1` is unchanged from `main`, and `scripts/runtime/Invoke-NativeRun.ps1`
+  differs from `main` only by a narrow preflight (round 9): a product ZIP that will be installed (`-ProductZip` without
+  `-NoProduct`) is copied privately and validated by the standalone validator before any lock, backup or staging, and
+  that validated copy is what is installed (a ZIP given with `-NoProduct` stays a comparison archive). Round 8 removed
+  this change's other runner additions (`scripts/runtime/NativeProduct.ps1`, run-lock ownership, journal handoff and
+  recovery) with their tests: native runs are outside this mission's scope and none was made, so no claim about the
+  runner's staging or recovery is made here.
+- Manifest syntax: a top-level member name that is not a double-quoted JSON string (single-quoted or unquoted, both
+  accepted by Windows PowerShell's decoder) and a single-quoted string anywhere (which could hide a brace from the
+  scanner's depth) are refused, so the duplicate check counts every declaration the decoder accepts. Whichever dirty flag a receipt uses (`product_inputs_dirty`, or `dirty` in an older receipt), a clean claim
   that lists product changes is refused.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.

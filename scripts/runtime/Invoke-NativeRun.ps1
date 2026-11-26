@@ -67,10 +67,28 @@ $root = Get-RepositoryRoot
 $productDir = Join-Path $root "artifacts\bin\$Configuration\KingmakerCutsceneSkip"
 $harnessDir = Join-Path $root "artifacts\bin\$Configuration\RuntimeHarness"
 if ($ProductZip) { Assert-FileExists $ProductZip 'Product ZIP' } else { Assert-FileExists (Join-Path $productDir 'KingmakerCutsceneSkip.dll') 'Built product DLL (run scripts\Build.ps1)' }
-Assert-FileExists (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll') 'Built harness DLL'
-
-Assert-RuntimePreflight $lab
-$lock = Enter-RuntimeLock $lab $runId
+# A product ZIP that will be installed is validated first: a private copy is checked by the standalone validator, before
+# any lock, backup or staging, and that same copy is what is installed. A ZIP given with -NoProduct remains a comparison
+# archive only and is not validated.
+$validatedProductZip = $null
+if ($ProductZip -and -not $NoProduct) {
+    $validatedProductZip = Join-Path ([IO.Path]::GetTempPath()) ('kmcs-validated-product-' + [Guid]::NewGuid().ToString('N') + '.zip')
+    Copy-Item -LiteralPath $ProductZip -Destination $validatedProductZip
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path (Split-Path -Parent $PSScriptRoot) 'Validate-Package.ps1') -PackagePath $validatedProductZip
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -LiteralPath $validatedProductZip -Force -ErrorAction SilentlyContinue
+        throw 'The product ZIP failed standalone validation; nothing was locked or staged.'
+    }
+}
+try {
+    Assert-FileExists (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll') 'Built harness DLL'
+    Assert-RuntimePreflight $lab
+    $lock = Enter-RuntimeLock $lab $runId
+}
+catch {
+    if ($validatedProductZip) { Remove-Item -LiteralPath $validatedProductZip -Force -ErrorAction SilentlyContinue }
+    throw
+}
 $evidence = Join-Path $lab.Evidence $runId
 $backup = Join-Path $lab.Backups $runId
 New-Item -ItemType Directory -Force -Path $evidence, $backup | Out-Null
@@ -85,7 +103,8 @@ try {
     $summary.ownerInstallFileCount = @($installBefore).Count
     $summary.gameRoot = $game.InstallDir
     $summary.loaderProfile = $(if ($GameCopy) { $LoaderProfile } else { 'owner installation' })
-    if ($ProductZip) { $summary.productZipSha256 = Get-Sha256 $ProductZip }
+    if ($validatedProductZip) { $summary.productZipSha256 = Get-Sha256 $validatedProductZip }
+    elseif ($ProductZip) { $summary.productZipSha256 = Get-Sha256 $ProductZip }
     elseif (-not $NoProduct) { $summary.productDllSha256 = Get-Sha256 (Join-Path $productDir 'KingmakerCutsceneSkip.dll') }
     $summary.harnessDllSha256 = Get-Sha256 (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll')
     $summary.git = Get-GitMetadata
@@ -144,7 +163,7 @@ try {
         if (Test-Path -LiteralPath $productTarget) { throw "Refusing to overwrite an existing mod folder: $productTarget" }
         $journal.staged += $productTarget
         Save-Journal $lab $journal
-        Expand-Archive -LiteralPath $ProductZip -DestinationPath $game.ModsDir
+        Expand-Archive -LiteralPath $validatedProductZip -DestinationPath $game.ModsDir
         $summary.productDllSha256 = Get-Sha256 (Join-Path $productTarget 'KingmakerCutsceneSkip.dll')
     }
     if ($ProductManagerVersion -and -not $NoProduct) {
@@ -190,6 +209,7 @@ catch {
     throw
 }
 finally {
+    if ($validatedProductZip) { Remove-Item -LiteralPath $validatedProductZip -Force -ErrorAction SilentlyContinue }
     $restored = $false
     try {
         Restore-RunJournal $lab $journal

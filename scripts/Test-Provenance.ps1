@@ -260,8 +260,28 @@ try {
     [IO.File]::WriteAllText($mixedEntry, $genuineInfoRaw.Replace('"EntryMethod"', 'EntryMethod: "Other.Main.Load", "EntryMethod"'), [Text.UTF8Encoding]::new($false))
     $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $mixedEntry)
     Assert-Case 'BareManifestWithUnquotedConflictingEntryMethodIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'unsupported member-name syntax')
+    # A brace inside a single-quoted value would lower the scanner's apparent depth and hide a duplicate behind it; a
+    # single-quoted string is refused wherever it occurs (ZIP and bare routes).
+    $bracedValue = Join-Path $fixtures 'single-quoted-brace Info.json'
+    [IO.File]::WriteAllText($bracedValue, $genuineInfoRaw.Replace('"ManagerVersion"', "`"Note`": '{', `"ManagerVersion`": `"0.33.0`", `"ManagerVersion`""), [Text.UTF8Encoding]::new($false))
+    $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'single-quoted-brace' $genuine $null @("KingmakerCutsceneSkip/Info.json|$bracedValue")))
+    Assert-Case 'PackagedManifestWithBraceInSingleQuotedValueIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'unsupported string syntax')
+    $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $bracedValue)
+    Assert-Case 'BareManifestWithBraceInSingleQuotedValueIsRejected' ($r.ExitCode -ne 0 -and $r.Output -match 'unsupported string syntax')
     $r = Invoke-Validator @('-PackagePath', (New-FixtureZip 'declared-names-control' $genuine $null $null))
     Assert-Case 'PackagedManifestWithDeclaredMemberNamesIsAccepted' ($r.ExitCode -eq 0)
+    # R8-F1: the runner's product-present ZIP route refuses an archive that fails standalone validation before any lock,
+    # backup or staging (the lab lock is unchanged and no private copy remains).
+    $runner = Join-Path (Get-RepositoryRoot) 'scripts\runtime\Invoke-NativeRun.ps1'
+    $scenarioFile = Join-Path (Get-RepositoryRoot) 'tests\native\scenarios\chain-lifecycle.json'
+    $labLock = Join-Path ([IO.Path]::GetFullPath((Join-Path (Get-RepositoryRoot) '..\..'))) 'runtime-state\runtime.lock'
+    $lockBefore = Test-Path -LiteralPath $labLock
+    $copiesBefore = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -File -Filter 'kmcs-validated-product-*.zip' -ErrorAction SilentlyContinue).Count
+    $badZip = Join-Path $fixtures 'newer-umm.zip'
+    $runnerOutput = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -Scenario $scenarioFile -ProductZip $badZip 2>&1) | ForEach-Object { "$_" }) -join ' '
+    $runnerExit = $LASTEXITCODE
+    $copiesAfter = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -File -Filter 'kmcs-validated-product-*.zip' -ErrorAction SilentlyContinue).Count
+    Assert-Case 'RunnerRefusesAProductZipThatFailsValidationBeforeLocking' ($runnerExit -ne 0 -and $runnerOutput -match 'The product ZIP failed standalone validation; nothing was locked or staged' -and (Test-Path -LiteralPath $labLock) -eq $lockBefore -and $copiesAfter -eq $copiesBefore)
     $genuineInfoCopy = Join-Path $fixtures 'genuine bare Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $genuineInfoCopy
     $r = Invoke-Validator @('-DllPath', $genuine, '-InfoPath', $genuineInfoCopy)
     Assert-Case 'GenuineBarePairIsAccepted' ($r.ExitCode -eq 0)

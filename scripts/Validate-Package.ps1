@@ -81,6 +81,9 @@ function Get-JsonTopLevelMemberNames([string] $Text) {
         if ($expectKey -and $depth -eq 1 -and -not [char]::IsWhiteSpace($c) -and $c -ne '"' -and $c -ne '}') {
             throw 'The manifest uses an unsupported member-name syntax (top-level member names must be double-quoted JSON strings).'
         }
+        # A single-quoted string (accepted by Windows PowerShell's decoder, not by JSON) could hide a brace or bracket
+        # from this scanner's depth; it is refused wherever it occurs, as a name or a value.
+        if ($c -eq "'") { throw 'The manifest uses an unsupported string syntax (single-quoted strings are not JSON).' }
         if ($c -eq '"') {
             $sb = New-Object System.Text.StringBuilder; $i++
             while ($i -lt $Text.Length -and $Text[$i] -ne '"') {
