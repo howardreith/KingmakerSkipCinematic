@@ -13,13 +13,19 @@ function Open-ValidatedProductZip {
         [string] $WorkRoot = [IO.Path]::GetTempPath(),
         [string] $ValidatorPath = $KmcsProductZipValidator
     )
+    # The caller's path is resolved with PowerShell's literal file-system semantics (relative to the PowerShell location,
+    # not the process working directory, which Windows PowerShell does not keep in step) before .NET sees it.
+    $resolved = @(Resolve-Path -LiteralPath $ProductZip -ErrorAction Stop)
+    if ($resolved.Count -ne 1 -or $resolved[0].Provider.Name -ne 'FileSystem') { throw "The product ZIP must name one file-system file: $ProductZip" }
+    $sourcePath = $resolved[0].ProviderPath
+    if (-not [IO.File]::Exists($sourcePath)) { throw "The product ZIP is not a file: $sourcePath" }
     $folder = Join-Path $WorkRoot ('kmcs-validated-product-' + [Guid]::NewGuid().ToString('N'))
     $stream = $null
     $handedOff = $false
     try {
         [void][IO.Directory]::CreateDirectory($folder)
         $copy = Join-Path $folder 'product.zip'
-        [IO.File]::Copy($ProductZip, $copy)
+        [IO.File]::Copy($sourcePath, $copy)
         $stream = [IO.FileStream]::new($copy, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
         if (-not (Test-Path -LiteralPath $ValidatorPath -PathType Leaf)) { throw "The package validator was not found: $ValidatorPath" }
         $previous = $ErrorActionPreference
@@ -36,7 +42,7 @@ function Open-ValidatedProductZip {
         $stream.Position = 0
         $hasher = [Security.Cryptography.SHA256]::Create()
         try { $sha256 = ([BitConverter]::ToString($hasher.ComputeHash($stream))).Replace('-', '').ToLowerInvariant() } finally { $hasher.Dispose() }
-        $validated = [pscustomobject]@{ Folder = $folder; Path = $copy; Stream = $stream; Sha256 = $sha256 }
+        $validated = [pscustomobject]@{ Folder = $folder; Path = $copy; Stream = $stream; Sha256 = $sha256; SourcePath = $sourcePath }
         $handedOff = $true
         return $validated
     }

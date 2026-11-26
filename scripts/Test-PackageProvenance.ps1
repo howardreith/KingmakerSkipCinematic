@@ -22,6 +22,7 @@ function Invoke-Script([string] $Path, [string[]] $Arguments = @()) {
     finally { $ErrorActionPreference = $previous }
     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = ($output -replace '\s+', ' ') }
 }
+function Get-BytesSha256Local([byte[]] $Bytes) { $h = [Security.Cryptography.SHA256]::Create(); try { ([BitConverter]::ToString($h.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant() } finally { $h.Dispose() } }
 function Get-Reason([string] $Text) { $m = [regex]::Match($Text, '(?i)(provenance check failed|does not match|refus|changed since)[^.]{0,200}'); if ($m.Success) { $m.Value } else { $Text.Substring([Math]::Max(0, $Text.Length - 200)) } }
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('kmcs-package-provenance-' + [guid]::NewGuid().ToString('N'))
 $clone = Join-Path $temp 'checkout with space'
@@ -39,6 +40,13 @@ try {
 
     $b = Invoke-Script $build; $p = Invoke-Script $package
     Add-Case 'GenuineBuildAndPackageWithoutOverride' ($b.ExitCode -eq 0 -and $p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "build exit $($b.ExitCode); package exit $($p.ExitCode)"
+    # The clean production package and its manifest, kept for the runner preflight cases at the end.
+    $productionVersion = [string](Get-Content -LiteralPath (Join-Path $clone 'Info.json') -Raw | ConvertFrom-Json).Version
+    $productionName = "KingmakerCutsceneSkip-$productionVersion.zip"
+    $production = Join-Path $temp 'production package'; New-Item -ItemType Directory -Path $production -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $clone "artifacts\package\$productionName") -Destination $production
+    Copy-Item -LiteralPath (Join-Path $clone "artifacts\package\KingmakerCutsceneSkip-$productionVersion.manifest.json") -Destination $production
+    $productionManifest = Get-Content -LiteralPath (Join-Path $production "KingmakerCutsceneSkip-$productionVersion.manifest.json") -Raw | ConvertFrom-Json
     $frozenDll = Get-Sha256 $dll
 
     # A committed change to the build helper (same product sources): the old receipt no longer qualifies.
@@ -224,6 +232,82 @@ try {
     Add-Case 'DirectRebuildRefusesADeclaredVersionDisagreeingWithThePinnedBytes' ($d.ExitCode -ne 0 -and $d.Output -match 'disagrees with its declared pin 0Harmony12, Version=1\.2\.0\.2' -and $d.Output -notmatch 'KingmakerCutsceneSkip -> ') ([regex]::Match($d.Output, 'is 0Harmony12[^\n]*').Value)
     $d = & $direct 'Rebuild'
     Add-Case 'DirectRebuildPassesAgainAfterRestoringTheCache' ($d.ExitCode -eq 0 -and $d.Output -match 'Loader compiler input: ') "exit $($d.ExitCode)"
+
+    # Runner product-ZIP preflight (scripts\runtime\ProductZip.ps1 of the commit under test) with the clean production
+    # package. R8-F1/R10-F1: a relative -ProductZip is resolved against the PowerShell location; the process working
+    # directory holds a different ZIP of the same name, and the caller-selected production ZIP is the one admitted and
+    # extracted (identities compared with the production manifest).
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $selected = Join-Path $temp 'selected location'; New-Item -ItemType Directory -Path $selected -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $production $productionName) -Destination $selected
+    $decoyDir = Join-Path $temp 'process cwd'; New-Item -ItemType Directory -Path $decoyDir -Force | Out-Null
+    $decoy = Join-Path $decoyDir $productionName
+    $decoyArchive = [IO.Compression.ZipFile]::Open($decoy, [IO.Compression.ZipArchiveMode]::Create)
+    try { $entry = $decoyArchive.CreateEntry('KingmakerCutsceneSkip/decoy.txt'); $writer = [IO.StreamWriter]::new($entry.Open()); $writer.Write('not the selected package'); $writer.Dispose() } finally { $decoyArchive.Dispose() }
+    $preflightWork = Join-Path $temp 'preflight work'; New-Item -ItemType Directory -Path $preflightWork -Force | Out-Null
+    $preflightMods = Join-Path $temp 'preflight mods'; New-Item -ItemType Directory -Path $preflightMods -Force | Out-Null
+    $probe = Join-Path $temp 'relative-preflight.ps1'
+    [IO.File]::WriteAllText($probe, @'
+param([string] $ProductZipScript, [string] $Selected, [string] $ProcessDirectory, [string] $Name, [string] $WorkRoot, [string] $Mods)
+$ErrorActionPreference = 'Stop'
+. $ProductZipScript
+[Environment]::CurrentDirectory = $ProcessDirectory
+Set-Location -LiteralPath $Selected
+$held = Open-ValidatedProductZip -ProductZip (Join-Path '.' $Name) -WorkRoot $WorkRoot 6>$null
+try {
+    Expand-ValidatedProductZip $held $Mods
+    $dll = Join-Path $Mods 'KingmakerCutsceneSkip\KingmakerCutsceneSkip.dll'
+    'PROBE ' + ([ordered]@{ processDirectory = [Environment]::CurrentDirectory; source = $held.SourcePath; admitted = $held.Sha256; dll = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant() } | ConvertTo-Json -Compress)
+}
+finally { Close-ValidatedProductZip $held }
+'@)
+    $r = Invoke-Script $probe @('-ProductZipScript', (Join-Path $clone 'scripts\runtime\ProductZip.ps1'), '-Selected', $selected, '-ProcessDirectory', $decoyDir, '-Name', $productionName, '-WorkRoot', $preflightWork, '-Mods', $preflightMods)
+    $probeResult = $null; $m = [regex]::Match($r.Output, 'PROBE (\{[^}]*\})'); if ($m.Success) { $probeResult = $m.Groups[1].Value | ConvertFrom-Json }
+    Add-Case 'RunnerPreflightAdmitsTheCallerSelectedProductionZipForARelativePath' ($r.ExitCode -eq 0 -and $null -ne $probeResult -and
+        [string]$probeResult.processDirectory -eq $decoyDir -and [string]$probeResult.source -eq (Join-Path $selected $productionName) -and
+        [string]$probeResult.admitted -ceq [string]$productionManifest.zip_sha256 -and [string]$probeResult.dll -ceq [string]$productionManifest.dll_sha256 -and
+        (Get-Sha256 $decoy) -cne [string]$productionManifest.zip_sha256 -and @(Get-ChildItem -LiteralPath $preflightWork -Force).Count -eq 0) "exit $($r.ExitCode); $($m.Value)"
+
+    # R9-F3: the real runner (this checkout's Invoke-NativeRun.ps1 and ProductZip.ps1) validates and takes the production
+    # ZIP, then a later setup step fails before any lock. Fixture overrides appended to this disposable checkout's
+    # RuntimeLab.Common.ps1 (restored afterwards) replace the lab and game locations with fixture folders, fail the
+    # runtime preflight, and make the run lock throw, so no lab, game or lock is reachable; the temporary directory of the
+    # runner process is a fixture folder, so every private copy it owns is observable.
+    $fixtureRoot = Join-Path $temp 'runner fixture'; $runnerTemp = Join-Path $fixtureRoot 'tmp'
+    New-Item -ItemType Directory -Path $runnerTemp, (Join-Path $fixtureRoot 'game\Mods') -Force | Out-Null
+    $labCommon = Join-Path $clone 'scripts\runtime\RuntimeLab.Common.ps1'; $labCommonBytes = [IO.File]::ReadAllBytes($labCommon)
+    $harnessDummy = Join-Path $clone 'artifacts\bin\Release\RuntimeHarness\KingmakerCutsceneSkip.RuntimeHarness.dll'
+    $previousEnvironment = @{}; foreach ($n in @('TEMP', 'TMP', 'KMCS_FIXTURE_ROOT')) { $previousEnvironment[$n] = [Environment]::GetEnvironmentVariable($n, 'Process') }
+    try {
+        [IO.File]::AppendAllText($labCommon, @'
+
+# FIXTURE OVERRIDES (Test-PackageProvenance, R9-F3): fixture folders only; the run lock is unreachable.
+function Get-LabPaths { $f = $env:KMCS_FIXTURE_ROOT; [pscustomobject]@{ Root = $f; State = $f; Lock = (Join-Path $f 'runtime.lock'); Journal = (Join-Path $f 'active-run.json'); Evidence = (Join-Path $f 'evidence'); Backups = (Join-Path $f 'backups'); Profiles = (Join-Path $f 'profiles'); Fixtures = (Join-Path $f 'fixtures'); OwnerData = (Join-Path $f 'owner'); OwnerSaves = (Join-Path $f 'owner\Saved Games') } }
+function Get-KingmakerConfiguration { $g = Join-Path $env:KMCS_FIXTURE_ROOT 'game'; [pscustomobject]@{ InstallDir = $g; ModsDir = (Join-Path $g 'Mods') } }
+function Assert-RuntimePreflight($lab) {
+    $held = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'kmcs-validated-product-*' | ForEach-Object { $_.Name + '|' + (Test-Path -LiteralPath (Join-Path $_.FullName 'product.zip')) })
+    [IO.File]::WriteAllText((Join-Path $env:KMCS_FIXTURE_ROOT 'held-at-failure.txt'), ($held -join ';'))
+    throw 'FIXTURE: setup failure after validation and handoff'
+}
+function Enter-RuntimeLock($lab, [string] $runId) { [IO.File]::WriteAllText((Join-Path $env:KMCS_FIXTURE_ROOT 'lock-reached.txt'), $runId); throw 'FIXTURE: the run lock is unreachable' }
+'@)
+        New-Item -ItemType Directory -Path (Split-Path -Parent $harnessDummy) -Force | Out-Null; [IO.File]::WriteAllText($harnessDummy, 'fixture')
+        foreach ($n in @('TEMP', 'TMP')) { [Environment]::SetEnvironmentVariable($n, $runnerTemp, 'Process') }
+        [Environment]::SetEnvironmentVariable('KMCS_FIXTURE_ROOT', $fixtureRoot, 'Process')
+        $r = Invoke-Script (Join-Path $clone 'scripts\runtime\Invoke-NativeRun.ps1') @('-Scenario', (Join-Path $clone 'tests\native\scenarios\chain-lifecycle.json'), '-ProductZip', (Join-Path $production $productionName))
+    }
+    finally {
+        foreach ($n in $previousEnvironment.Keys) { [Environment]::SetEnvironmentVariable($n, $previousEnvironment[$n], 'Process') }
+        [IO.File]::WriteAllBytes($labCommon, $labCommonBytes)
+        Remove-Item -LiteralPath (Split-Path -Parent $harnessDummy) -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $heldAtFailure = [string](Get-Content -LiteralPath (Join-Path $fixtureRoot 'held-at-failure.txt') -Raw -ErrorAction SilentlyContinue)
+    $leftAfter = @(Get-ChildItem -LiteralPath $runnerTemp -Directory -Filter 'kmcs-validated-product-*' -ErrorAction SilentlyContinue)
+    Add-Case 'RunnerSetupFailureAfterValidationAndHandoffRemovesItsPrivateCopy' ($r.ExitCode -ne 0 -and $r.Output -match 'Package validation passed' -and
+        $r.Output -match 'FIXTURE: setup failure after validation and handoff' -and $heldAtFailure -match '^kmcs-validated-product-[0-9a-f]{32}\|True$' -and
+        $leftAfter.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $fixtureRoot 'lock-reached.txt')) -and
+        @(Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'game\Mods') -Force).Count -eq 0 -and
+        (Get-Sha256 $labCommon) -eq (Get-BytesSha256Local $labCommonBytes)) "exit $($r.ExitCode); held at failure: $heldAtFailure; left after: $($leftAfter.Count)"
 
     $failedCases = @($cases | Where-Object { -not $_.passed })
     $summary = [ordered]@{ schema = 'ksc.package-provenance-tests.v1'; commit = $commit; frozen_dll_sha256 = $frozenDll; passed = $cases.Count - $failedCases.Count; total = $cases.Count; cases = @($cases) }

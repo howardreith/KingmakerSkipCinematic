@@ -56,7 +56,13 @@ by rename.
   preflight's tests call it directly in a private fixture folder (refusal with the validator's reference diagnostic, a
   genuine ZIP extracted from the held copy, write/rename/delete refused while held, no copy left after a setup failure
   or after close) and check statically that the runner opens it before the lock and extracts only the held copy; they
-  never start the runner. Round 8 removed
+  never start the runner. Round 11: a relative `-ProductZip` is resolved with PowerShell's literal file-system
+  semantics (`Resolve-Path -LiteralPath`, against the PowerShell location) before .NET copies it. The package-provenance
+  suite passes the clean production package it builds through the real preflight with a relative path while the process
+  working directory holds a different ZIP of the same name (the admitted ZIP and extracted DLL match the production
+  manifest), and runs the real runner in its disposable checkout with fixture overrides (fixture lab and game folders, a
+  failing runtime preflight, an unreachable run lock): after validation and handoff the later setup failure leaves no
+  private copy in the runner's own temporary folder and nothing in the fixture Mods folder. Round 8 removed
   this change's other runner additions (`scripts/runtime/NativeProduct.ps1`, run-lock ownership, journal handoff and
   recovery) with their tests: native runs are outside this mission's scope and none was made, so no claim about the
   runner's staging or recovery is made here.
