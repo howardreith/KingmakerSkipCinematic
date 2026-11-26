@@ -1,0 +1,943 @@
+{
+ "schema": "ksc.test-results.v2",
+ "recorded_at_utc": "2026-11-24T15:57:43Z",
+ "command": "scripts/Test.ps1 (Release): unit runner, Test-Provenance.ps1, Test-PackageProvenance.ps1",
+ "commit": "fd1ac03",
+ "note": "Later commits change only documentation and evidence.",
+ "results": [
+  "RESULT total=55 passed=55 failed=0",
+  "RESULT provenance total=110 failed=0",
+  "RESULT package-provenance total=31 failed=0"
+ ],
+ "unit_cases": [
+  {
+   "name": "CutsceneSkipControllerTests.AbortForDisableReleasesEverything",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.AccelerationBeginsOnlyWhenScreenIsFullyBlack",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.BoundaryDuringFadeOutReleasesEverything",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.CancelOutsideSkipIsNotConsumed",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.CancelRevealsWithoutTouchingTheScene",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ContinueAdvancingIsTrueUntilABoundaryThenEndsTheSkip",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ContinueAdvancingProbeExceptionEndsWithError",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ExceptionDuringTickRevealsAndLogs",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.FadeTimeoutRevealsWithoutEverAccelerating",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ImmediateNotificationEndsWithinTheSameTick",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.IneligibleRequestIsDeclinedWithoutSideEffects",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.InteractionBoundaryReleasesEverything",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.LoadResetDuringSkipIsNotDoubleReleased",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.MissingFadeDeclinesInsteadOfSkippingVisibly",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.MutingDisabledLeavesAudioAlone",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.NonBoundaryNotificationIsIgnored",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.RevealCompletesThenGuardsInputBriefly",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.RevealTimeoutReturnsToIdle",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.SecondStartWhileActiveIsRejected",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.ShutdownReleasesEverythingAndReturnsToIdle",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.StalledProgressRevealsNormalPlayback",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.StartAcquiresFadeAndAudioButNotTimeScale",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.StartedOperationsCountsOnlyAcceptedStarts",
+   "passed": true
+  },
+  {
+   "name": "CutsceneSkipControllerTests.TotalWatchdogRevealsEvenWithProgress",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.AcceleratedFrameMatchesNormalFramesWhenCutsceneTicksBeforeMovement",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.AcceleratedFrameMatchesNormalFramesWhenMovementTicksBeforeCutscene",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.PerControllerBatchingWouldChangeTheBranchResult",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.StopRequestEndsTheFrameAfterACompleteTick",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.SubstepCountIsBoundedAndSmallFramesAreNotSplit",
+   "passed": true
+  },
+  {
+   "name": "FrameSubstepSchedulerTests.TimeAdvancesInEqualStepsAndOncePerFrameControllersTickOnce",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.GapBetweenLoadingProcessesGivesNoVerdict",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.LoadThatNeverBecomesPlayableFails",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.LoadingThatLeavesTheOldStateFails",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.MarkerSurvivingTheLoadFails",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.RealLoadCompletesAfterStateIsReplacedAndMarkerUndone",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.RejectedRequestIsNeverComplete",
+   "passed": true
+  },
+  {
+   "name": "LoadObserverTests.WithoutAnExpectedValueTheReplacedStateIsEnough",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.AudioRestoreReappliesLivePlayerSetting",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.FadeClaimIsVoidedByGameReset",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.FadeReleaseIsIdempotent",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.ProgressWatchdogDistinguishesStallFromProgress",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleIgnoresAReplacedController",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleLeavesAnotherOwnersChange",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleNeverSlowsAFasterPriorScale",
+   "passed": true
+  },
+  {
+   "name": "OverrideOwnershipTests.TimeScaleRestoresCapturedPriorValue",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.ClaimCoversTheReleaseFrameThenEnds",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.DisabledGateClaimsNothing",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.EnterInCinematicStartsOneSkipAndIsHidden",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.EnterOutsideCinematicReachesTheGame",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.EscapeCancelsOnlyDuringASkip",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.HeldEnterDoesNotStartAnotherOperation",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.KeypadEnterAlsoStartsASkip",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.PollingTwiceInOneFrameActsOnce",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.PressRightAfterRevealIsSwallowedThenNormal",
+   "passed": true
+  },
+  {
+   "name": "SkipInputGateTests.RepeatedPressesDuringSkipAreSwallowed",
+   "passed": true
+  }
+ ],
+ "provenance_cases": [
+  {
+   "name": "Provenance.MatchingReceiptHasNoProblems",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ChangedHashIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ChangedSourceIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.MissingIdentityIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.UnpinnedIdentityIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReceiptWithoutReferencesIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ManagerVersionMustEqualThePinnedLoader",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecordedAssemblyVersionContradictingThePinIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecordedPinDigestBooleanIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecordedPinDigestEmptyArrayIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecordedPinDigestTrailingLineFeedIsAProblem",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PinManifestIsAProductInput",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.EffectivePinsComeFromTheManifest",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.CommittedManifestDeclaresBothLoaderReferences",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.CommittedManifestAgreesWithInfoJson",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackageWithPinnedReferencesIsAccepted",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedDllCompiledAgainstNewerStubLoaderIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.SameNameSameVersionDifferentBindingIdentityIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedDllWithHarmony2ReferenceIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.AdditionalUmmFamilyReferenceIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedDllWithAnotherAssemblyNameIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedDllWithConflictingFileVersionIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedWrongAssemblyTargetIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedWrongEntryMethodIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackageCarryingALoaderAssemblyIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManagerVersionAbovePinIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.AdditionalCaseVariantLoaderReference0_31_1_0IsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareDllWithCaseVariantLoaderReference0_31_1_0IsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.AdditionalCaseVariantLoaderReference0_33_0_0IsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareDllWithCaseVariantLoaderReference0_33_0_0IsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.GenuinePackageAcceptedWithoutACache",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.GenuinePackageAcceptedWithTheCache",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DeclaredPinVersionDisagreeingWithTheCachedAssemblyIsRefused",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.WithoutACacheTheDllIsCheckedAgainstTheDeclaredPin",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedEntryMethodWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManagerVersionWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestEntryMethodWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestManagerVersionWithASoftHyphenIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManifestWithLowercaseManagerVersionMemberIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestWithLowercaseEntryMethodMemberIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManifestDeclaringManagerVersionTwiceIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestDeclaringEntryMethodTwiceIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PackagedManifestWithDeclaredMemberNamesIsAccepted",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.GenuineBarePairIsAccepted",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BuiltDllWithPinnedReferencesIsAccepted",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BuiltDllCompiledAgainstNewerStubLoaderIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportPathEqualToPackageIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportPathHardLinkToPackageIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportDigestAndMetadataComeFromOneSnapshot",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportPathEqualToSuppliedInfoJsonIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportPathHardLinkToSuppliedInfoJsonIsRejected",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DistinctReportForTheBarePairIsWritten",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportBelowAFreshSubdirectoryIsWritten",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.InputReplacedInPlaceDuringValidationReportsOnlyTheSnapshot",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.InputReplacedByRenameDuringValidationReportsOnlyTheSnapshot",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportAliasingTheInputAtPublicationIsRefused",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReportAliasingTheReplacedCurrentInputIsRefused",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductWithZipIsAComparisonOnly",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductWithoutZipNeedsNoProduct",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestWithMismatchedVersionIsRefused",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestWithMismatchedManagerVersionIsRefused",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareManifestWithMismatchedIdIsRefused",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DefaultCheckoutManifestWithChangedIdIsRefusedBeforeLocking",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DefaultCheckoutManifestWithChangedAssemblyNameIsRefusedBeforeLocking",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DefaultCheckoutManifestWithChangedEntryMethodIsRefusedBeforeLocking",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DefaultCheckoutManifestGenuinePairStagesTheValidatedManifest",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ManifestChangedAfterPreparationDoesNotAlterTheStagedManifest",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.BareDllRouteStagesTheValidatedBytesAfterTheBuildOutputChanged",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ZipReplacedAfterValidationWithChangedManifestIsRefusedWithNothingStaged",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ZipReplacedAfterValidationWithAdditionalEntryIsRefusedWithNothingStaged",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.GenuineZipStagesExactlyTheValidatedEntries",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PreparationFailureRemovesThePrivateCopy",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PostLockSetupFailureReleasesOwnLockAndKeepsForeignLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RestoredRunReleasesOwnLockDespiteSummaryAndCleanupFailures",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.PrivateCopyCleanupFailureIsAFailedOutcomeInTheSavedSummary",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.IncompleteRestorationKeepsLockAndJournal",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.LockReleaseFailureIsAFailedSavedOutcomeWithARecoveryJournal",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseRecoveryRefusesAnotherRunsLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseRecoveryClearsOnlyThatRunsLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.OrdinaryRecoveryWithTheLockHeldChangesNothingAndStaysRetryable",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.OrdinaryRecoveryRetryAfterTheHandleClosesClearsOnlyThatTransaction",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.OrdinaryJournalWithAnotherRunsLockLeavesStagedFilesUntouched",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseJournalWithAForeignLockPathPreservesBothLocks",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ReleaseJournalWithAnEmptyRunIdPreservesBothLocks",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.LockReplacedBeforeTheExclusiveOpenIsKeptForItsOwner",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.LockReplacementAfterTheOwnershipCheckIsRefusedAndOnlyTheVerifiedLockIsRemoved",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.FailedJournalPublicationLeavesTheCompleteJournalAndLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecoveryAfterFailedPublicationClearsTheOwnedTransaction",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.JournalRetirementFailureIsAFailedSavedOutcomeWithTheLockReleased",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecoveryRetiresTheReleaseJournalAfterTheHandleCloses",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DelayedFinalizerOfAnotherRunLeavesTheSuccessorUntouched",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.DelayedRestorationOfAnotherRunCannotHoldTheSuccessorsLock",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecoveryWhileTheOwningRunIsActiveChangesNothing",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecoveryAfterTheOwningRunEndedClearsItsTransaction",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ClaimedProductDestinationIsRefusedAndTheSentinelKept",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.RecoveryKeepsAFolderTheRunDidNotCreate",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlExcludesInheritedCutsceneSkipWithComparisonZip",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlExcludesInheritedCutsceneSkipWithoutZip",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlWithAnInstalledCutsceneSkipIsRefusedAndTheSourceIsIntact",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlExcludesTheShippingIdUnderAnotherFolderNameWithComparisonZip",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlExcludesTheShippingIdUnderAnotherFolderNameWithoutZip",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlRefusesTheShippingIdUnderAnotherFolderNameAndKeepsTheSource",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ProductRunZipLoadsOnlyTheValidatedCandidate",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ProductRunBareDllLoadsOnlyTheValidatedCandidate",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.ProductRunRefusesALiveProfileWithAnOlderShippingIdAndKeepsTheSource",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlFindsTheShippingIdInFolderKeys",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlFindsTheShippingIdInFolderHiddenSkip",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.NoProductControlWithOnlyAnUnrelatedModPasses",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.UnselectedMalformedManifestDoesNotBlockAnIsolatedSelection",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "Provenance.SelectedMalformedManifestIsRefused",
+   "passed": true,
+   "detail": ""
+  }
+ ],
+ "package_provenance_cases": [
+  {
+   "name": "PackageProvenance.GenuineBuildAndPackageWithoutOverride",
+   "passed": true,
+   "detail": "build exit 0; package exit 0"
+  },
+  {
+   "name": "PackageProvenance.BuildHelperChangeInvalidatesThePriorReceipt",
+   "passed": true,
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit fd1ac039f6afea8fff4b3109c9ae687c34107150: scripts/Build"
+  },
+  {
+   "name": "PackageProvenance.FreshBuildAfterHelperChangePasses",
+   "passed": true,
+   "detail": "build exit 0; package exit 0; DLL unchanged: True"
+  },
+  {
+   "name": "PackageProvenance.DocumentationOnlyChangeReusesTheFrozenDll",
+   "passed": true,
+   "detail": "build b867c83, package 27bd044, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
+  },
+  {
+   "name": "PackageProvenance.DirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
+   "passed": true,
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit b867c830dfd2e322211c578eec7f8f1f12e3b669: Directory"
+  },
+  {
+   "name": "PackageProvenance.FreshBuildAfterDirectoryBuildTargetsChangePasses",
+   "passed": true,
+   "detail": "build exit 0; package exit 0"
+  },
+  {
+   "name": "PackageProvenance.SrcDirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
+   "passed": true,
+   "detail": "provenance check failed (rebuild from the current commit): product inputs changed since build commit 5ff2c6515f7564ef773975a61028759aae5ab8cf: src/Directory"
+  },
+  {
+   "name": "PackageProvenance.FreshBuildAfterSrcDirectoryBuildTargetsChangePasses",
+   "passed": true,
+   "detail": "build exit 0; package exit 0"
+  },
+  {
+   "name": "PackageProvenance.DocumentationOnlyChangeAfterTheSrcInputStillReusesTheFrozenDll",
+   "passed": true,
+   "detail": "build d5f379e, package 52b55f6"
+  },
+  {
+   "name": "PackageProvenance.CorruptCacheEntryRefusedBeforeCompilation",
+   "passed": true,
+   "detail": "does not match its pin; remove it explicitly before retrying"
+  },
+  {
+   "name": "PackageProvenance.DllDifferingFromItsReceiptRefusedAtPackaging",
+   "passed": true,
+   "detail": "does not match the build receipt (a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba); rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.DifferentBaselineCompatibleDllBuilt",
+   "passed": true,
+   "detail": "build exit 0; other DLL c632b236013598e1fb72e73f206b3dbf3c292b8d4ed892acd81712b1376dde44"
+  },
+  {
+   "name": "PackageProvenance.ReceiptBooleanDllDigestWithADifferentDllRefused",
+   "passed": true,
+   "detail": "The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.ReceiptEmptyArrayDllDigestWithADifferentDllRefused",
+   "passed": true,
+   "detail": "The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.GenuineReceiptAndDllPackageAgain",
+   "passed": true,
+   "detail": "package exit 0"
+  },
+  {
+   "name": "PackageProvenance.AlternateBuildReceiptRecordsItsDirtyInputs",
+   "passed": true,
+   "detail": "dirty True; changes  M src/KingmakerCutsceneSkip/Core/AudioMuteOverride.cs; DLL c632b236013598e1fb72e73f206b3dbf3c292b8d4ed892acd81712b1376dde44"
+  },
+  {
+   "name": "PackageProvenance.AlternateDirtyReceiptRefused",
+   "passed": true,
+   "detail": "provenance check failed (rebuild from the current commit): the DLL was built with uncommitted product changes At <temp>\\kmcs-package-provenance-7a870f03fbc14f51a9eff664703a439c\\checkout with space"
+  },
+  {
+   "name": "PackageProvenance.AlternateNullDirtyFlagRefused",
+   "passed": true,
+   "detail": "The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.AlternateEmptyArrayDirtyFlagRefused",
+   "passed": true,
+   "detail": "The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.AlternateStringFalseDirtyFlagRefused",
+   "passed": true,
+   "detail": "The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.AlternateCleanClaimListingChangesRefused",
+   "passed": true,
+   "detail": "The build receipt claims clean product inputs but lists product changes; rebuild with scripts\\Build"
+  },
+  {
+   "name": "PackageProvenance.GenuineCleanReceiptPackagesAfterTheDirtyCases",
+   "passed": true,
+   "detail": "package exit 0"
+  },
+  {
+   "name": "PackageProvenance.LowercaseReleaseConfigurationPackagesTheGenuineBuild",
+   "passed": true,
+   "detail": "package exit 0"
+  },
+  {
+   "name": "PackageProvenance.DebugReceiptForAReleasePackageRefused",
+   "passed": true,
+   "detail": "Build receipt is for Debug, not Release"
+  },
+  {
+   "name": "PackageProvenance.ReceiptWithContradictoryLoaderAssemblyVersionRefused",
+   "passed": true,
+   "detail": "UnityModManager.dll was recorded as assembly version 0.33.0.0, but the pin declares 0.31.1.0 At <temp>\\kmcs-package-provenance-7a870f03fbc14f51a9eff664703a439c\\checkout with space\\scripts\\Package.ps1:66 char:29 + ... lowDirty) { throw ('Package provenance check failed (rebuild from the ... + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (Package provena...clares 0.31.1.0:String) [], RuntimeException + FullyQualifiedErrorId : Package provenance check failed (rebuild from the current commit): UnityModManager.dll w as recorded as assembly version 0.33.0.0, but the pin declares 0.31.1.0 "
+  },
+  {
+   "name": "PackageProvenance.GenuineReceiptPackagesAfterTheVersionCase",
+   "passed": true,
+   "detail": "package exit 0"
+  },
+  {
+   "name": "PackageProvenance.DirectProductionRebuildVerifiesItsCompilerInputs",
+   "passed": true,
+   "detail": "artifacts\\references\\UnityModManager.dll 2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4; artifacts\\references\\0Harmony12.dll aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+  },
+  {
+   "name": "PackageProvenance.DirectRebuildRefusesASubstitutedCacheFile",
+   "passed": true,
+   "detail": "does not match its pin"
+  },
+  {
+   "name": "PackageProvenance.ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused",
+   "passed": true,
+   "detail": "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-7a870f03fbc14f51a9eff664703a439c\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-7a870f03fbc14f51a9eff664703a439c\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-7a870f03fbc14f51a9eff664703a439c\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+  },
+  {
+   "name": "PackageProvenance.DirectRebuildRefusesADeclaredVersionDisagreeingWithThePinnedBytes",
+   "passed": true,
+   "detail": "is 0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1.2.0.2, Culture=neutral, PublicKeyToken=null. [<temp>\\kmcs-package-provenance-7a870f03fbc14f51a9eff664703a439c\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+  },
+  {
+   "name": "PackageProvenance.DirectRebuildPassesAgainAfterRestoringTheCache",
+   "passed": true,
+   "detail": "exit 0"
+  }
+ ]
+}

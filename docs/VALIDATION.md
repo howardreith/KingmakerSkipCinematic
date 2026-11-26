@@ -1,9 +1,123 @@
 # Validation record — Mr. Bard's Kingmaker Cutscene Skip
 
+## Package contract: the packaged DLL's actual loader references (2026-11-24)
+
+**Compiler inputs.** Every MSBuild compile of the product, through `scripts/Build.ps1` or directly
+(`dotnet msbuild src/KingmakerCutsceneSkip/KingmakerCutsceneSkip.csproj`), runs `scripts/Assert-PinnedReferences.ps1`
+twice: before references resolve, the cache files must match the hashes parsed from `scripts/reference-pins.json`; and in
+`LoaderReferences.Final.targets`, imported after `Microsoft.CSharp.targets` (so after `Directory.Build.targets` and any
+other repository-level hook) as the last step before `CoreCompile`, the UnityModManager and 0Harmony12 entries Csc
+receives must be exactly the two pinned files, re-hashed against the parsed pins. In both checks the CLR identity read
+from the same bytes as the digest must be the identity the pin declares (name, version, neutral culture, no token), so a
+pin whose digest matches but whose declared version does not is refused. Each compile logs both compiler-input paths and
+hashes. These two files, the targets, everything under `src/` (including any `src/Directory.Build.props` or
+`src/Directory.Build.targets`) and the root `Directory.Build.props` / `Directory.Build.targets` are product inputs for
+the receipt comparison. Digests, CLR identities, entry names and manifest fields are compared with exact ordinal
+equality (PowerShell's `-ceq` follows culture rules, under which an ignorable character such as a soft hyphen makes
+different strings equal).
+
+**Package validation.** `scripts/Validate-Package.ps1` is the standalone check of what will be installed. It reads the
+input once, through one handle, into memory, and takes the digest and every inspection from that snapshot. For a ZIP it
+requires exactly the four package entries (`Info.json`, `KingmakerCutsceneSkip.dll`, `README.md`, `LICENSE` under
+`KingmakerCutsceneSkip/`). The packaged `Info.json` must name the product's fixed load target (`Id`
+`KingmakerCutsceneSkip`, `AssemblyName` `KingmakerCutsceneSkip.dll`, `EntryMethod` `KingmakerCutsceneSkip.Main.Load`,
+defined in `scripts/Common.ps1` independently of any manifest file), this checkout's `Version`, and a `ManagerVersion`
+equal to the pinned floor (0.31.1). Each of these five members must be present under exactly its declared name
+(compared ordinally; PowerShell's member lookup ignores case, so `managerversion` alone is refused), be a string, and be
+declared only once in the JSON as written (the raw text is scanned before conversion, which would keep only the last of
+repeated names). A bare DLL (`-DllPath`) may be given its `Info.json` (`-InfoPath`). It is read once
+through one handle, checked the same way, and protected like the input. The DLL must define `KingmakerCutsceneSkip` with a file version
+belonging to the shipping version. Within the UnityModManager and Harmony families (any case, any suffix), the full
+identities in its AssemblyRef table, compared ordinally, must be exactly the declared pins:
+`UnityModManager, Version=0.31.1.0, Culture=neutral, PublicKeyToken=null` and
+`0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null`. A case variant such as `unitymodmanager` is a
+different, refused reference. The declared pin is authoritative. A cached pinned file whose digest authenticates it must
+also carry the declared identity (digest and identity come from one read), or validation stops. The report is written
+through one handle that is refused if it is the snapshot identity or current file of the input or of the supplied
+`Info.json`. This also covers a report path that becomes a hard link to the input at publication, and an input replaced
+by rename.
+
+- `scripts/Package.ps1` validates the ZIP it builds (a refused ZIP is removed) and records the validated ZIP digest and
+  references in its manifest. Documentation-only commits still reuse the frozen DLL. Build-receipt fields are typed
+  before any comparison: `status` and `configuration` are strings (the configuration compared without case, since
+  `release` and `Release` select the same output), `commit` is a 40-character hexadecimal string, and `dll_sha256` and
+  every recorded pinned-reference digest are strings of 64 lowercase hexadecimal characters. The dirty flag
+  (`product_inputs_dirty`, or `dirty` in an older receipt) must be a JSON boolean, and a clean claim that lists product
+  changes is refused. Each recorded pinned reference's `assembly_version` must equal the pin's declared version
+  (normalized to four parts). A boolean, an array or a padded digest is refused, never compared.
+- The reference cache refuses an existing entry that does not match its pin (remove it explicitly to re-fetch); only an
+  absent entry is downloaded.
+- Native runner: `scripts/runtime/RuntimeLab.Common.ps1` is unchanged from `main`, and `scripts/runtime/Invoke-NativeRun.ps1`
+  differs from `main` only by a narrow preflight (rounds 9-10, `scripts/runtime/ProductZip.ps1`): a product ZIP that will
+  be installed (`-ProductZip` without `-NoProduct`) is copied into a private folder and held open read-only (no writer,
+  rename or delete while held), validated by the standalone validator before any lock, backup or staging, and extracted
+  through the same handle, so the installed bytes are the validated bytes; one cleanup scope covers the copy from its
+  creation, and the runner's `finally` releases it. A ZIP given with `-NoProduct` stays a comparison archive. The
+  preflight's tests call it directly in a private fixture folder (refusal with the validator's reference diagnostic, a
+  genuine ZIP extracted from the held copy, write/rename/delete refused while held, no copy left after a setup failure
+  or after close) and check statically that the runner opens it before the lock and extracts only the held copy; they
+  never start the runner. Round 11: a relative `-ProductZip` is resolved with PowerShell's literal file-system
+  semantics (`Resolve-Path -LiteralPath`, against the PowerShell location) before .NET copies it. The package-provenance
+  suite passes the clean production package it builds through the real preflight with a relative path while the process
+  working directory holds a different ZIP of the same name (the admitted ZIP and extracted DLL match the production
+  manifest), and runs the real runner in its disposable checkout with fixture overrides (fixture lab and game folders, a
+  failing runtime preflight, an unreachable run lock): after validation and handoff the later setup failure leaves no
+  private copy in the runner's own temporary folder and nothing in the fixture Mods folder. Round 8 removed
+  this change's other runner additions (`scripts/runtime/NativeProduct.ps1`, run-lock ownership, journal handoff and
+  recovery) with their tests: native runs are outside this mission's scope and none was made, so no claim about the
+  runner's staging or recovery is made here.
+- Manifest syntax: a top-level member name that is not a double-quoted JSON string (single-quoted or unquoted, both
+  accepted by Windows PowerShell's decoder) and a single-quoted string anywhere (which could hide a brace from the
+  scanner's depth) are refused, so the duplicate check counts every declaration the decoder accepts. Whichever dirty flag a receipt uses (`product_inputs_dirty`, or `dirty` in an older receipt), a clean claim
+  that lists product changes is refused.
+- The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
+  MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
+- Round 8, `scripts/Test.ps1` at `a7a33bc` (the round-8 code): 55/55 unit, provenance 62/62, package provenance 33/33.
+  Added: a ZIP manifest whose conflicting earlier `ManagerVersion` is single-quoted and a bare manifest whose conflicting
+  earlier `EntryMethod` is unquoted (last declarations genuine) are refused; the alternate build's dirty receipt and DLL
+  in the older format (`dirty` false, no `product_inputs_dirty`, the changed file still listed) are refused, and a
+  genuine clean receipt in the older format packages; bare manifests with a mismatched `Version`, `ManagerVersion` or
+  `Id` are refused by the validator directly. The provenance count is lower than round 7's because the native-runner
+  cases were removed with that machinery.
+- Round-7 record, `scripts/Test.ps1` at `fd1ac03`: 55/55 unit, provenance 110/110, package provenance 31/31. Cases added
+  in rounds 6 and 7 are listed first; the rest are unchanged from earlier rounds. Its native-runner, ZIP-staging and
+  recovery cases were removed in round 8 with that machinery and are not listed here.
+  - Round 7, receipts: the alternate build's own dirty receipt (digest matching its DLL) after the source is restored is
+    refused as recorded and when `product_inputs_dirty` is `null`, `[]` or `"false"`, or `false` while listing the
+    changed file; `-Configuration release` packages the genuine Release build and a Debug receipt for a Release package
+    is refused; a receipt whose UnityModManager `assembly_version` alone is changed is refused; genuine controls package.
+  - Round 7, manifests: `ManagerVersion` declared twice in a ZIP manifest and `EntryMethod` declared twice in a bare
+    manifest (last declaration genuine) are refused.
+  - Receipt digests: in the temporary checkout, a real build of an uncommitted source change (reverted before packaging)
+    gives a different baseline-compatible DLL. Beside it, an otherwise coherent receipt with `dll_sha256` `true` or `[]`
+    is refused without any override; the genuine receipt and DLL then package again. Recorded pin digests that are a
+    boolean, an empty array or followed by a line feed are problems.
+  - Manifest members: `ManagerVersion` spelled `managerversion` in a ZIP manifest and `EntryMethod` spelled `entrymethod`
+    in a bare manifest are refused; a manifest with the declared names passes.
+  - Fixtures are compiled with the .NET Framework compiler against the pinned files or disposable stub loaders of known
+    identity, so no case depends on the installed loader.
+  - Reference cases: newer UMM 0.33.0.0; a 0.31.1.0 with another culture; Harmony 2; an extra UMM-family assembly; an
+    added case-variant `unitymodmanager` reference at 0.31.1.0 and 0.33.0.0 (fixture AssemblyRef name rewritten in
+    place); in a disposable validator root, the genuine package with and without a cache, and a declared version that
+    disagrees with the cached assembly.
+  - Package cases: wrong assembly name, `AssemblyName`, `EntryMethod`, file version, extra loader payload, raised minimum;
+    a soft hyphen in an otherwise correct `EntryMethod` or `ManagerVersion` (ZIP and bare manifest).
+  - Report cases: aliases by spelling and hard link; a report below a fresh subdirectory; the input replaced in place and
+    by rename right after its snapshot (every report field still comes from the snapshot); a report path aliased to the
+    input, or to the replaced current input, at publication (refused, bytes intact). These use a PowerShell line
+    breakpoint in a separate process, so the validator has no test hook.
+  - Package provenance runs the real build and packaging commands in a temporary checkout: genuine package; build-helper
+    change refused, then rebuilt; documentation-only reuse; corrupt cache refused before compilation; a DLL differing
+    from its receipt refused; a committed root or `src/Directory.Build.targets` change refused, then rebuilt, with
+    documentation-only reuse after it. It also runs
+    direct MSBuild builds: a genuine rebuild recording both compiler inputs, a
+    substituted cache file refused, a declared version disagreeing with the pinned bytes refused, and a `Directory.Build.targets` hook at the `CoreCompile` boundary that points
+    UnityModManager elsewhere refused by the final check. It finds the manifest by the checkout's version.
+
 ## Candidate 0.1.2 (UMM compatibility and cinematic safety)
 
-Status: **the listed checks are complete; not yet accepted by the owner.** A `MATCH` below means the compared fields
-matched for the named sequences. It is not a claim about other scenes; see "Not covered".
+Status: **released as v0.1.2** (GitHub release 2026-11-09, ZIP `c1be6ae2…05fb`, the final ZIP below). A `MATCH` below
+means the compared fields matched for the named sequences. It is not a claim about other scenes; see "Not covered".
 
 | Item | Value |
 |---|---|
@@ -249,5 +363,5 @@ run: `scripts\runtime\Invoke-NativeRun.ps1 -RecoverOnly`.
 
 ## Resume point
 
-Candidate 0.1.2 awaits the owner's review and manual checks in the PR. Merge, release, Nexus upload and replies are the
-owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.
+0.1.2 is released. The package-contract check above is a tooling change on a draft PR; merging it and any later release
+or Nexus upload are the owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.

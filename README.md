@@ -86,11 +86,14 @@ Copy-Item GamePath.props.example GamePath.props   # then set KingmakerInstallDir
 powershell -ExecutionPolicy Bypass -File scripts\Build.ps1      # artifacts\bin\Release\KingmakerCutsceneSkip\
 powershell -ExecutionPolicy Bypass -File scripts\Test.ps1       # deterministic unit tests
 powershell -ExecutionPolicy Bypass -File scripts\Package.ps1    # artifacts\package\KingmakerCutsceneSkip-<version>.zip
+powershell -ExecutionPolicy Bypass -File scripts\Validate-Package.ps1 -PackagePath <zip>   # check any ZIP before installing
 ```
 
 Game assemblies are referenced from your installation and never copied into the build output or the package. The
 Unity Mod Manager and Harmony shim references are downloaded by `scripts\Build.ps1` at pinned versions and SHA-256
 hashes and recorded in the build receipt, so a local loader update cannot change what the mod is built against.
+`scripts\Validate-Package.ps1` reads the packaged DLL itself: it must reference exactly the pinned UnityModManager 0.31.1.0
+and 0Harmony12 1.2.0.1, and the package may contain no loader, Harmony or game assembly.
 Native test tooling lives in `tools/` and `scripts/runtime/`; see `docs/VALIDATION.md`.
 
 ## License

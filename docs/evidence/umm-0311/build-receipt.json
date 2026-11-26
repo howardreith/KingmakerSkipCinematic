@@ -1,0 +1,59 @@
+{
+    "status":  "passed",
+    "configuration":  "Release",
+    "commit":  "9f35cb26d58038e0511b15953c4a62de154a7f2d",
+    "dirty":  false,
+    "product_inputs_dirty":  false,
+    "product_input_changes":  [
+
+                              ],
+    "dll":  "<repo>\\artifacts\\bin\\Release\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.dll",
+    "dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
+    "references":  [
+                       {
+                           "role":  "pinned loader reference",
+                           "file":  "UnityModManager.dll",
+                           "assembly_version":  "0.31.1.0",
+                           "sha256":  "2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4",
+                           "source":  "https://api.nuget.org/v3-flatcontainer/unitymodmanager/0.31.1/unitymodmanager.0.31.1.nupkg"
+                       },
+                       {
+                           "role":  "pinned loader reference",
+                           "file":  "0Harmony12.dll",
+                           "assembly_version":  "1.2.0.1",
+                           "sha256":  "aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292",
+                           "source":  "https://raw.githubusercontent.com/newman55/unity-mod-manager/10cfb1cce51914a5114928c5bc6a06d1d2c31fe2/lib/Harmony/1.2/0Harmony12.dll"
+                       },
+                       {
+                           "role":  "local game reference",
+                           "file":  "Assembly-CSharp.dll",
+                           "assembly_version":  "0.0.0.0",
+                           "sha256":  "3b6450ffec440e296e586f71c711b195aed144b28d53e1cbb29406d18fef5afb"
+                       },
+                       {
+                           "role":  "local game reference",
+                           "file":  "Assembly-CSharp-firstpass.dll",
+                           "assembly_version":  "0.0.0.0",
+                           "sha256":  "069a7362ce5e3ccd597206174aec13743c2db5a1bfbc2a42f15a5fbd1ea30d30"
+                       },
+                       {
+                           "role":  "local game reference",
+                           "file":  "UnityEngine.dll",
+                           "assembly_version":  "0.0.0.0",
+                           "sha256":  "50b79c57f46bf4e060bb27461b6d4fac6f078e08b57e776c7a811554c4899fd6"
+                       },
+                       {
+                           "role":  "local game reference",
+                           "file":  "UnityEngine.CoreModule.dll",
+                           "assembly_version":  "0.0.0.0",
+                           "sha256":  "3a76df7f709d465e3273502e08edbffb536b1c2f78c3a132b8668e59fddd2803"
+                       },
+                       {
+                           "role":  "local game reference",
+                           "file":  "UnityEngine.IMGUIModule.dll",
+                           "assembly_version":  "0.0.0.0",
+                           "sha256":  "327b1d34eab0ada754186a03dac40f23de627867124777ec35c6c040b210079a"
+                       }
+                   ],
+    "built_utc":  "2026-11-24T15:57:41.1091390Z"
+}

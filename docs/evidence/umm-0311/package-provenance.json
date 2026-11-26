@@ -1,0 +1,164 @@
+{
+    "schema":  "ksc.package-provenance-tests.v1",
+    "commit":  "fd1ac039f6afea8fff4b3109c9ae687c34107150",
+    "frozen_dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
+    "passed":  31,
+    "total":  31,
+    "cases":  [
+                  {
+                      "name":  "GenuineBuildAndPackageWithoutOverride",
+                      "passed":  true,
+                      "detail":  "build exit 0; package exit 0"
+                  },
+                  {
+                      "name":  "BuildHelperChangeInvalidatesThePriorReceipt",
+                      "passed":  true,
+                      "detail":  "provenance check failed (rebuild from the current commit): product inputs changed since build commit fd1ac039f6afea8fff4b3109c9ae687c34107150: scripts/Build"
+                  },
+                  {
+                      "name":  "FreshBuildAfterHelperChangePasses",
+                      "passed":  true,
+                      "detail":  "build exit 0; package exit 0; DLL unchanged: True"
+                  },
+                  {
+                      "name":  "DocumentationOnlyChangeReusesTheFrozenDll",
+                      "passed":  true,
+                      "detail":  "build 24cf601, package 60f01e9, DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba"
+                  },
+                  {
+                      "name":  "DirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
+                      "passed":  true,
+                      "detail":  "provenance check failed (rebuild from the current commit): product inputs changed since build commit 24cf601b0d62d65a984599e231cb9913b795e256: Directory"
+                  },
+                  {
+                      "name":  "FreshBuildAfterDirectoryBuildTargetsChangePasses",
+                      "passed":  true,
+                      "detail":  "build exit 0; package exit 0"
+                  },
+                  {
+                      "name":  "SrcDirectoryBuildTargetsChangeInvalidatesThePriorReceipt",
+                      "passed":  true,
+                      "detail":  "provenance check failed (rebuild from the current commit): product inputs changed since build commit 3de4f9b31b834b77a64447ea6c61beb531609b2c: src/Directory"
+                  },
+                  {
+                      "name":  "FreshBuildAfterSrcDirectoryBuildTargetsChangePasses",
+                      "passed":  true,
+                      "detail":  "build exit 0; package exit 0"
+                  },
+                  {
+                      "name":  "DocumentationOnlyChangeAfterTheSrcInputStillReusesTheFrozenDll",
+                      "passed":  true,
+                      "detail":  "build c9cd9cd, package b351ccf"
+                  },
+                  {
+                      "name":  "CorruptCacheEntryRefusedBeforeCompilation",
+                      "passed":  true,
+                      "detail":  "does not match its pin; remove it explicitly before retrying"
+                  },
+                  {
+                      "name":  "DllDifferingFromItsReceiptRefusedAtPackaging",
+                      "passed":  true,
+                      "detail":  "does not match the build receipt (a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba); rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "DifferentBaselineCompatibleDllBuilt",
+                      "passed":  true,
+                      "detail":  "build exit 0; other DLL c632b236013598e1fb72e73f206b3dbf3c292b8d4ed892acd81712b1376dde44"
+                  },
+                  {
+                      "name":  "ReceiptBooleanDllDigestWithADifferentDllRefused",
+                      "passed":  true,
+                      "detail":  "The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "ReceiptEmptyArrayDllDigestWithADifferentDllRefused",
+                      "passed":  true,
+                      "detail":  "The build receipt dll_sha256 is not a SHA-256 string; rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "GenuineReceiptAndDllPackageAgain",
+                      "passed":  true,
+                      "detail":  "package exit 0"
+                  },
+                  {
+                      "name":  "AlternateBuildReceiptRecordsItsDirtyInputs",
+                      "passed":  true,
+                      "detail":  "dirty True; changes  M src/KingmakerCutsceneSkip/Core/AudioMuteOverride.cs; DLL c632b236013598e1fb72e73f206b3dbf3c292b8d4ed892acd81712b1376dde44"
+                  },
+                  {
+                      "name":  "AlternateDirtyReceiptRefused",
+                      "passed":  true,
+                      "detail":  "provenance check failed (rebuild from the current commit): the DLL was built with uncommitted product changes At <temp>\\kmcs-package-provenance-9b6dd7ecfecf4963ae05e3c039d776a0\\checkout with space"
+                  },
+                  {
+                      "name":  "AlternateNullDirtyFlagRefused",
+                      "passed":  true,
+                      "detail":  "The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "AlternateEmptyArrayDirtyFlagRefused",
+                      "passed":  true,
+                      "detail":  "The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "AlternateStringFalseDirtyFlagRefused",
+                      "passed":  true,
+                      "detail":  "The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "AlternateCleanClaimListingChangesRefused",
+                      "passed":  true,
+                      "detail":  "The build receipt claims clean product inputs but lists product changes; rebuild with scripts\\Build"
+                  },
+                  {
+                      "name":  "GenuineCleanReceiptPackagesAfterTheDirtyCases",
+                      "passed":  true,
+                      "detail":  "package exit 0"
+                  },
+                  {
+                      "name":  "LowercaseReleaseConfigurationPackagesTheGenuineBuild",
+                      "passed":  true,
+                      "detail":  "package exit 0"
+                  },
+                  {
+                      "name":  "DebugReceiptForAReleasePackageRefused",
+                      "passed":  true,
+                      "detail":  "Build receipt is for Debug, not Release"
+                  },
+                  {
+                      "name":  "ReceiptWithContradictoryLoaderAssemblyVersionRefused",
+                      "passed":  true,
+                      "detail":  "UnityModManager.dll was recorded as assembly version 0.33.0.0, but the pin declares 0.31.1.0 At <temp>\\kmcs-package-provenance-9b6dd7ecfecf4963ae05e3c039d776a0\\checkout with space\\scripts\\Package.ps1:66 char:29 + ... lowDirty) { throw (\u0027Package provenance check failed (rebuild from the ... + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (Package provena...clares 0.31.1.0:String) [], RuntimeException + FullyQualifiedErrorId : Package provenance check failed (rebuild from the current commit): UnityModManager.dll w as recorded as assembly version 0.33.0.0, but the pin declares 0.31.1.0 "
+                  },
+                  {
+                      "name":  "GenuineReceiptPackagesAfterTheVersionCase",
+                      "passed":  true,
+                      "detail":  "package exit 0"
+                  },
+                  {
+                      "name":  "DirectProductionRebuildVerifiesItsCompilerInputs",
+                      "passed":  true,
+                      "detail":  "artifacts\\references\\UnityModManager.dll 2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4; artifacts\\references\\0Harmony12.dll aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+                  },
+                  {
+                      "name":  "DirectRebuildRefusesASubstitutedCacheFile",
+                      "passed":  true,
+                      "detail":  "does not match its pin"
+                  },
+                  {
+                      "name":  "ResolvedReferenceRewrittenAtTheCoreCompileBoundaryIsRefused",
+                      "passed":  true,
+                      "detail":  "Loader compiler references must be the pinned files in <temp>\\kmcs-package-provenance-9b6dd7ecfecf4963ae05e3c039d776a0\\checkout with space\\artifacts\\references\\; resolved: <temp>\\kmcs-package-provenance-9b6dd7ecfecf4963ae05e3c039d776a0\\elsewhere\\UnityModManager.dll [<temp>\\kmcs-package-provenance-9b6dd7ecfecf4963ae05e3c039d776a0\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+                  },
+                  {
+                      "name":  "DirectRebuildRefusesADeclaredVersionDisagreeingWithThePinnedBytes",
+                      "passed":  true,
+                      "detail":  "is 0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null, which disagrees with its declared pin 0Harmony12, Version=1.2.0.2, Culture=neutral, PublicKeyToken=null. [<temp>\\kmcs-package-provenance-9b6dd7ecfecf4963ae05e3c039d776a0\\checkout with space\\src\\KingmakerCutsceneSkip\\KingmakerCutsceneSkip.csproj]"
+                  },
+                  {
+                      "name":  "DirectRebuildPassesAgainAfterRestoringTheCache",
+                      "passed":  true,
+                      "detail":  "exit 0"
+                  }
+              ]
+}

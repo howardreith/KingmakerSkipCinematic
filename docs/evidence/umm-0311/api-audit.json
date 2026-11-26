@@ -1,0 +1,61 @@
+{
+  "schema": "kingmaker.loader-api-audit.v1",
+  "mod": "KingmakerCutsceneSkip.dll",
+  "mod_sha256": "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
+  "mod_mvid": "a494d31e-dfb6-469f-b2a7-787e3094639d",
+  "mod_assembly_references": [
+    "mscorlib 4.0.0.0",
+    "UnityModManager 0.31.1.0",
+    "UnityEngine.CoreModule 0.0.0.0",
+    "Assembly-CSharp 0.0.0.0",
+    "0Harmony12 1.2.0.1",
+    "Assembly-CSharp-firstpass 0.0.0.0",
+    "System.Core 4.0.0.0",
+    "UnityEngine.IMGUIModule 0.0.0.0"
+  ],
+  "type_references": 6,
+  "member_references": 18,
+  "method": "static metadata resolution of TypeRef/MemberRef (name \u002B decoded signature, base-type walk, type forwarders)",
+  "profiles": [
+    {
+      "profile": "0.31.1",
+      "assemblies": [
+        "UnityModManager 0.31.1.0 UnityModManager.dll sha256=2e038ff23ab01d538dfef792096e1f5c04802d1edac3660db20d0d54c167c2c4",
+        "0Harmony 2.3.1.1 0Harmony.dll sha256=5f7ad0df1eb08e81f66d4006d3a9e5cb40fc05e381f36d7bd0513f334f6a251f",
+        "0Harmony12 1.2.0.1 0Harmony12.dll sha256=aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+      ],
+      "resolved": true,
+      "unresolved": []
+    },
+    {
+      "profile": "0.32.4",
+      "assemblies": [
+        "UnityModManager 0.32.4.0 UnityModManager.dll sha256=1387468bc3af41c50fe51859a3bb7af4922891aa8f13a6187e7a348ceaabfd88",
+        "0Harmony 2.3.6.0 0Harmony.dll sha256=df043f05c6e43602fa8e8f38f52a3a2cf962aab7a65a9d85573ea25f01a63e80",
+        "0Harmony12 1.2.0.1 0Harmony12.dll sha256=aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+      ],
+      "resolved": true,
+      "unresolved": []
+    },
+    {
+      "profile": "owner-0.33.0",
+      "assemblies": [
+        "UnityModManager 0.33.0.0 UnityModManager.dll sha256=63e5baf7b1738e4091b5fd17ccb738ecdb4d1dbf246061dfd55dc52835d52691",
+        "0Harmony 2.3.6.0 0Harmony.dll sha256=df043f05c6e43602fa8e8f38f52a3a2cf962aab7a65a9d85573ea25f01a63e80",
+        "0Harmony12 1.2.0.1 0Harmony12.dll sha256=aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+      ],
+      "resolved": true,
+      "unresolved": []
+    },
+    {
+      "profile": "0.33.4",
+      "assemblies": [
+        "UnityModManager 0.33.4.0 UnityModManager.dll sha256=c5ed5617457f597d7befb272f9fe311d7128c647fd427a114c197bea13475239",
+        "0Harmony 2.4.3.0 0Harmony.dll sha256=ddc070b57f695ece6f92c43cf82cf4d863c69685de96a99ebd9d2fa1d8fa7a19",
+        "0Harmony12 1.2.0.1 0Harmony12.dll sha256=aa1cd48317254985d8b700cc74953477d1b40c3022ce9aa4c95ed2b8327e1292"
+      ],
+      "resolved": true,
+      "unresolved": []
+    }
+  ]
+}

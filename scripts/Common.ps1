@@ -3,6 +3,16 @@ $ErrorActionPreference = 'Stop'
 
 $script:RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $script:ProductId = 'KingmakerCutsceneSkip'
+# The load target UMM reads from Info.json. Fixed for this product, independently of any Info.json file, so a manifest
+# is never its own reference.
+$script:ProductLoadIdentity = [ordered]@{ Id = 'KingmakerCutsceneSkip'; AssemblyName = 'KingmakerCutsceneSkip.dll'; EntryMethod = 'KingmakerCutsceneSkip.Main.Load' }
+function Get-ProductLoadIdentity { return $script:ProductLoadIdentity }
+# Exact ordinal string equality. PowerShell's -ceq/-cne compare with culture rules, under which ignorable characters
+# (a soft hyphen, for example) make different strings equal; identities, digests and load targets use this instead.
+function Test-OrdinalEqual([string] $A, [string] $B) { return [string]::Equals($A, $B, [StringComparison]::Ordinal) }
+# A recorded digest is accepted only as a JSON string of 64 lowercase hexadecimal characters (no boolean, array, number,
+# padding or trailing line feed), so a malformed receipt field can never compare as equal.
+function Test-Sha256String($Value) { return ($Value -is [string]) -and [regex]::IsMatch($Value, '\A[0-9a-f]{64}\z') }
 
 function Get-RepositoryRoot { return $script:RepositoryRoot }
 
@@ -46,6 +56,24 @@ function Get-PinnedReferenceDefinitions([string] $Path = $script:ReferencePinsPa
     return @($document.references)
 }
 
+# The CLR identity a pin declares (name, four-part version, neutral culture, no public key token).
+function Get-PinnedDeclaredIdentity($Pin) {
+    $v = [version][string]$Pin.Version
+    return '{0}, Version={1}.{2}.{3}.{4}, Culture=neutral, PublicKeyToken=null' -f $Pin.Name, $v.Major, $v.Minor, [Math]::Max($v.Build, 0), [Math]::Max($v.Revision, 0)
+}
+# One read of a pinned file: its SHA-256 must be the pin's and the CLR identity in those same bytes must be the declared
+# identity. Returns the digest. (Loads the bytes reflection-only into this process.)
+function Assert-PinnedReferenceBytes([string] $Path, $Pin) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try { $hash = ([BitConverter]::ToString($hasher.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() } finally { $hasher.Dispose() }
+    if (-not (Test-OrdinalEqual $hash ([string]$Pin.Sha256))) { throw "The pinned file $Path does not match its pin." }
+    $identity = [Reflection.Assembly]::ReflectionOnlyLoad($bytes).GetName().FullName
+    $declared = Get-PinnedDeclaredIdentity $Pin
+    if (-not (Test-OrdinalEqual $identity $declared)) { throw "The pinned file $($Pin.File) is $identity, which disagrees with its declared pin $declared." }
+    return $hash
+}
+
 function Get-PinnedReferenceDirectory { return (Join-Path $script:RepositoryRoot 'artifacts\references') }
 
 # Ensures every pinned loader reference is present and byte-exact; a hash mismatch fails the build.
@@ -56,7 +84,12 @@ function Initialize-PinnedReferences {
     [IO.Directory]::CreateDirectory($directory) | Out-Null
     foreach ($reference in (Get-PinnedReferenceDefinitions)) {
         $target = Join-Path $directory $reference.File
-        if ((Test-Path -LiteralPath $target) -and (Get-Sha256 $target) -eq $reference.Sha256) { continue }
+        if (Test-Path -LiteralPath $target) {
+            # An existing entry must already be byte-exact: a corrupt or substituted file is refused (remove it explicitly
+            # to re-fetch), never silently replaced. Only an absent entry is acquired.
+            if ((Get-Sha256 $target) -ne $reference.Sha256) { throw "Cached pinned reference $target does not match its pin; remove it explicitly before retrying." }
+            continue
+        }
         $download = Join-Path $directory ($reference.Name + '.download')
         Invoke-WebRequest -Uri $reference.Url -OutFile $download -UseBasicParsing
         try {
@@ -129,9 +162,10 @@ function Get-GitMetadata {
     return [pscustomobject]@{ Commit = ([string] $commit).Trim(); Dirty = [bool] $status }
 }
 
-# Repository paths whose content determines the product DLL or the packaged mod identity. Changes anywhere else
+# Repository paths whose content determines the product DLL or the packaged mod identity, including the build and
+# reference helpers that select and verify what the compiler receives (scripts/Build.ps1, scripts/Common.ps1). Changes anywhere else
 # (documentation, tests, native tooling) do not require rebuilding the validated binary.
-$script:ProductInputPaths = @('src/KingmakerCutsceneSkip', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json')
+$script:ProductInputPaths = @('src', 'Directory.Build.props', 'KingmakerCutsceneSkip.sln', 'Info.json', 'scripts/reference-pins.json', 'scripts/Build.ps1', 'scripts/Common.ps1', 'scripts/Assert-PinnedReferences.ps1', 'LoaderReferences.Final.targets', 'Directory.Build.targets')
 
 function Get-ProductInputPaths { return $script:ProductInputPaths }
 
@@ -169,13 +203,20 @@ function Get-ReferencePinProblems($Receipt, $Pins, [string] $ManagerVersion) {
         $recorded = @($Receipt.references | Where-Object { $_.role -eq 'pinned loader reference' })
     }
     foreach ($pin in $Pins) {
-        $matches = @($recorded | Where-Object { $_.file -eq $pin.File })
+        $matches = @($recorded | Where-Object { ($_.file -is [string]) -and (Test-OrdinalEqual $_.file ([string]$pin.File)) })
         if ($matches.Count -ne 1) { $problems += "the build receipt has $($matches.Count) identities for pinned reference $($pin.File)"; continue }
-        if ($matches[0].sha256 -ne $pin.Sha256) { $problems += "$($pin.File) was built with SHA-256 $($matches[0].sha256), but the pin is $($pin.Sha256)" }
-        if ($matches[0].source -ne $pin.Url) { $problems += "$($pin.File) was built from $($matches[0].source), but the pin is $($pin.Url)" }
+        if (-not (Test-Sha256String $matches[0].sha256)) { $problems += "the build receipt's SHA-256 for $($pin.File) is not a SHA-256 string" }
+        elseif (-not (Test-OrdinalEqual $matches[0].sha256 ([string]$pin.Sha256))) { $problems += "$($pin.File) was built with SHA-256 $($matches[0].sha256), but the pin is $($pin.Sha256)" }
+        if (-not ($matches[0].source -is [string]) -or -not (Test-OrdinalEqual $matches[0].source ([string]$pin.Url))) { $problems += "$($pin.File) was built from $($matches[0].source), but the pin is $($pin.Url)" }
+        # The recorded assembly version must be the declared pin version (normalized to four parts).
+        $declaredParts = @(([string]$pin.Version).Split('.')); while ($declaredParts.Count -lt 4) { $declaredParts += '0' }
+        $declaredVersion = $declaredParts -join '.'
+        if (-not ($matches[0].PSObject.Properties['assembly_version']) -or -not ($matches[0].assembly_version -is [string]) -or -not (Test-OrdinalEqual $matches[0].assembly_version $declaredVersion)) {
+            $problems += "$($pin.File) was recorded as assembly version $($matches[0].assembly_version), but the pin declares $declaredVersion"
+        }
     }
     foreach ($identity in $recorded) {
-        if (@($Pins | Where-Object { $_.File -eq $identity.file }).Count -eq 0) { $problems += "the build receipt records an unpinned loader reference: $($identity.file)" }
+        if (@($Pins | Where-Object { ($identity.file -is [string]) -and (Test-OrdinalEqual $identity.file ([string]$_.File)) }).Count -eq 0) { $problems += "the build receipt records an unpinned loader reference: $($identity.file)" }
     }
     $loader = @($Pins | Where-Object { $_.Name -eq 'UnityModManager' })
     if ($loader.Count -ne 1) { $problems += 'the pins do not name exactly one UnityModManager reference' }

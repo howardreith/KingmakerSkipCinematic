@@ -1,0 +1,23 @@
+{
+    "status":  "validated",
+    "input":  "<repo>\\artifacts\\package\\KingmakerCutsceneSkip-0.1.2.zip",
+    "input_sha256":  "8c6279b113c0f340549e9eb96a53bc8cfdafa06adefd0c5dadf73388a9fefd9c",
+    "manager_version":  "0.31.1",
+    "info_sha256":  "d65cedf989f5a2d89a2d2717992bf270ea188774384ca480bc6fba7c17d1dc87",
+    "dll_assembly_name":  "KingmakerCutsceneSkip",
+    "dll_file_version":  "0.1.2.0",
+    "dll_sha256":  "a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba",
+    "dll_mvid":  "a494d31e-dfb6-469f-b2a7-787e3094639d",
+    "dll_loader_references":  [
+                                  {
+                                      "name":  "0Harmony12",
+                                      "version":  "1.2.0.1",
+                                      "identity":  "0Harmony12, Version=1.2.0.1, Culture=neutral, PublicKeyToken=null"
+                                  },
+                                  {
+                                      "name":  "UnityModManager",
+                                      "version":  "0.31.1.0",
+                                      "identity":  "UnityModManager, Version=0.31.1.0, Culture=neutral, PublicKeyToken=null"
+                                  }
+                              ]
+}

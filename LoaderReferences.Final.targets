@@ -1,0 +1,21 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Imported last by the product project (after Microsoft.CSharp.targets and so after Directory.Build.targets and every
+       other standard or repository-level hook): the last check before compilation. The UnityModManager and 0Harmony12
+       entries Csc receives (@(ReferencePathWithRefAssemblies)) must be exactly the files in the pinned cache, and their
+       bytes are verified against the parsed pin definition. -->
+  <Target Name="AssertPinnedReferencesResolved" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <_KmcsPinnedDirectory>$([MSBuild]::NormalizeDirectory('$(PinnedReferenceDir)'))</_KmcsPinnedDirectory>
+    </PropertyGroup>
+    <ItemGroup>
+      <_KmcsResolvedUmm Include="@(ReferencePathWithRefAssemblies)" Condition="'%(Filename)' == 'UnityModManager' or $([System.String]::Copy('%(ReferencePathWithRefAssemblies.FusionName)').StartsWith('UnityModManager,'))" />
+      <_KmcsResolvedHarmony12 Include="@(ReferencePathWithRefAssemblies)" Condition="'%(Filename)' == '0Harmony12' or $([System.String]::Copy('%(ReferencePathWithRefAssemblies.FusionName)').StartsWith('0Harmony12,'))" />
+      <_KmcsResolvedOutside Include="@(_KmcsResolvedUmm)" Condition="'%(FullPath)' != '$(_KmcsPinnedDirectory)UnityModManager.dll'" />
+      <_KmcsResolvedOutside Include="@(_KmcsResolvedHarmony12)" Condition="'%(FullPath)' != '$(_KmcsPinnedDirectory)0Harmony12.dll'" />
+    </ItemGroup>
+    <Error Condition="'@(_KmcsResolvedUmm->Count())' != '1'" Text="Exactly one UnityModManager compiler input is required; resolved: @(_KmcsResolvedUmm)" />
+    <Error Condition="'@(_KmcsResolvedHarmony12->Count())' != '1'" Text="Exactly one 0Harmony12 compiler input is required; resolved: @(_KmcsResolvedHarmony12)" />
+    <Error Condition="'@(_KmcsResolvedOutside)' != ''" Text="Loader compiler references must be the pinned files in $(_KmcsPinnedDirectory); resolved: @(_KmcsResolvedOutside)" />
+    <Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)scripts\Assert-PinnedReferences.ps1&quot; -CompilerInputs &quot;@(_KmcsResolvedUmm->'%(FullPath)')|@(_KmcsResolvedHarmony12->'%(FullPath)')&quot;" />
+  </Target>
+</Project>
