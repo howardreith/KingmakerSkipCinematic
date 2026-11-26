@@ -42,18 +42,20 @@ if (-not (Test-OrdinalEqual $receipt.dll_sha256 $dllSha256)) { throw "DLL SHA-25
 if (-not ($receipt.commit -is [string]) -or -not [regex]::IsMatch($receipt.commit, '\A[0-9a-f]{40}\z')) { throw 'Build receipt has no source commit.' }
 # The dirty flag is a JSON boolean (product_inputs_dirty, or dirty in an older receipt), never coerced; a clean claim
 # that lists product changes is a contradiction.
+# The applicable flag is selected and type-checked first; then, whichever flag applied, any recorded product changes are
+# checked against a clean claim (a genuine older receipt omits product_input_changes and is unaffected).
 if ($receipt.PSObject.Properties['product_inputs_dirty']) {
     if (-not ($receipt.product_inputs_dirty -is [bool])) { throw 'The build receipt product_inputs_dirty must be a JSON boolean; rebuild with scripts\Build.ps1.' }
     $receiptInputsDirty = $receipt.product_inputs_dirty
-    if ($receipt.PSObject.Properties['product_input_changes']) {
-        $recordedChanges = $receipt.product_input_changes
-        if ($null -ne $recordedChanges -and -not ($recordedChanges -is [array]) -and -not ($recordedChanges -is [string])) { throw 'The build receipt product_input_changes must be a list; rebuild with scripts\Build.ps1.' }
-        if (-not $receiptInputsDirty -and @($recordedChanges | Where-Object { $_ }).Count -gt 0) { throw 'The build receipt claims clean product inputs but lists product changes; rebuild with scripts\Build.ps1.' }
-    }
 }
 else {
     if (-not ($receipt.PSObject.Properties['dirty']) -or -not ($receipt.dirty -is [bool])) { throw 'The build receipt dirty flag must be a JSON boolean; rebuild with scripts\Build.ps1.' }
     $receiptInputsDirty = $receipt.dirty
+}
+if ($receipt.PSObject.Properties['product_input_changes']) {
+    $recordedChanges = $receipt.product_input_changes
+    if ($null -ne $recordedChanges -and -not ($recordedChanges -is [array]) -and -not ($recordedChanges -is [string])) { throw 'The build receipt product_input_changes must be a list; rebuild with scripts\Build.ps1.' }
+    if (-not $receiptInputsDirty -and @($recordedChanges | Where-Object { $_ }).Count -gt 0) { throw 'The build receipt claims clean product inputs but lists product changes; rebuild with scripts\Build.ps1.' }
 }
 $problems = @()
 if ($receiptInputsDirty) { $problems += "the DLL was built with uncommitted product changes" }

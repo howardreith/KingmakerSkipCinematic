@@ -47,76 +47,31 @@ by rename.
   (normalized to four parts). A boolean, an array or a padded digest is refused, never compared.
 - The reference cache refuses an existing entry that does not match its pin (remove it explicitly to re-fetch); only an
   absent entry is downloaded.
-- `scripts/runtime/Invoke-NativeRun.ps1` decides once whether a product is staged (`-NoProduct` wins; a ZIP given with it
-  is recorded as a comparison archive only). It freezes the product as a private copy: the ZIP, or the built DLL together
-  with the checkout's `Info.json`. It validates that copy before taking the run lock and installs exactly the validated
-  files. A ZIP is read once into memory at staging, and that snapshot must have the validated digest. Only its four
-  package entries are written, from the snapshot, into `Mods\KingmakerCutsceneSkip`; any other entry refuses before
-  anything is written. The product folder is created with an operation that refuses an existing folder, and a failure
-  removes it only if this run created it. The journal records each staged folder in `created` immediately after its
-  creation, and restoration removes only those, so a folder another process placed at the destination is never removed. In both routes the staged `Info.json` must equal the
-  validated manifest digest (the validator now reports `info_sha256` for the packaged manifest too) before
-  `-ProductManagerVersion` (still recorded in the summary) edits it.
-- No run starts with an inherited Cutscene Skip, identified by its UMM `Id` in each folder's `Info.json` (ignoring case),
-  whatever the folder is called; hidden folders are included. Game copies never copy it from the owner profile (product
-  and no-product runs alike), and only the selected folders' manifests are read. A live profile that already contains
-  it is refused before staging. After product staging exactly one folder carries the shipping Id, the staged validated
-  candidate. A selected folder whose manifest cannot be read refuses.
-- Final cleanup steps are independent of each other. The private copy is removed first and the outcome is saved in the
-  host summary: a failed removal makes the run `integrity-failed` (the scenario status is kept). A failure writing the
-  summary or removing the private copy is reported, and this run's lock is still released when restoration succeeded.
-  Private copies go below a temporary root the caller can scope.
-- Run lock and recovery. The lab's configured lock (`runtime-state\runtime.lock`) is the only lock a run or recovery
-  releases, and only for a named run whose `runId` it records. Ownership is held, not just checked: the lock is opened
-  exclusively (no sharing, with delete access), its owner is read through that handle, and the handle is kept through
-  restoration, the journal handoff and the release (deletion through the same handle). While it is held nobody can
-  release, replace or re-create the lock, so no successor can start. A run's own restoration opens its lock the same way;
-  if the lock now belongs to another run, it restores nothing. Recovery never acts while the process recorded in the lock
-  is alive (it is still restoring or finishing). Journals are published atomically (complete document to a temporary
-  file, then one replace), so a failed or interrupted publication leaves the previous complete journal; a journal that
-  names another run is never overwritten. When restoration completes, the journal is replaced by this run's release-lock
-  journal; after the release is confirmed it is retired through one exclusive handle that verifies phase and run. If the
-  release fails, the saved summary is `integrity-failed` with `lockReleased: false`, and the release-lock journal stays
-  (it is written only while this run still owns the lock). If retirement fails, the summary is `integrity-failed` with
-  `journalRetired: false`, and `-RecoverOnly` retires the journal later. A failed setup rollback that cannot release its
-  lock writes the same release-lock journal, or reports that it could not. `-RecoverOnly` requires a named run that owns
-  this lab's lock (any lock path stored in the journal is ignored) and re-reads the journal under the held lock. Another
-  run's lock, an empty run ID, or an ordinary journal without its lock is refused with the staged files, journal and
-  locks untouched. If restoration did not complete, the lock and recovery journal stay for `-RecoverOnly`.
+- Native runner: `scripts/runtime/Invoke-NativeRun.ps1` and `scripts/runtime/RuntimeLab.Common.ps1` are unchanged from
+  `main`. Round 8 (2026-11-26) removed this change's native-runner product validation, staging, run-lock and recovery
+  additions (`scripts/runtime/NativeProduct.ps1` and the related runner edits) with their tests: native runs are outside
+  this mission's scope and none was made, so no claim about the runner's staging or recovery is made here.
+- Manifest member names: a top-level member name that is not a double-quoted JSON string (single-quoted or unquoted,
+  both accepted by Windows PowerShell's decoder) is refused, so the duplicate check counts every declaration the decoder
+  accepts. Whichever dirty flag a receipt uses (`product_inputs_dirty`, or `dirty` in an older receipt), a clean claim
+  that lists product changes is refused.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
-- `scripts/Test.ps1` at `fd1ac03`: 55/55 unit, provenance 110/110, package provenance 31/31. Cases added in rounds 6
-  and 7 are listed first; the rest are unchanged from earlier rounds.
+- Round-7 record, `scripts/Test.ps1` at `fd1ac03`: 55/55 unit, provenance 110/110, package provenance 31/31. Cases added
+  in rounds 6 and 7 are listed first; the rest are unchanged from earlier rounds. Its native-runner, ZIP-staging and
+  recovery cases were removed in round 8 with that machinery and are not listed here.
   - Round 7, receipts: the alternate build's own dirty receipt (digest matching its DLL) after the source is restored is
     refused as recorded and when `product_inputs_dirty` is `null`, `[]` or `"false"`, or `false` while listing the
     changed file; `-Configuration release` packages the genuine Release build and a Debug receipt for a Release package
     is refused; a receipt whose UnityModManager `assembly_version` alone is changed is refused; genuine controls package.
   - Round 7, manifests: `ManagerVersion` declared twice in a ZIP manifest and `EntryMethod` declared twice in a bare
     manifest (last declaration genuine) are refused.
-  - Round 7, recovery in disposable labs: the journal held open while recovery publishes its handoff leaves the complete
-    ordinary journal and the lock, and a retry clears the run; the release-lock journal held while the finalizer retires
-    it gives an `integrity-failed` summary with the lock released, and recovery retires the journal later; after a
-    handoff to run B, a delayed finalizer and a delayed restoration of run A leave B's lock, journal and staged folder
-    byte-identical, and recovery while B's process is alive changes nothing; a folder with a sentinel that claims the
-    product destination just before creation (a line breakpoint in a child process) is refused, kept by the immediate
-    cleanup, and kept by the recovery of a journal that planned but never created it. The lock held open by a reader
-    during recovery now means recovery changes nothing until the handle closes; the retry then clears the run.
   - Receipt digests: in the temporary checkout, a real build of an uncommitted source change (reverted before packaging)
     gives a different baseline-compatible DLL. Beside it, an otherwise coherent receipt with `dll_sha256` `true` or `[]`
     is refused without any override; the genuine receipt and DLL then package again. Recorded pin digests that are a
     boolean, an empty array or followed by a line feed are problems.
   - Manifest members: `ManagerVersion` spelled `managerversion` in a ZIP manifest and `EntryMethod` spelled `entrymethod`
     in a bare manifest are refused; a manifest with the declared names passes.
-  - ZIP staging: the private ZIP replaced after validation by one with the same DLL and Id but a changed manifest, or
-    with an additional top-level entry, is refused with nothing in the destination; the genuine ZIP stages exactly its
-    four entries with the validated DLL and manifest digests.
-  - Recovery, in disposable labs: an ordinary journal recovered while the owned lock is held open completes restoration
-    and keeps a release-lock journal and the lock; a retry after the handle closes clears only that transaction. An
-    ordinary journal for run A with run B's lock leaves the staged files, journal and lock untouched. A release-lock
-    journal naming another lab's lock path, or with an empty run ID, keeps both locks. In a child process with a line
-    breakpoint: a successor's lock written just before the exclusive open is kept; an attempt to replace the lock after
-    the ownership check is refused and only the verified lock is removed. These labs have no game, so in those blocks
-    only, the shared wait for a running Kingmaker process sees an empty process list.
   - Fixtures are compiled with the .NET Framework compiler against the pinned files or disposable stub loaders of known
     identity, so no case depends on the installed loader.
   - Reference cases: newer UMM 0.33.0.0; a 0.31.1.0 with another culture; Harmony 2; an extra UMM-family assembly; an
@@ -129,19 +84,6 @@ by rename.
     by rename right after its snapshot (every report field still comes from the snapshot); a report path aliased to the
     input, or to the replaced current input, at publication (refused, bytes intact). These use a PowerShell line
     breakpoint in a separate process, so the validator has no test hook.
-  - Runner cases: bare manifests with a mismatched `Version`, `ManagerVersion` or `Id` refused; in a disposable checkout
-    using the default manifest path, a root `Info.json` changed after the build to another `Id`, `AssemblyName` or
-    `EntryMethod` refused before locking, and the genuine pair staged with the validated manifest digest; a manifest
-    changed after preparation does not change what is staged; a report path equal to or hard-linked to the supplied
-    `Info.json` refused with both inputs intact; final cleanup with summary and private-copy failures; incomplete
-    restoration; a private-copy cleanup failure saved as an `integrity-failed` summary with the lock released; a lock
-    that cannot be deleted saved as `integrity-failed` with a release-only journal, recovery refusing another run's lock
-    and then clearing only this run's;
-    no-product controls from an owner profile that contains Cutscene Skip, also under another folder name and in another
-    case, in a folder named `Keys` and in a hidden folder; product runs (ZIP and bare DLL) from an owner profile with an
-    older Cutscene Skip under another name, staging only the validated candidate, and a live profile with it refused; a
-    malformed manifest in an unselected folder not blocking an isolated selection, and refused when selected; cleanup counted only below the
-    invocation's own temporary root, with another invocation's folder present.
   - Package provenance runs the real build and packaging commands in a temporary checkout: genuine package; build-helper
     change refused, then rebuilt; documentation-only reuse; corrupt cache refused before compilation; a DLL differing
     from its receipt refused; a committed root or `src/Directory.Build.targets` change refused, then rebuilt, with

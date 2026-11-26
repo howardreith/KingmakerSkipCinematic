@@ -154,6 +154,20 @@ try {
     [IO.File]::WriteAllText($receiptPath, ($edited | ConvertTo-Json -Depth 8)); [IO.File]::WriteAllBytes($dll, $altDll)
     $p = Invoke-Script $package
     Add-Case 'AlternateCleanClaimListingChangesRefused' ($p.ExitCode -ne 0 -and $p.Output -match 'claims clean product inputs but lists product changes') ([regex]::Match($p.Output, 'The build receipt[^.]*').Value)
+    # R6-F1, legacy flag: the same alternate receipt and DLL with the older dirty flag (false) and without
+    # product_inputs_dirty, still listing the changed file, is refused for the contradiction; a genuine clean receipt in
+    # the older format (dirty false, no newer fields) packages.
+    $edited = $altReceiptText | ConvertFrom-Json
+    [void]$edited.PSObject.Properties.Remove('product_inputs_dirty'); $edited | Add-Member -NotePropertyName dirty -NotePropertyValue $false -Force
+    [IO.File]::WriteAllText($receiptPath, ($edited | ConvertTo-Json -Depth 8)); [IO.File]::WriteAllBytes($dll, $altDll)
+    $p = Invoke-Script $package
+    Add-Case 'AlternateLegacyCleanClaimListingChangesRefused' ($p.ExitCode -ne 0 -and $p.Output -match 'claims clean product inputs but lists product changes' -and @($edited.product_input_changes).Count -gt 0) ([regex]::Match($p.Output, 'The build receipt[^.]*').Value)
+    $legacy = $genuineReceiptText | ConvertFrom-Json
+    foreach ($field in @('product_inputs_dirty', 'product_input_changes')) { [void]$legacy.PSObject.Properties.Remove($field) }
+    $legacy | Add-Member -NotePropertyName dirty -NotePropertyValue $false -Force
+    [IO.File]::WriteAllText($receiptPath, ($legacy | ConvertTo-Json -Depth 8)); [IO.File]::WriteAllBytes($dll, $dllBytes)
+    $p = Invoke-Script $package
+    Add-Case 'GenuineLegacyCleanReceiptPackages' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"
     [IO.File]::WriteAllText($receiptPath, $genuineReceiptText); [IO.File]::WriteAllBytes($dll, $dllBytes)
     $p = Invoke-Script $package
     Add-Case 'GenuineCleanReceiptPackagesAfterTheDirtyCases' ($p.ExitCode -eq 0 -and $p.Output -match 'Package validation passed') "package exit $($p.ExitCode)"

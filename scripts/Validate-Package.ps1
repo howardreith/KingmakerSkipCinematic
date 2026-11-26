@@ -70,12 +70,17 @@ $result = [ordered]@{ status = 'validated'; input = $inputPath; input_sha256 = G
 # The load target is the product's fixed identity (Common.ps1), never taken from the manifest being checked.
 $loadIdentity = Get-ProductLoadIdentity
 # The top-level member names of a JSON object as written (before ConvertFrom-Json, which keeps only the last of repeated
-# names): a small scanner over strings and nesting depth.
+# names): a small scanner over strings and nesting depth. Windows PowerShell's decoder also accepts single-quoted and
+# unquoted member names; such a name at the top level is refused here, so every declaration the decoder accepts is one
+# this scanner counts.
 function Get-JsonTopLevelMemberNames([string] $Text) {
     $names = New-Object System.Collections.Generic.List[string]
     $depth = 0; $i = 0; $expectKey = $false
     while ($i -lt $Text.Length) {
         $c = $Text[$i]
+        if ($expectKey -and $depth -eq 1 -and -not [char]::IsWhiteSpace($c) -and $c -ne '"' -and $c -ne '}') {
+            throw 'The manifest uses an unsupported member-name syntax (top-level member names must be double-quoted JSON strings).'
+        }
         if ($c -eq '"') {
             $sb = New-Object System.Text.StringBuilder; $i++
             while ($i -lt $Text.Length -and $Text[$i] -ne '"') {

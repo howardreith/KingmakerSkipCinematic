@@ -66,26 +66,16 @@ if ($GameCopy) {
 $root = Get-RepositoryRoot
 $productDir = Join-Path $root "artifacts\bin\$Configuration\KingmakerCutsceneSkip"
 $harnessDir = Join-Path $root "artifacts\bin\$Configuration\RuntimeHarness"
-. (Join-Path $PSScriptRoot 'NativeProduct.ps1')
-# One product decision for requirements, summary and staging (-NoProduct wins; a ZIP given with it is a comparison only).
-$productPlan = Resolve-NativeProductPlan -NoProduct:$NoProduct -ProductZip $ProductZip -ProductDll (Join-Path $productDir 'KingmakerCutsceneSkip.dll')
+if ($ProductZip) { Assert-FileExists $ProductZip 'Product ZIP' } else { Assert-FileExists (Join-Path $productDir 'KingmakerCutsceneSkip.dll') 'Built product DLL (run scripts\Build.ps1)' }
 Assert-FileExists (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll') 'Built harness DLL'
-# The product (ZIP or built DLL) is frozen as a private copy and validated before anything is locked or staged; that copy
-# is what is installed. The private copy is removed in every outcome.
-$validatedProduct = New-ValidatedNativeProduct $productPlan (Join-Path (Split-Path -Parent $PSScriptRoot) 'Validate-Package.ps1')
-try {
-    Assert-RuntimePreflight $lab
-    $runDirectories = Enter-NativeRunDirectories $lab $runId
-}
-catch {
-    Remove-ValidatedNativeProduct $validatedProduct
-    throw
-}
-$lock = $runDirectories.Lock
-$evidence = $runDirectories.Evidence
-$backup = $runDirectories.Backup
-$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = ($productPlan.Mode -eq 'none'); productMode = $productPlan.Mode; status = 'started'; failure = $null }
-$journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); created = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
+
+Assert-RuntimePreflight $lab
+$lock = Enter-RuntimeLock $lab $runId
+$evidence = Join-Path $lab.Evidence $runId
+$backup = Join-Path $lab.Backups $runId
+New-Item -ItemType Directory -Force -Path $evidence, $backup | Out-Null
+$summary = [ordered]@{ runId = $runId; modProfile = $ModProfile; scenario = $Scenario; noProduct = [bool] $NoProduct; status = 'started'; failure = $null }
+$journal = [ordered]@{ runId = $runId; modProfile = $ModProfile; modsDir = $game.ModsDir; backup = $backup; staged = @(); modsMoved = $false; registryBackup = $null; paramsBackup = $null; paramsTarget = $null; modsOriginal = $null; completedSteps = @() }
 $savesBefore = $null
 $installBefore = $null
 try {
@@ -95,9 +85,8 @@ try {
     $summary.ownerInstallFileCount = @($installBefore).Count
     $summary.gameRoot = $game.InstallDir
     $summary.loaderProfile = $(if ($GameCopy) { $LoaderProfile } else { 'owner installation' })
-    if ($productPlan.Mode -eq 'zip') { $summary.productZipSha256 = [string]$validatedProduct.Validation.input_sha256 }
-    if ($productPlan.Mode -ne 'none') { $summary.validatedProductDllSha256 = [string]$validatedProduct.Validation.dll_sha256 }
-    if ($productPlan.ComparisonZip) { $summary.comparisonZipSha256 = Get-Sha256 $productPlan.ComparisonZip }
+    if ($ProductZip) { $summary.productZipSha256 = Get-Sha256 $ProductZip }
+    elseif (-not $NoProduct) { $summary.productDllSha256 = Get-Sha256 (Join-Path $productDir 'KingmakerCutsceneSkip.dll') }
     $summary.harnessDllSha256 = Get-Sha256 (Join-Path $harnessDir 'KingmakerCutsceneSkip.RuntimeHarness.dll')
     $summary.git = Get-GitMetadata
 
@@ -122,7 +111,7 @@ try {
         Initialize-GameCopy $copyPaths
         $loaderIdentity = Install-LoaderProfile $lab $copyPaths $LoaderProfile
         Write-JsonFile (Join-Path $evidence 'loader-install.json') $loaderIdentity
-        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet -ExcludeModIds @(Get-InheritedModExclusions $productPlan))
+        $summary.copyMods = @(Set-GameCopyMods $copyPaths $ModProfile $ModSet)
     }
     elseif ($ModProfile -eq 'isolated') {
         # Persist the planned move first: recovery inspects both locations, so an interruption on either side of the
@@ -136,11 +125,8 @@ try {
         Save-Journal $lab $journal
         New-Item -ItemType Directory -Path $game.ModsDir | Out-Null
     }
-    # No run starts with an inherited Cutscene Skip under any folder name (game copies exclude it; a live profile refuses):
-    # a no-product control has none and a product run loads only the validated candidate staged below.
-    Assert-NoInstalledShippingMod $game.ModsDir
     $deploy = @(@{ Source = $harnessDir; Name = 'KingmakerCutsceneSkipRuntimeHarness'; Info = Join-Path $root 'tools\RuntimeHarness\Info.json' })
-    # The product itself is staged below from the validated private copy (never from the build output).
+    if (-not $NoProduct -and -not $ProductZip) { $deploy += @{ Source = $productDir; Name = 'KingmakerCutsceneSkip'; Info = Join-Path $root 'Info.json' } }
     foreach ($item in $deploy) {
         $target = Join-Path $game.ModsDir $item.Name
         if (Test-Path -LiteralPath $target) { throw "Refusing to overwrite an existing mod folder: $target" }
@@ -148,20 +134,18 @@ try {
         $journal.staged += $target
         Save-Journal $lab $journal
         New-Item -ItemType Directory -Path $target | Out-Null
-        $journal.created += $target
-        Save-Journal $lab $journal
         Copy-Item -LiteralPath (Join-Path $item.Source ($(if ($item.Name -eq 'KingmakerCutsceneSkip') { 'KingmakerCutsceneSkip.dll' } else { 'KingmakerCutsceneSkip.RuntimeHarness.dll' }))) -Destination $target
         Copy-Item -LiteralPath $item.Info -Destination (Join-Path $target 'Info.json')
     }
 
-    if ($productPlan.Mode -ne 'none') {
-        # The validated private copy, installed exactly as validated (ZIP: its single top-level mod folder).
+    if ($ProductZip -and -not $NoProduct) {
+        # The packaged candidate, installed exactly as a user would: the ZIP's single top-level mod folder.
         $productTarget = Join-Path $game.ModsDir 'KingmakerCutsceneSkip'
         if (Test-Path -LiteralPath $productTarget) { throw "Refusing to overwrite an existing mod folder: $productTarget" }
         $journal.staged += $productTarget
         Save-Journal $lab $journal
-        $summary.productDllSha256 = Install-ValidatedNativeProduct $validatedProduct $game.ModsDir -OnCreated { param($created) $journal.created += $created; Save-Journal $lab $journal }
-        Assert-OnlyStagedShippingMod $game.ModsDir 'KingmakerCutsceneSkip'
+        Expand-Archive -LiteralPath $ProductZip -DestinationPath $game.ModsDir
+        $summary.productDllSha256 = Get-Sha256 (Join-Path $productTarget 'KingmakerCutsceneSkip.dll')
     }
     if ($ProductManagerVersion -and -not $NoProduct) {
         $stagedInfo = Join-Path $game.ModsDir 'KingmakerCutsceneSkip\Info.json'
@@ -208,10 +192,7 @@ catch {
 finally {
     $restored = $false
     try {
-        # Restoration holds this run's lock; a run whose lock now belongs to another run restores nothing.
-        $ownedLock = Open-OwnedRuntimeLock $lab $runId
-        if ($null -eq $ownedLock) { throw "This run's runtime lock is gone; nothing was restored by this invocation." }
-        try { Restore-RunJournal $lab $journal $ownedLock } finally { $ownedLock.Dispose() }
+        Restore-RunJournal $lab $journal
         $restored = $true
     }
     catch {
@@ -260,8 +241,9 @@ finally {
         $summary.status = 'integrity-failed'
         $summary.integrityFailures = $integrityFailures
     }
-    # Summary, private-copy cleanup and lock release are independent; the lock is released whenever restoration succeeded.
-    Complete-NativeRun $lab $lock ([bool]$restored) $summary (Join-Path $evidence 'host-summary.json') $validatedProduct $runId
+    Write-JsonFile (Join-Path $evidence 'host-summary.json') $summary
+    if ($restored) { Exit-RuntimeLock $lab $lock }
+    else { Write-Warning "Run lock and recovery journal kept; run '$PSCommandPath -RecoverOnly' after resolving the error." }
     Write-Host "Run $runId finished: $($summary.status) $($summary.failure) $(if ($integrityFailures.Count -gt 0) { '[' + ($integrityFailures -join '; ') + ']' })"
     Write-Host "Evidence: $evidence"
 }
