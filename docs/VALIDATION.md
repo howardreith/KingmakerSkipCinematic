@@ -57,6 +57,13 @@ by rename.
   that lists product changes is refused.
 - The published v0.1.2 ZIP (`c1be6ae26f0cb02d4e9cdebbbeba4977472ad8a5349ab441eb8496cc250005fb`) passes: DLL `a2a8706b…a1ba`,
   MVID `a494d31e-dfb6-469f-b2a7-787e3094639d`, file version 0.1.2.0, the two pinned references above.
+- Round 8, `scripts/Test.ps1` at `a7a33bc` (the round-8 code): 55/55 unit, provenance 62/62, package provenance 33/33.
+  Added: a ZIP manifest whose conflicting earlier `ManagerVersion` is single-quoted and a bare manifest whose conflicting
+  earlier `EntryMethod` is unquoted (last declarations genuine) are refused; the alternate build's dirty receipt and DLL
+  in the older format (`dirty` false, no `product_inputs_dirty`, the changed file still listed) are refused, and a
+  genuine clean receipt in the older format packages; bare manifests with a mismatched `Version`, `ManagerVersion` or
+  `Id` are refused by the validator directly. The provenance count is lower than round 7's because the native-runner
+  cases were removed with that machinery.
 - Round-7 record, `scripts/Test.ps1` at `fd1ac03`: 55/55 unit, provenance 110/110, package provenance 31/31. Cases added
   in rounds 6 and 7 are listed first; the rest are unchanged from earlier rounds. Its native-runner, ZIP-staging and
   recovery cases were removed in round 8 with that machinery and are not listed here.
