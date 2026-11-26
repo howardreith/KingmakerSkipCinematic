@@ -1,0 +1,372 @@
+<!-- agent-review:v1 enrollment=ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f key=r06-review part=1/1 sha256=105a2b65af3dc56d42b289aaa5f75ce2a6a09b0162551562a7f7281dd6b7f2d0 -->
+### Codex GPT-6.2 Astra — review — round 6 — candidate `bdd506d060`
+
+**Decision:** `changes_required` — The controller gate passed, and the recorded product DLL matches the released DLL and the required compiler pins. Readiness is blocked because recovery can overwrite a successor’s journal, staging cleanup can delete a directory the run never created, and packaging can certify a DLL built from uncommitted source.
+
+Continuation for Claude
+
+Keep the correction within Skip’s packaging, validation, and native transaction helpers. Preserve transaction ownership through restoration, journal publication, and retirement. Make journal replacement recoverable after interruption, record retirement failures in the saved host status, and make staging cleanup conditional on ownership of the directory. Finish the receipt checks for product changes and recorded reference versions, preserve supported configuration spelling, and check required manifest members before JSON parsing discards duplicates.
+
+Use the existing temporary checkout and disposable lab fixtures to exercise the failure paths in the findings. Retain the genuine package, altered-DLL, held-lock retry, and genuine ZIP staging controls. Rebuild affected inputs, refresh the artifact records, and run the configured test gate on the corrected commit. The gameplay implementation, compiler pins, and historical loader results remain outside the correction scope.
+
+#### Findings
+
+**R5-F3** · P1 · defect · blocks readiness — A stale recovery or finalizer can overwrite the next run’s journal
+- Location: `scripts/runtime/RuntimeLab.Common.ps1:292`; acceptance: mission §7, AGENTS.md native recovery
+- Trigger: Two recoveries admit run A before either finishes. One releases A, and run B starts staging before the other resumes. Recovery can also release A while its normal host is still performing integrity checks.
+- Expected: Once B owns the lab, an invocation for A preserves B’s staged state, lock, and journal.
+- Actual: Assert-RuntimeLockOwner closes its read handle before Restore-RunJournal changes files and publishes a journal. A delayed recovery can therefore act on B’s state before its final lock check detects B. The normal finalizer also writes A’s release journal at NativeProduct.ps1 line 166 even when lock release explicitly refused B’s ownership. Journal retirement separately reads the journal and deletes by path.
+- Why it blocks / does not: Run B can lose staged files or the restoration instructions needed to recover the owner’s installation.
+- Requested correction: Keep verified transaction ownership effective through restoration and journal retirement. Coordinate recovery with an active finalizer and prevent stale completion or setup rollback from publishing over a successor’s journal.
+- Requested evidence: Use overlapping disposable invocations with a controlled handoff to B. Show that the delayed invocation preserves B’s staged files, lock, and journal bytes. Retain the existing exclusive lock-deletion and held-lock retry cases.
+
+**R6-F1** · P1 · defect · blocks readiness — Malformed dirty metadata can certify a DLL built from uncommitted source
+- Location: `scripts/Package.ps1:42`; acceptance: mission §5, mission §6
+- Trigger: Package the DLL from a locally modified build after reverting the source, using its receipt with a null or empty-array product_inputs_dirty and the original nonempty product_input_changes.
+- Expected: A verified source binding requires a valid dirty-state field consistent with the receipt’s recorded product changes.
+- Actual: Package.ps1 casts a present product_inputs_dirty to bool and ignores product_input_changes. Both null and an empty array select false even with dirty set to true and a changed source file listed. Once the checkout is clean, the remaining checks accept the dirty-build DLL’s genuine digest.
+- Why it blocks / does not: The package can record provenance_verified for product bytes that the named committed source did not produce.
+- Requested correction: Require an actual JSON boolean for the applicable dirty flag and reject a clean claim that conflicts with recorded product changes. Preserve the supported legacy receipt path with a typed dirty flag.
+- Requested evidence: Use the existing alternate-DLL build fixture with that build’s own receipt and matching digest. Show refusal for malformed or contradictory dirty metadata after the source is restored, and acceptance of the genuine clean control.
+
+**R6-F2** · P1 · defect · blocks readiness — Staging rollback can delete a product directory it failed to create
+- Location: `scripts/runtime/NativeProduct.ps1:97`; acceptance: mission §7, AGENTS.md native transaction
+- Trigger: Another process creates Mods\KingmakerCutsceneSkip after the runner checks that the path is free and before the runner creates its directory.
+- Expected: A destination collision preserves the existing directory and its contents through both rollback and recovery.
+- Actual: If New-Item fails because the destination appeared after the initial check, the catch recursively deletes whatever now occupies that path. Invoke-NativeRun.ps1 has already added the destination to journal.staged, so restoration can delete it again.
+- Why it blocks / does not: A failed staging attempt can remove another installation’s mod files.
+- Requested correction: Track ownership of the directory actually created or published by this transaction. Apply that ownership check in immediate cleanup and journal-driven restoration.
+- Requested evidence: In a disposable Mods tree, arrange for a directory containing a sentinel file to claim the destination before creation. Show that staging refuses and that both immediate cleanup and recovery preserve the sentinel.
+
+**R5-F2** · P2 · defect · blocks readiness — The journal handoff can still lose its only readable record
+- Location: `scripts/runtime/RuntimeLab.Common.ps1:273`; acceptance: mission §7, AGENTS.md native recovery
+- Trigger: The host stops or a write fails while restoration is replacing the ordinary journal with the release-lock record.
+- Expected: Until lock release is confirmed, recovery can read either the previous complete journal or the complete release record.
+- Actual: The new handoff calls Save-Journal, which uses Set-Content on the only active-run.json. That truncates the ordinary journal before the release record is fully written. Interruption can leave an empty or partial document alongside the held lock. The setup rollback at NativeProduct.ps1 line 201 also suppresses a journal-write failure.
+- Why it blocks / does not: A surviving lock can still lack a usable recovery record, preventing the next guarded run.
+- Requested correction: Publish the completed journal atomically while preserving the last usable record if publication fails. Surface failures establishing recovery state during setup rollback.
+- Requested evidence: Interrupt or fail publication in a disposable lab. Show that a complete journal remains readable and that a subsequent recovery clears the owned transaction. Keep the passing lock-sharing-denial retry case.
+
+**R6-F3** · P2 · defect · blocks readiness — Failed journal retirement leaves a passing host summary
+- Location: `scripts/runtime/NativeProduct.ps1:157`; acceptance: mission §7, mission §8
+- Trigger: The scenario and restoration pass and the lock is released, but Windows refuses deletion of the release journal.
+- Expected: The saved summary records the failed cleanup, the successful lock release, and the original scenario outcome.
+- Actual: The journal-removal catch only appends to the local failures list. Complete-NativeRun then writes host-summary.json with status passed and throws afterward. The leftover journal causes the next preflight to refuse.
+- Why it blocks / does not: The saved evidence reports success for a host invocation that failed required cleanup.
+- Requested correction: Record journal-retirement failure as an integrity failure before writing the summary. Preserve scenarioStatus, lockReleased, and the retryable journal.
+- Requested evidence: Hold the release journal readable but undeletable in a disposable lab. Verify the saved failed host status and successful lock release, then show recovery retires the journal after the handle closes.
+
+**R6-F4** · P2 · defect · blocks readiness — Duplicate manifest declarations disappear before the uniqueness check
+- Location: `scripts/Validate-Package.ps1:75`; acceptance: mission §5, mission §6
+- Trigger: A supplied Info.json repeats ManagerVersion or EntryMethod with conflicting values and places the expected value last.
+- Expected: Each required shipping member has one unambiguous declaration in the supplied manifest.
+- Actual: Both manifest routes call ConvertFrom-Json before counting property names. Windows PowerShell 5.1 retains only the last occurrence of an exactly repeated name. The count therefore reports one even when the supplied manifest contains conflicting minimums or entry methods.
+- Why it blocks / does not: The standalone validator can certify a package whose manifest declares two different values for a required shipping field.
+- Requested correction: Detect duplicate required top-level members while reading the original JSON, before conversion collapses them. Use the same check for ZIP and bare manifests.
+- Requested evidence: Supply raw ZIP and bare manifests with conflicting repeated required names whose last value is genuine. Show standalone rejection and retain the single-declaration passing controls.
+
+**R6-F5** · P2 · defect · blocks readiness — Configuration casing rejects a genuine build receipt
+- Location: `scripts/Package.ps1:38`; acceptance: mission §5, mission §6
+- Trigger: Build with the default Release configuration, then invoke Package.ps1 with -Configuration release.
+- Expected: Equivalent accepted spellings of Debug or Release select the same configuration. A genuinely different configuration is refused.
+- Actual: The public ValidateSet accepts release and preserves its spelling. The new ordinal comparison then rejects an authentic Release receipt even though both spellings select the same Windows build output. The previous comparison accepted this invocation.
+- Why it blocks / does not: The correction breaks a supported packaging invocation for a genuine candidate.
+- Requested correction: Keep scalar-string validation and canonicalize the supported configurations on both sides or compare them with OrdinalIgnoreCase.
+- Requested evidence: Package a genuine Release build with lowercase release and retain a negative control for a Debug versus Release mismatch.
+
+**R6-F6** · P2 · defect · blocks readiness — A build receipt can contradict the pinned assembly version and still verify
+- Location: `scripts/Common.ps1:208`; acceptance: mission §5, mission §6
+- Trigger: A supplied receipt carries the genuine reference digest and source alongside a different recorded assembly_version.
+- Expected: A verified build receipt records the four-part CLR version of each pinned reference consistently with the authenticated pin.
+- Actual: Get-ReferencePinProblems compares the file, digest, and source but never reads assembly_version. The passing MatchingReceiptHasNoProblems fixture supplies 1.0.0.0 for both UMM and Harmony even though its pins declare 0.31.1 and 1.2.0.1.
+- Why it blocks / does not: Packaging can mark reference provenance verified while the supplied build receipt explicitly contradicts the compiler identity it is meant to document.
+- Requested correction: Compare each recorded pinned assembly_version with the normalized declared version and correct the matching-receipt fixture to carry the real expected identities.
+- Requested evidence: Keep a genuine product digest and reference hash, change only the recorded UMM or Harmony assembly version, and show that packaging refuses the contradictory receipt while accepting the genuine one.
+
+#### Prior finding assessments
+
+- **R5-F1** — `fix_verified` — The product and pinned-reference digests now require scalar strings of 64 lowercase hexadecimal characters before ordinal comparison. The alternate-DLL fixtures refused boolean and empty-array digests and accepted the restored genuine pair. R6-F1 concerns the separate source-cleanliness claim.
+- **R5-F2** — `fix_rejected` — The held-lock fixture now completes restoration and retries release successfully. The requested durable handoff remains incomplete because its in-place write can destroy the last readable journal before the next record exists.
+- **R5-F3** — `fix_rejected` — The configured lock, nonempty run ID, initial mismatch check, and same-handle deletion address the tested cases. Ownership still expires before restoration and journal mutation finish. A delayed invocation can overwrite or remove a successor’s journal.
+- **R5-F4** — `fix_verified` — Ordinal enumeration of parsed property names rejects lowercase-only ManagerVersion in the ZIP and lowercase-only EntryMethod in the bare manifest. Both genuine controls pass. R6-F4 concerns duplicate declarations lost during parsing.
+- **R5-F5** — `fix_verified` — ZIP staging hashes one snapshot, checks its four exact entries, writes those bytes, and verifies the staged manifest and DLL before the optional override. Both replacement archives were refused with an empty destination. R6-F2 concerns ownership of a colliding destination directory.
+
+#### Evidence assessment
+
+- **Inspected:** The controller mission, request, developer report, transcript notice, prior findings ledger, candidate gate receipt, AGENTS.md, and CLAUDE.md.; The M..H feature diff, the corrections since 7360f8e, the shipping manifest and project, both compiler-reference gates, and the build, package, and standalone validation paths.; The native runner’s staging, restoration, lock, and journal consumers, their disposable fixtures, and the build, package, compatibility, and historical native records.
+- **Executed verification:** The controller receipt binds scripts/Test.ps1 to bdd506d0600a3d61382baa3232a713c5b0fb4fae. It records exit 0 in 64.0 seconds and an unchanged worktree. Its output tail confirms all 20 package-provenance cases passed.; The exported results at 91da7b6 record 55 of 55 unit tests, 97 of 97 provenance checks, and 20 of 20 package-provenance checks passing. Git confirms that only documentation and evidence changed between that commit and H.; I verified all 11 exported evidence hashes against their Git blobs. The clean build and package records at 48cff41 agree on the source commit and DLL digest. The package manifest and validator agree on ZIP SHA-256 8fcb0d5e769a6f359a3e64344747265399df52615c6afe5b3844d3ce56447ec5.; Read-only Windows PowerShell 5.1 checks confirmed that null and empty-array dirty flags become false, duplicate JSON names collapse to the last value, and ValidateSet accepts and preserves lowercase release.
+- **Source inspection only:** The remaining cross-run ownership, interrupted-write, staging rollback, and saved-summary failures follow from control flow. The recorded fixtures cover different failure points.; The compiler targets check the selected and resolved UMM and Harmony inputs. The packaged-reference reports and static API audit identify the same frozen product DLL.
+- **Required gaps:** Demonstrate recoverable journal publication, preservation of a successor’s files and journal, and an accurate saved status when journal retirement fails.; Demonstrate that a staging collision preserves the other directory through rollback and recovery.; Exercise contradictory receipts, duplicate manifest members, and supported configuration casing through the real packaging and validation entry points. Supply the corrected candidate’s gate receipt.
+- **Limitations:** The controller withheld the mixed foreground transcript. The candidate-bound gate receipt and the separately attributed exported records are the available execution evidence.; This review used read-only checks. Native skip and persistence observations come from the documented November 8 runs on the same product DLL under 0.31.1, 0.32.4, and owner 0.33.0. UMM 0.33.4 has static evidence only because the guarded runner lacks a reviewed profile.
+
+#### Summary
+
+- **Delivered behavior:** Cutscene Skip declares UMM 0.31.1. The release records identify UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1 in product DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba, MVID a494d31e-dfb6-469f-b2a7-787e3094639d. The standalone validator inspects the supplied DLL, and ZIP staging now binds extraction to the validated archive bytes.
+- **Scope reviewed:** The final Cutscene Skip candidate against the enrolled mission, with emphasis on the five pending findings and the packaging, staging, recovery, and evidence paths affected by their corrections.
+- **Pending later-phase work:** none
+- **Unresolved questions:** none
+- **Remaining owner review:** The owner retains the decision whether to merge draft PR #3 or make a later release after a corrected candidate completes review.
+
+#### Provenance (controller-recorded)
+
+| | Requested | Observed |
+|---|---|---|
+| Model | `gpt-6.2-astra` | `gpt-6.2-astra` (turns ['gpt-6.2-astra']) |
+| Reasoning effort | `max` | `max` (turns ['max']) |
+| Sandbox / approvals | read-only / never | `read-only` / `never` |
+
+Owner guidance bound to this review: none.
+
+Owner amendments bound to this review: none.
+
+Codex CLI `0.170.0`, thread `01a20e2e-7ded-7f23-aefe-adf15b3e6e97`, duration 670.3s, response sha256 `e89890ba1b6a82fdd652a6f548d45ecb3f5e4c9828917ef76aef3043a6ffa7c0`, request `ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r06-1f648b`. Observed values come from the Codex session rollout's recorded thread settings, not from the model's own statements; the serving backend's model identity is not separately exposed.
+
+<details><summary>Complete structured review (agent-review.review.v1)</summary>
+
+```json
+{
+  "candidate_commit": "bdd506d0600a3d61382baa3232a713c5b0fb4fae",
+  "checkpoint_id": "final",
+  "checkpoint_type": "final",
+  "decision": "changes_required",
+  "decision_rationale": "The controller gate passed, and the recorded product DLL matches the released DLL and the required compiler pins. Readiness is blocked because recovery can overwrite a successor\u2019s journal, staging cleanup can delete a directory the run never created, and packaging can certify a DLL built from uncommitted source.\n\nContinuation for Claude\n\nKeep the correction within Skip\u2019s packaging, validation, and native transaction helpers. Preserve transaction ownership through restoration, journal publication, and retirement. Make journal replacement recoverable after interruption, record retirement failures in the saved host status, and make staging cleanup conditional on ownership of the directory. Finish the receipt checks for product changes and recorded reference versions, preserve supported configuration spelling, and check required manifest members before JSON parsing discards duplicates.\n\nUse the existing temporary checkout and disposable lab fixtures to exercise the failure paths in the findings. Retain the genuine package, altered-DLL, held-lock retry, and genuine ZIP staging controls. Rebuild affected inputs, refresh the artifact records, and run the configured test gate on the corrected commit. The gameplay implementation, compiler pins, and historical loader results remain outside the correction scope.",
+  "evidence_assessment": {
+    "executed_verification": [
+      "The controller receipt binds scripts/Test.ps1 to bdd506d0600a3d61382baa3232a713c5b0fb4fae. It records exit 0 in 64.0 seconds and an unchanged worktree. Its output tail confirms all 20 package-provenance cases passed.",
+      "The exported results at 91da7b6 record 55 of 55 unit tests, 97 of 97 provenance checks, and 20 of 20 package-provenance checks passing. Git confirms that only documentation and evidence changed between that commit and H.",
+      "I verified all 11 exported evidence hashes against their Git blobs. The clean build and package records at 48cff41 agree on the source commit and DLL digest. The package manifest and validator agree on ZIP SHA-256 8fcb0d5e769a6f359a3e64344747265399df52615c6afe5b3844d3ce56447ec5.",
+      "Read-only Windows PowerShell 5.1 checks confirmed that null and empty-array dirty flags become false, duplicate JSON names collapse to the last value, and ValidateSet accepts and preserves lowercase release."
+    ],
+    "inspected": [
+      "The controller mission, request, developer report, transcript notice, prior findings ledger, candidate gate receipt, AGENTS.md, and CLAUDE.md.",
+      "The M..H feature diff, the corrections since 7360f8e, the shipping manifest and project, both compiler-reference gates, and the build, package, and standalone validation paths.",
+      "The native runner\u2019s staging, restoration, lock, and journal consumers, their disposable fixtures, and the build, package, compatibility, and historical native records."
+    ],
+    "limitations": [
+      "The controller withheld the mixed foreground transcript. The candidate-bound gate receipt and the separately attributed exported records are the available execution evidence.",
+      "This review used read-only checks. Native skip and persistence observations come from the documented November 8 runs on the same product DLL under 0.31.1, 0.32.4, and owner 0.33.0. UMM 0.33.4 has static evidence only because the guarded runner lacks a reviewed profile."
+    ],
+    "required_gaps": [
+      "Demonstrate recoverable journal publication, preservation of a successor\u2019s files and journal, and an accurate saved status when journal retirement fails.",
+      "Demonstrate that a staging collision preserves the other directory through rollback and recovery.",
+      "Exercise contradictory receipts, duplicate manifest members, and supported configuration casing through the real packaging and validation entry points. Supply the corrected candidate\u2019s gate receipt."
+    ],
+    "source_inspection_only": [
+      "The remaining cross-run ownership, interrupted-write, staging rollback, and saved-summary failures follow from control flow. The recorded fixtures cover different failure points.",
+      "The compiler targets check the selected and resolved UMM and Harmony inputs. The packaged-reference reports and static API audit identify the same frozen product DLL."
+    ]
+  },
+  "findings": [
+    {
+      "acceptance_ids": [
+        "mission \u00a77",
+        "AGENTS.md native recovery"
+      ],
+      "actual": "Assert-RuntimeLockOwner closes its read handle before Restore-RunJournal changes files and publishes a journal. A delayed recovery can therefore act on B\u2019s state before its final lock check detects B. The normal finalizer also writes A\u2019s release journal at NativeProduct.ps1 line 166 even when lock release explicitly refused B\u2019s ownership. Journal retirement separately reads the journal and deletes by path.",
+      "blocking_rationale": "Run B can lose staged files or the restoration instructions needed to recover the owner\u2019s installation.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "Once B owns the lab, an invocation for A preserves B\u2019s staged state, lock, and journal.",
+      "id": "R5-F3",
+      "location": {
+        "file": "scripts/runtime/RuntimeLab.Common.ps1",
+        "line": 292
+      },
+      "priority": "P1",
+      "requested_correction": "Keep verified transaction ownership effective through restoration and journal retirement. Coordinate recovery with an active finalizer and prevent stale completion or setup rollback from publishing over a successor\u2019s journal.",
+      "requested_evidence": "Use overlapping disposable invocations with a controlled handoff to B. Show that the delayed invocation preserves B\u2019s staged files, lock, and journal bytes. Retain the existing exclusive lock-deletion and held-lock retry cases.",
+      "title": "A stale recovery or finalizer can overwrite the next run\u2019s journal",
+      "trigger": "Two recoveries admit run A before either finishes. One releases A, and run B starts staging before the other resumes. Recovery can also release A while its normal host is still performing integrity checks."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a75",
+        "mission \u00a76"
+      ],
+      "actual": "Package.ps1 casts a present product_inputs_dirty to bool and ignores product_input_changes. Both null and an empty array select false even with dirty set to true and a changed source file listed. Once the checkout is clean, the remaining checks accept the dirty-build DLL\u2019s genuine digest.",
+      "blocking_rationale": "The package can record provenance_verified for product bytes that the named committed source did not produce.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "A verified source binding requires a valid dirty-state field consistent with the receipt\u2019s recorded product changes.",
+      "id": "R6-F1",
+      "location": {
+        "file": "scripts/Package.ps1",
+        "line": 42
+      },
+      "priority": "P1",
+      "requested_correction": "Require an actual JSON boolean for the applicable dirty flag and reject a clean claim that conflicts with recorded product changes. Preserve the supported legacy receipt path with a typed dirty flag.",
+      "requested_evidence": "Use the existing alternate-DLL build fixture with that build\u2019s own receipt and matching digest. Show refusal for malformed or contradictory dirty metadata after the source is restored, and acceptance of the genuine clean control.",
+      "title": "Malformed dirty metadata can certify a DLL built from uncommitted source",
+      "trigger": "Package the DLL from a locally modified build after reverting the source, using its receipt with a null or empty-array product_inputs_dirty and the original nonempty product_input_changes."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a77",
+        "AGENTS.md native transaction"
+      ],
+      "actual": "If New-Item fails because the destination appeared after the initial check, the catch recursively deletes whatever now occupies that path. Invoke-NativeRun.ps1 has already added the destination to journal.staged, so restoration can delete it again.",
+      "blocking_rationale": "A failed staging attempt can remove another installation\u2019s mod files.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "A destination collision preserves the existing directory and its contents through both rollback and recovery.",
+      "id": "R6-F2",
+      "location": {
+        "file": "scripts/runtime/NativeProduct.ps1",
+        "line": 97
+      },
+      "priority": "P1",
+      "requested_correction": "Track ownership of the directory actually created or published by this transaction. Apply that ownership check in immediate cleanup and journal-driven restoration.",
+      "requested_evidence": "In a disposable Mods tree, arrange for a directory containing a sentinel file to claim the destination before creation. Show that staging refuses and that both immediate cleanup and recovery preserve the sentinel.",
+      "title": "Staging rollback can delete a product directory it failed to create",
+      "trigger": "Another process creates Mods\\KingmakerCutsceneSkip after the runner checks that the path is free and before the runner creates its directory."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a77",
+        "AGENTS.md native recovery"
+      ],
+      "actual": "The new handoff calls Save-Journal, which uses Set-Content on the only active-run.json. That truncates the ordinary journal before the release record is fully written. Interruption can leave an empty or partial document alongside the held lock. The setup rollback at NativeProduct.ps1 line 201 also suppresses a journal-write failure.",
+      "blocking_rationale": "A surviving lock can still lack a usable recovery record, preventing the next guarded run.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "Until lock release is confirmed, recovery can read either the previous complete journal or the complete release record.",
+      "id": "R5-F2",
+      "location": {
+        "file": "scripts/runtime/RuntimeLab.Common.ps1",
+        "line": 273
+      },
+      "priority": "P2",
+      "requested_correction": "Publish the completed journal atomically while preserving the last usable record if publication fails. Surface failures establishing recovery state during setup rollback.",
+      "requested_evidence": "Interrupt or fail publication in a disposable lab. Show that a complete journal remains readable and that a subsequent recovery clears the owned transaction. Keep the passing lock-sharing-denial retry case.",
+      "title": "The journal handoff can still lose its only readable record",
+      "trigger": "The host stops or a write fails while restoration is replacing the ordinary journal with the release-lock record."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a77",
+        "mission \u00a78"
+      ],
+      "actual": "The journal-removal catch only appends to the local failures list. Complete-NativeRun then writes host-summary.json with status passed and throws afterward. The leftover journal causes the next preflight to refuse.",
+      "blocking_rationale": "The saved evidence reports success for a host invocation that failed required cleanup.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "The saved summary records the failed cleanup, the successful lock release, and the original scenario outcome.",
+      "id": "R6-F3",
+      "location": {
+        "file": "scripts/runtime/NativeProduct.ps1",
+        "line": 157
+      },
+      "priority": "P2",
+      "requested_correction": "Record journal-retirement failure as an integrity failure before writing the summary. Preserve scenarioStatus, lockReleased, and the retryable journal.",
+      "requested_evidence": "Hold the release journal readable but undeletable in a disposable lab. Verify the saved failed host status and successful lock release, then show recovery retires the journal after the handle closes.",
+      "title": "Failed journal retirement leaves a passing host summary",
+      "trigger": "The scenario and restoration pass and the lock is released, but Windows refuses deletion of the release journal."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a75",
+        "mission \u00a76"
+      ],
+      "actual": "Both manifest routes call ConvertFrom-Json before counting property names. Windows PowerShell 5.1 retains only the last occurrence of an exactly repeated name. The count therefore reports one even when the supplied manifest contains conflicting minimums or entry methods.",
+      "blocking_rationale": "The standalone validator can certify a package whose manifest declares two different values for a required shipping field.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "Each required shipping member has one unambiguous declaration in the supplied manifest.",
+      "id": "R6-F4",
+      "location": {
+        "file": "scripts/Validate-Package.ps1",
+        "line": 75
+      },
+      "priority": "P2",
+      "requested_correction": "Detect duplicate required top-level members while reading the original JSON, before conversion collapses them. Use the same check for ZIP and bare manifests.",
+      "requested_evidence": "Supply raw ZIP and bare manifests with conflicting repeated required names whose last value is genuine. Show standalone rejection and retain the single-declaration passing controls.",
+      "title": "Duplicate manifest declarations disappear before the uniqueness check",
+      "trigger": "A supplied Info.json repeats ManagerVersion or EntryMethod with conflicting values and places the expected value last."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a75",
+        "mission \u00a76"
+      ],
+      "actual": "The public ValidateSet accepts release and preserves its spelling. The new ordinal comparison then rejects an authentic Release receipt even though both spellings select the same Windows build output. The previous comparison accepted this invocation.",
+      "blocking_rationale": "The correction breaks a supported packaging invocation for a genuine candidate.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "Equivalent accepted spellings of Debug or Release select the same configuration. A genuinely different configuration is refused.",
+      "id": "R6-F5",
+      "location": {
+        "file": "scripts/Package.ps1",
+        "line": 38
+      },
+      "priority": "P2",
+      "requested_correction": "Keep scalar-string validation and canonicalize the supported configurations on both sides or compare them with OrdinalIgnoreCase.",
+      "requested_evidence": "Package a genuine Release build with lowercase release and retain a negative control for a Debug versus Release mismatch.",
+      "title": "Configuration casing rejects a genuine build receipt",
+      "trigger": "Build with the default Release configuration, then invoke Package.ps1 with -Configuration release."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a75",
+        "mission \u00a76"
+      ],
+      "actual": "Get-ReferencePinProblems compares the file, digest, and source but never reads assembly_version. The passing MatchingReceiptHasNoProblems fixture supplies 1.0.0.0 for both UMM and Harmony even though its pins declare 0.31.1 and 1.2.0.1.",
+      "blocking_rationale": "Packaging can mark reference provenance verified while the supplied build receipt explicitly contradicts the compiler identity it is meant to document.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "A verified build receipt records the four-part CLR version of each pinned reference consistently with the authenticated pin.",
+      "id": "R6-F6",
+      "location": {
+        "file": "scripts/Common.ps1",
+        "line": 208
+      },
+      "priority": "P2",
+      "requested_correction": "Compare each recorded pinned assembly_version with the normalized declared version and correct the matching-receipt fixture to carry the real expected identities.",
+      "requested_evidence": "Keep a genuine product digest and reference hash, change only the recorded UMM or Harmony assembly version, and show that packaging refuses the contradictory receipt while accepting the genuine one.",
+      "title": "A build receipt can contradict the pinned assembly version and still verify",
+      "trigger": "A supplied receipt carries the genuine reference digest and source alongside a different recorded assembly_version."
+    }
+  ],
+  "prior_finding_assessments": [
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R5-F1",
+      "rationale": "The product and pinned-reference digests now require scalar strings of 64 lowercase hexadecimal characters before ordinal comparison. The alternate-DLL fixtures refused boolean and empty-array digests and accepted the restored genuine pair. R6-F1 concerns the separate source-cleanliness claim."
+    },
+    {
+      "assessment": "fix_rejected",
+      "finding_id": "R5-F2",
+      "rationale": "The held-lock fixture now completes restoration and retries release successfully. The requested durable handoff remains incomplete because its in-place write can destroy the last readable journal before the next record exists."
+    },
+    {
+      "assessment": "fix_rejected",
+      "finding_id": "R5-F3",
+      "rationale": "The configured lock, nonempty run ID, initial mismatch check, and same-handle deletion address the tested cases. Ownership still expires before restoration and journal mutation finish. A delayed invocation can overwrite or remove a successor\u2019s journal."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R5-F4",
+      "rationale": "Ordinal enumeration of parsed property names rejects lowercase-only ManagerVersion in the ZIP and lowercase-only EntryMethod in the bare manifest. Both genuine controls pass. R6-F4 concerns duplicate declarations lost during parsing."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R5-F5",
+      "rationale": "ZIP staging hashes one snapshot, checks its four exact entries, writes those bytes, and verifies the staged manifest and DLL before the optional override. Both replacement archives were refused with an empty destination. R6-F2 concerns ownership of a colliding destination directory."
+    }
+  ],
+  "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r06-1f648b",
+  "round": 6,
+  "schema_version": "agent-review.review.v1",
+  "summary": {
+    "delivered_behavior": "Cutscene Skip declares UMM 0.31.1. The release records identify UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1 in product DLL a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba, MVID a494d31e-dfb6-469f-b2a7-787e3094639d. The standalone validator inspects the supplied DLL, and ZIP staging now binds extraction to the validated archive bytes.",
+    "pending_later_phase_work": [],
+    "remaining_owner_review": [
+      "The owner retains the decision whether to merge draft PR #3 or make a later release after a corrected candidate completes review."
+    ],
+    "scope_reviewed": "The final Cutscene Skip candidate against the enrolled mission, with emphasis on the five pending findings and the packaging, staging, recovery, and evidence paths affected by their corrections.",
+    "unresolved_questions": []
+  }
+}
+```
+</details>
+
+_Model-generated review by Codex using the requested model, posted by the agent-review controller through the owner's GitHub account. Not a human review or approval._

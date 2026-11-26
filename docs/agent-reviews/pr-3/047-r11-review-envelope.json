@@ -1,0 +1,156 @@
+{
+  "B": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "H": "58cc4870ff84e54dc290540977bb9017a4d96ecf",
+  "M": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "amendment_revision": 2,
+  "amendment_sha256": "5304be854d1bcac4cd2ab4a33a273b64ea1a74d18667dfe587a0cd20d42875bd",
+  "checkpoint_id": "final",
+  "checkpoint_type": "final",
+  "fatal": false,
+  "guidance_revision": null,
+  "guidance_sha256": "none",
+  "invocation": {
+    "completed": true,
+    "duration_s": 493.0,
+    "errors": [],
+    "exit_code": 0,
+    "failed": false,
+    "observed": {
+      "approval_policy": "never",
+      "cli_version": "0.170.0",
+      "network": "restricted",
+      "observed_effort": "max",
+      "observed_model": "gpt-6.2-astra",
+      "plan_type": "pro",
+      "rollout_found": true,
+      "sandbox": "read-only",
+      "source": "Codex session rollout (CLI-recorded thread settings; not model-authored)",
+      "subagent_suspected": false,
+      "turn_efforts": [
+        "max"
+      ],
+      "turn_models": [
+        "gpt-6.2-astra"
+      ],
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 1119872,
+        "input_tokens": 1232294,
+        "output_tokens": 16722,
+        "reasoning_output_tokens": 9582,
+        "total_tokens": 1249016
+      }
+    },
+    "requested": {
+      "effort": "max",
+      "model": "gpt-6.2-astra",
+      "sandbox": "read-only"
+    },
+    "thread_id": "01a218b5-125c-7ca2-a791-46c828bbb35a",
+    "timed_out": false
+  },
+  "mission": {
+    "id": "kingmaker-umm-0311-mission-20261123",
+    "sha256": "f7d990f396c858ad663020133baba66e0cefb57f2b8be54a26d96186f86b24d5"
+  },
+  "ok": true,
+  "path": "~\\.agent-review\\state\\ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f\\rounds\\r11\\envelope-1.json",
+  "pr": 3,
+  "project_sha256": "9363dae8e8c7b3854c5e46e22149d5639bdd2f5b48fa2d8f456889f2331df6f1",
+  "protocol": "agent-review.v1",
+  "publication": "r11-review",
+  "published": [
+    {
+      "comment_id": 7197990287,
+      "of": 1,
+      "part": 1,
+      "url": "https://github.com/howardreith/KingmakerSkipCinematic/pull/3#issuecomment-7197990287"
+    }
+  ],
+  "raw_result_if_rejected": null,
+  "reasons": [],
+  "repository": "howardreith/KingmakerSkipCinematic",
+  "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r11-4a7755",
+  "response_sha256": "ed68119674dcadbc7596b3e84c95c7f874be8dcfa635216cddb8dadc595b87ba",
+  "result": {
+    "candidate_commit": "58cc4870ff84e54dc290540977bb9017a4d96ecf",
+    "checkpoint_id": "final",
+    "checkpoint_type": "final",
+    "decision": "ready_for_owner_review",
+    "decision_rationale": "The candidate satisfies all three Skip corrections in OWNER AMENDMENT 2. The controller gate confirmed that a relative path selected the intended production ZIP, that the admitted archive and extracted DLL matched its manifest, and that the runner removed its private copy after a later setup failure. One optional issue affects how the test reads paths on other Windows hosts.",
+    "evidence_assessment": {
+      "executed_verification": [
+        "The controller ran scripts/Test.ps1 at 58cc4870ff84e54dc290540977bb9017a4d96ecf. The gate exited 0 in 75.6 seconds, recorded an unchanged worktree, and reported 35 package-provenance cases with zero failures.",
+        "The gate recorded production ZIP SHA-256 cfb98788ea32e86419f8bca9792e82c7abfbbab36c9870408c96ff4760bd22ad and extracted DLL SHA-256 a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba. Both matched the clean production manifest.",
+        "The extracted DLL digest matches the archived static audit for MVID a494d31e-dfb6-469f-b2a7-787e3094639d. That audit recorded all 6 types and 18 members resolved on UMM 0.31.1, 0.32.4, the owner\u2019s 0.33.0, and 0.33.4.",
+        "I matched all 11 indexed evidence files to their recorded Git blob SHA-256 digests. An in-memory PowerShell check also reproduced the optional probe-parsing issue."
+      ],
+      "inspected": [
+        "The mission, both owner amendments, repository instructions, developer report, pending findings, and controller gate receipt.",
+        "The 3,329-line feature diff matched the Git diff from the supplied merge base. I traced the round-11 changes through the production packaging fixture, ZIP helpers, and runner setup catch."
+      ],
+      "limitations": [
+        "The supplied gate receipt contains the output tail. The developer report supplies the 55/55 unit and 70/70 provenance subtotals and the separate 78-second direct run.",
+        "Native gameplay, save persistence, and combined-stack testing for this change remain NOT RUN under OWNER AMENDMENT 2. The runner fixture ended before native locking or staging."
+      ],
+      "required_gaps": [],
+      "source_inspection_only": [
+        "The runner\u2019s staging path extracts through the held archive stream. The positive fixture exercised that extraction helper against a disposable destination. The runner failure fixture exercised cleanup before extraction."
+      ]
+    },
+    "findings": [
+      {
+        "acceptance_ids": [
+          "OWNER AMENDMENT 2, Skip production-ZIP handoff fixture"
+        ],
+        "actual": "The probe parser stops at the first closing brace, including one inside a JSON path string. Invoke-Script also collapses repeated spaces before parsing. In memory, C:\\build{42} caused JSON decoding to fail and C:\\build  temp decoded to a different path.",
+        "blocking_rationale": "The paths in the candidate receipt decoded correctly and both artifact hashes matched. This affects portability of the test fixture.",
+        "blocks_readiness": false,
+        "category": "optional_polish",
+        "expected": "The fixture preserves the selected paths when decoding the probe output.",
+        "id": "R11-F1",
+        "location": {
+          "file": "scripts/Test-PackageProvenance.ps1",
+          "line": 265
+        },
+        "priority": "P3",
+        "requested_correction": "Preserve the raw probe output line and pass the complete text after the PROBE prefix to ConvertFrom-Json.",
+        "requested_evidence": "Round-trip a probe record containing a closing brace and consecutive spaces in its directory name.",
+        "title": "The handoff test can misread a valid temporary directory name",
+        "trigger": "Run the package-provenance suite with a TEMP path containing a closing brace or consecutive spaces."
+      }
+    ],
+    "prior_finding_assessments": [
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R10-F1",
+        "rationale": "Open-ValidatedProductZip resolves the argument with Resolve-Path -LiteralPath, requires one FileSystem file, and passes its absolute ProviderPath to File.Copy. The gate recorded the selected source in the PowerShell location while the process directory held a different ZIP of the same name."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R8-F1",
+        "rationale": "The fixture retained the ZIP and manifest from the clean Build.ps1 and Package.ps1 run before modifying its checkout. The real copy, validation, and extraction helpers produced both manifest digests. The refusal case still requires the specific UMM 0.33.0.0 reference diagnostic."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R9-F3",
+        "rationale": "The real runner passed standalone validation and reached the injected setup failure with one private folder containing product.zip. It exited 1. The fixture observed zero private folders afterward, an empty Mods destination, and no lock marker. The runner\u2019s catch performed the cleanup before the fixture inspected those paths."
+      }
+    ],
+    "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r11-4a7755",
+    "round": 11,
+    "schema_version": "agent-review.review.v1",
+    "summary": {
+      "delivered_behavior": "Cutscene Skip declares UMM 0.31.1 and compiles against UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1. The package checks bind the shipping DLL to its build receipt, inspect its actual loader references, and carry the caller-selected archive through validation and extraction.",
+      "pending_later_phase_work": [],
+      "remaining_owner_review": [
+        "Decide whether to accept the tooling and compatibility evidence in draft PR #3."
+      ],
+      "scope_reviewed": "The final Cutscene Skip candidate for PR #3 under the amended mission, including the three pending findings and their affected callers.",
+      "unresolved_questions": []
+    }
+  },
+  "round": 11,
+  "validated_at": "2026-11-26T16:42:22Z",
+  "workflow_fingerprint": "6d613defe7bfe2f01a5818a2cd41b281965f438c45a0ca37ce15957e4dcffe19"
+}

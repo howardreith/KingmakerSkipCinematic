@@ -1,0 +1,220 @@
+{
+  "B": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "H": "8d2cfd38d1d86d604bfe495af6a781a600ade033",
+  "M": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "amendment_revision": 1,
+  "amendment_sha256": "a2f26787968fd209dccca023305660a73ad7dbba2bbb1c15dff0131891965f67",
+  "checkpoint_id": "final",
+  "checkpoint_type": "final",
+  "fatal": false,
+  "guidance_revision": null,
+  "guidance_sha256": "none",
+  "invocation": {
+    "completed": true,
+    "duration_s": 837.0,
+    "errors": [],
+    "exit_code": 0,
+    "failed": false,
+    "observed": {
+      "approval_policy": "never",
+      "cli_version": "0.170.0",
+      "network": "restricted",
+      "observed_effort": "max",
+      "observed_model": "gpt-6.2-astra",
+      "plan_type": "pro",
+      "rollout_found": true,
+      "sandbox": "read-only",
+      "source": "Codex session rollout (CLI-recorded thread settings; not model-authored)",
+      "subagent_suspected": false,
+      "turn_efforts": [
+        "max"
+      ],
+      "turn_models": [
+        "gpt-6.2-astra"
+      ],
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 1970816,
+        "input_tokens": 2087983,
+        "output_tokens": 25921,
+        "reasoning_output_tokens": 16262,
+        "total_tokens": 2113904
+      }
+    },
+    "requested": {
+      "effort": "max",
+      "model": "gpt-6.2-astra",
+      "sandbox": "read-only"
+    },
+    "thread_id": "01a21842-fc6b-7571-8d1d-bee002594367",
+    "timed_out": false
+  },
+  "mission": {
+    "id": "kingmaker-umm-0311-mission-20261123",
+    "sha256": "f7d990f396c858ad663020133baba66e0cefb57f2b8be54a26d96186f86b24d5"
+  },
+  "ok": true,
+  "path": "~\\.agent-review\\state\\ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f\\rounds\\r09\\envelope-1.json",
+  "pr": 3,
+  "project_sha256": "9363dae8e8c7b3854c5e46e22149d5639bdd2f5b48fa2d8f456889f2331df6f1",
+  "protocol": "agent-review.v1",
+  "publication": "r09-review",
+  "published": [
+    {
+      "comment_id": 7195229204,
+      "of": 1,
+      "part": 1,
+      "url": "https://github.com/howardreith/KingmakerSkipCinematic/pull/3#issuecomment-7195229204"
+    }
+  ],
+  "raw_result_if_rejected": null,
+  "reasons": [],
+  "repository": "howardreith/KingmakerSkipCinematic",
+  "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r09-390b03",
+  "response_sha256": "b7c05e378577d39b0afdf6f8f736ca59998618f854d3cc8a8445935543df4009",
+  "result": {
+    "candidate_commit": "8d2cfd38d1d86d604bfe495af6a781a600ade033",
+    "checkpoint_id": "final",
+    "checkpoint_type": "final",
+    "decision": "changes_required",
+    "decision_rationale": "The candidate gate passed, and the duplicate-manifest correction is verified. The supplied-ZIP path now rejects the tested invalid archive, but the gate lacks a successful runner handoff and can enter the owner's native installation if rejection regresses. The runner also leaves the validated ZIP open to modification before extraction and can leave its temporary copy behind on setup failure.\n\n## Continuation for Claude\n\nKeep the correction within the product-ZIP preflight and its tests. Keep the admitted bytes stable from validation through extraction and cover the lifetime of any temporary copy. Use a disposable fixture with a hard stop before native locking or staging. Exercise the exact UMM 0.33.0.0 mismatch and a genuine baseline ZIP through the same preflight. Preserve the comparison-only `-NoProduct` route and existing runtime guards. Record the observations and rerun the configured `test` gate within the existing allowance.",
+    "evidence_assessment": {
+      "executed_verification": [
+        "Verified HEAD, merge base, mission and amendment digests. The gate log SHA-256 matched its controller receipt. `git diff --check` passed.",
+        "The controller ran `scripts/Test.ps1` at the exact candidate. It exited 0 in 70.3 seconds with 55/55 unit, 65/65 provenance and 33/33 package-provenance cases passing.",
+        "The log confirms both pinned compiler-input hashes, a genuine build and package without an override, rejection of a substituted cache file and rejection of a DLL that differed from its receipt.",
+        "Both single-quoted-brace fixtures passed on the ZIP and bare-manifest routes. The gate also recorded the standalone UMM 0.33.0.0 mismatch, genuine package acceptance and the runner's invalid-ZIP refusal."
+      ],
+      "inspected": [
+        "The mission, OWNER AMENDMENT 1, repository instructions, developer report, prior ledger, full 3,131-line feature diff and four-file correction since 8cc7ab5.",
+        "The production project and compiler targets, package and receipt checks, manifest scanner, runner preflight and extraction, test fixtures, compatibility records and candidate-bound gate log."
+      ],
+      "limitations": [
+        "The review used a read-only snapshot. The shell's constrained language mode prevented an additional in-memory manifest-helper probe. The executed manifest results come from the controller gate.",
+        "The foreground transcript is withheld. The controller receipt confirms the required gate independently of the developer's account of the direct reruns.",
+        "Native gameplay and combined-stack checks were not run for this correction. The 0.33.4 evidence is static only."
+      ],
+      "required_gaps": [
+        "Observe a genuine baseline ZIP reaching the runner's post-validation handoff and the mismatched ZIP failing for its specific reference error in an isolated fixture.",
+        "Verify that the bytes handed to extraction remain the validated bytes and that a setup error releases the newly acquired package resource."
+      ],
+      "source_inspection_only": [
+        "The product-present branch validates before locking. The `-NoProduct` branch keeps the supplied ZIP for comparison. The only current gate invocation of the runner uses the invalid ZIP.",
+        "The unprotected interval before extraction, the temporary-copy cleanup gap and the test's route into a native transaction were identified by tracing the candidate source.",
+        "The archived audit records static resolution on 0.31.1, 0.32.4, owner 0.33.0 and 0.33.4 for DLL SHA-256 a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba. The candidate gate records the same frozen DLL hash."
+      ]
+    },
+    "findings": [
+      {
+        "acceptance_ids": [
+          "mission \u00a76",
+          "OWNER AMENDMENT 1 scope freeze and validation allowance"
+        ],
+        "actual": "The test invokes the real runner with `chain-lifecycle.json`, the worktree's game configuration and the default owner installation. It reads the user's Steam registry before ZIP validation. On a prepared lab with a built harness and clear guards, an unexpected admission can move the owner's Mods directory and launch Kingmaker before the test checks its result. The lock check and shared TEMP file counts happen after the child exits.",
+        "blocking_rationale": "A failure of the condition under test can turn the required package gate into a native transaction against the owner's installation.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "Both acceptance and rejection end at a fixture-owned boundary before any native lock, staging or launch.",
+        "id": "R9-F1",
+        "location": {
+          "file": "scripts/Test-Provenance.ps1",
+          "line": 282
+        },
+        "priority": "P1",
+        "requested_correction": "Exercise the real package preflight in a disposable fixture that cannot proceed into the native transaction. Confine its temporary-file and lock observations to that fixture.",
+        "requested_evidence": "Show that even a successfully admitted ZIP reaches only the fixture handoff and that the check runs independently of the owner's Steam registry and runtime lock.",
+        "title": "The package gate can enter a live native run when its refusal regresses",
+        "trigger": "Run `scripts/Test.ps1` on a prepared lab when the expected product-ZIP rejection fails."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a76",
+          "R8-F1 requested evidence"
+        ],
+        "actual": "The runner is invoked only with `newer-umm.zip`. Its assertion accepts the generic standalone-validation failure message. Genuine ZIP controls invoke the validator separately. A runner invocation that fails validation for every ZIP would pass this test.",
+        "blocking_rationale": "The requested passing control at the installation handoff is missing, and the negative runner assertion cannot distinguish the intended metadata mismatch from an unrelated validator error.",
+        "blocks_readiness": true,
+        "category": "evidence_gap",
+        "expected": "The same runner preflight rejects the newer-reference ZIP for its UMM identity and hands a genuine baseline ZIP to the next step.",
+        "id": "R8-F1",
+        "location": {
+          "file": "scripts/Test-Provenance.ps1",
+          "line": 285
+        },
+        "priority": "P2",
+        "requested_correction": "Add the passing baseline control to the isolated runner fixture and assert the underlying reference diagnostic in the refusal case.",
+        "requested_evidence": "A candidate-bound gate showing the 0.33.0.0 mismatch before handoff and the genuine 0.31.1.0 package reaching handoff before any native transaction.",
+        "title": "A genuine baseline ZIP has no observed runner handoff",
+        "trigger": "Verify the product-present `-ProductZip` procedure with the round-9 gate."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a76",
+          "OWNER AMENDMENT 1 package accuracy"
+        ],
+        "actual": "The validator closes its snapshot and exits. The runner hashes the temporary pathname at line 106 and reopens it for `Expand-Archive` at line 166. It holds no handle preventing writes or replacement and does not compare extraction with the validator's digest. The earlier replacement fixtures exercised the implementation removed in round 8.",
+        "blocking_rationale": "A changed prepared archive can stage a manifest or file set that never passed standalone validation. A change after the summary hash is taken also makes the recorded ZIP identity inaccurate.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "Validation, the recorded digest and extraction all refer to the same archive bytes.",
+        "id": "R9-F2",
+        "location": {
+          "file": "scripts/runtime/Invoke-NativeRun.ps1",
+          "line": 166
+        },
+        "priority": "P2",
+        "requested_correction": "Keep the input protected against writes and replacement through extraction, or consume one verified snapshot for both validation and handoff.",
+        "requested_evidence": "In a disposable fixture, confirm that a change to the prepared file cannot change the manifest or file set handed to staging. Retain the passing baseline control.",
+        "title": "Extraction reopens the validated ZIP without protecting its contents",
+        "trigger": "The prepared ZIP changes after the standalone validator returns and before extraction."
+      },
+      {
+        "acceptance_ids": [
+          "OWNER AMENDMENT 1 correction of mission-introduced regressions"
+        ],
+        "actual": "The preflight catch ends after lock acquisition. Evidence and backup directory creation occurs at line 94, before the `try` whose `finally` removes the ZIP. If directory creation throws, the newly copied `kmcs-validated-product-*.zip` remains in TEMP.",
+        "blocking_rationale": "An ordinary setup error leaks a resource introduced by this correction and contradicts the report's claim that the copy is removed on every outcome.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "Every handled setup failure releases the package resource acquired by this invocation.",
+        "id": "R9-F3",
+        "location": {
+          "file": "scripts/runtime/Invoke-NativeRun.ps1",
+          "line": 94
+        },
+        "priority": "P2",
+        "requested_correction": "Cover the temporary copy from creation through handoff with one cleanup scope, or use a protected input handle that eliminates the copy.",
+        "requested_evidence": "Force a post-validation setup error in a disposable fixture and verify that its temporary ZIP is gone or its input handle has been released.",
+        "title": "A setup error can strand the preflight's temporary ZIP",
+        "trigger": "A valid ZIP passes preflight and the runner cannot create its evidence or backup directory."
+      }
+    ],
+    "prior_finding_assessments": [
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R6-F4",
+        "rationale": "The scanner rejects a single quote outside a double-quoted string before enclosed punctuation can alter its depth. The candidate gate confirms the specific syntax refusal on both manifest routes, rejection of double-quoted duplicate fields and acceptance of the genuine display name containing an apostrophe."
+      },
+      {
+        "assessment": "fix_rejected",
+        "finding_id": "R8-F1",
+        "rationale": "The missing preflight call has been restored, and the invalid fixture reached the runner's refusal. The requested verification is incomplete because the runner assertion checks only a generic error and no genuine baseline ZIP was observed reaching its handoff."
+      }
+    ],
+    "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r09-390b03",
+    "round": 9,
+    "schema_version": "agent-review.review.v1",
+    "summary": {
+      "delivered_behavior": "Cutscene Skip declares UMM 0.31.1 and builds against UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1. The packaged-DLL reference checks pass, and the manifest scanner rejects the reported ambiguous declaration on both routes.",
+      "pending_later_phase_work": [],
+      "remaining_owner_review": [
+        "Decide whether to accept draft PR #3 after the package-path corrections receive a current controller handoff."
+      ],
+      "scope_reviewed": "Final correction review of KingmakerSkipCinematic PR #3 under OWNER AMENDMENT 1, including both pending findings and the directly affected package, runner and test paths.",
+      "unresolved_questions": []
+    }
+  },
+  "round": 9,
+  "validated_at": "2026-11-26T14:43:29Z",
+  "workflow_fingerprint": "6d613defe7bfe2f01a5818a2cd41b281965f438c45a0ca37ce15957e4dcffe19"
+}

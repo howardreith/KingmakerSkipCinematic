@@ -1,0 +1,264 @@
+{
+  "B": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "H": "7360f8e08daaf1fbeab34f0a0e3e98811206a55f",
+  "M": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "amendment_revision": null,
+  "amendment_sha256": "none",
+  "checkpoint_id": "final",
+  "checkpoint_type": "final",
+  "fatal": false,
+  "guidance_revision": null,
+  "guidance_sha256": "none",
+  "invocation": {
+    "completed": true,
+    "duration_s": 747.0,
+    "errors": [],
+    "exit_code": 0,
+    "failed": false,
+    "observed": {
+      "approval_policy": "never",
+      "cli_version": "0.170.0",
+      "network": "restricted",
+      "observed_effort": "max",
+      "observed_model": "gpt-6.2-astra",
+      "plan_type": "pro",
+      "rollout_found": true,
+      "sandbox": "read-only",
+      "source": "Codex session rollout (CLI-recorded thread settings; not model-authored)",
+      "subagent_suspected": false,
+      "turn_efforts": [
+        "max"
+      ],
+      "turn_models": [
+        "gpt-6.2-astra"
+      ],
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 1537280,
+        "input_tokens": 1698941,
+        "output_tokens": 26364,
+        "reasoning_output_tokens": 17555,
+        "total_tokens": 1725305
+      }
+    },
+    "requested": {
+      "effort": "max",
+      "model": "gpt-6.2-astra",
+      "sandbox": "read-only"
+    },
+    "thread_id": "01a20c34-48ef-7961-b1fa-658afb4cd04f",
+    "timed_out": false
+  },
+  "mission": {
+    "id": "kingmaker-umm-0311-mission-20261123",
+    "sha256": "f7d990f396c858ad663020133baba66e0cefb57f2b8be54a26d96186f86b24d5"
+  },
+  "ok": true,
+  "path": "~\\.agent-review\\state\\ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f\\rounds\\r05\\envelope-1.json",
+  "pr": 3,
+  "project_sha256": "9363dae8e8c7b3854c5e46e22149d5639bdd2f5b48fa2d8f456889f2331df6f1",
+  "protocol": "agent-review.v1",
+  "publication": "r05-review",
+  "published": [
+    {
+      "comment_id": 7124005121,
+      "of": 1,
+      "part": 1,
+      "url": "https://github.com/howardreith/KingmakerSkipCinematic/pull/3#issuecomment-7124005121"
+    }
+  ],
+  "raw_result_if_rejected": null,
+  "reasons": [],
+  "repository": "howardreith/KingmakerSkipCinematic",
+  "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r05-54bf7e",
+  "response_sha256": "05c6e649768d5f14e47c15d1a71b789475f20e47cda1e110fcfb9bcb6b9cee8d",
+  "result": {
+    "candidate_commit": "7360f8e08daaf1fbeab34f0a0e3e98811206a55f",
+    "checkpoint_id": "final",
+    "checkpoint_type": "final",
+    "decision": "changes_required",
+    "decision_rationale": "All six prior findings are fixed for their reported triggers, and the controller recorded 152 passing checks at this commit. Five defects remain in receipt validation, manifest admission, ZIP staging and interrupted-run recovery. They can cause the tooling to certify unbound artifacts or lose control of a shared runtime transaction.\n\n## Continuation for Claude\n\nValidate receipt hashes as scalar SHA-256 strings and require the shipping manifest\u2019s named JSON fields. Bind ZIP extraction to the archive bytes that passed validation. In the runner, retain recovery state through confirmed lock release and establish local transaction ownership before replaying restoration or removing files. Exercise these cases through the existing temporary-checkout, archive and disposable-lab tests, then run the controller test gate at the corrected commit. Keep the correction within Cutscene Skip\u2019s tooling. Preserve the product identity, compiler pins, gameplay and existing native evidence.",
+    "evidence_assessment": {
+      "executed_verification": [
+        "I verified the mission and gate-log SHA-256 values, the detached HEAD and the merge base. The controller receipt binds scripts/Test.ps1 to 7360f8e08daaf1fbeab34f0a0e3e98811206a55f with exit code 0 and an unchanged worktree.",
+        "The gate log records 55/55 unit checks, 81/81 provenance checks and 16/16 package-provenance checks. It includes a genuine build and package without an override, both pinned compiler inputs, cache and receipt rejection, and the regression cases cited for R4-F1 through R4-F6.",
+        "Read-only Windows PowerShell 5.1 checks confirmed that a boolean true or empty-array receipt digest makes the package rejection condition false against a different SHA-256. They also confirmed that the manifest field check accepts managerversion when the literal ManagerVersion member is absent.",
+        "I cross-checked the committed build, package, standalone-validation and API-audit records. They identify the same DLL SHA-256, a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba. The package-validation, published-package and audit records agree on MVID a494d31e-dfb6-469f-b2a7-787e3094639d."
+      ],
+      "inspected": [
+        "The enrolled mission, AGENTS.md, CLAUDE.md, full feature diff, round-four-to-five changes, prior-findings ledger, developer report, transcript notice and controller gate evidence.",
+        "The production project and reference targets, build and package scripts, standalone validator, native staging and recovery callers, and their disposable regression fixtures.",
+        "docs/VALIDATION.md, docs/COMPATIBILITY.md and the indexed build, package, loader-profile and static-audit evidence."
+      ],
+      "limitations": [
+        "The reviewer used the detached read-only snapshot. The controller supplied the candidate gate log and receipt. The full foreground developer transcript was withheld.",
+        "The archived clean build and package records identify 50bac0d. Only evidence files changed between that commit and H. The recorded ZIP SHA-256 for 50bac0d is 05f460cfe23e191f10f93aa43057907d4c9eb35c33aa9c084b32eca34ae8b86f.",
+        "This round had no native game execution. Historical skip and persistence observations cover the identical DLL on 0.31.1, 0.32.4 and owner 0.33.0. The 0.33.4 evidence is static only because the guarded runner lacks a reviewed runtime profile."
+      ],
+      "required_gaps": [
+        "Show package refusal for malformed receipt digests and manifest members with incorrect casing.",
+        "Show that a changed private ZIP cannot stage a different manifest or additional files.",
+        "Show that ordinary interrupted recovery survives a failed lock release and that stale or foreign ownership prevents restoration and deletion before either can affect another transaction."
+      ],
+      "source_inspection_only": [
+        "The ZIP staging and recovery findings follow from the call order and file operations in NativeProduct.ps1, Invoke-NativeRun.ps1 and RuntimeLab.Common.ps1. The gate exercised different failure cases.",
+        "The audit record reports resolution of six types and 18 members across four loader profiles. I inspected the audit implementation and records. The audit was not rerun during this review."
+      ]
+    },
+    "findings": [
+      {
+        "acceptance_ids": [
+          "mission \u00a75",
+          "mission \u00a76"
+        ],
+        "actual": "Package.ps1 compares the untyped JSON value on the left of -ne. With true or an empty array in dll_sha256, that condition does not reject a different digest. The later ZIP check compares the validator\u2019s hash with the current DLL hash, so it cannot recover the missing receipt binding. The recorded pin hashes in Common.ps1 use the same comparison pattern.",
+        "blocking_rationale": "Packaging can record provenance_verified for DLL bytes that the supplied build receipt never identified.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "A verified package has a well-formed build-receipt digest that identifies the exact packaged DLL.",
+        "id": "R5-F1",
+        "location": {
+          "file": "scripts/Package.ps1",
+          "line": 38
+        },
+        "priority": "P1",
+        "requested_correction": "Require scalar strings containing valid SHA-256 digests before comparing the product and pinned-reference receipt fields. Compare the validated digests explicitly.",
+        "requested_evidence": "In the temporary checkout, supply an otherwise coherent receipt with a boolean or empty-array product digest and a different, baseline-compatible DLL. Show refusal without an override and retain the genuine receipt as a passing control.",
+        "title": "A receipt without a product digest can verify different DLL bytes",
+        "trigger": "Package a same-version DLL with valid loader references using a supplied build receipt whose dll_sha256 is JSON true or an empty array."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a77",
+          "AGENTS.md native recovery"
+        ],
+        "actual": "On the ordinary -RecoverOnly path, Restore-RunJournal deletes the journal at line 215 before Exit-RuntimeLock runs at line 229. If deletion of the lock fails, the release-only journal writer in Complete-NativeRun is never called. A second recovery then reports that no interrupted journal exists. The normal run also has a journal-free interval while it checks saves and installation integrity after restoration.",
+        "blocking_rationale": "A recoverable file-sharing error or interruption can strand the lock and prevent subsequent guarded runs.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "Recovery retains a usable record of the owned transaction until its lock release is confirmed.",
+        "id": "R5-F2",
+        "location": {
+          "file": "scripts/runtime/RuntimeLab.Common.ps1",
+          "line": 228
+        },
+        "priority": "P2",
+        "requested_correction": "Make the transition from restoration to lock release durable in both the normal and recovery paths. Retire the journal after confirmed release, and use the same recoverable handoff if post-lock setup rollback cannot release its lock.",
+        "requested_evidence": "Start with an ordinary interrupted-run journal in a disposable lab, hold the owned lock against deletion, and invoke recovery. Show that restoration completes, the first attempt retains retryable state, and a second attempt after the handle closes clears only that transaction.",
+        "title": "Ordinary recovery deletes its journal before releasing the lock",
+        "trigger": "Run -RecoverOnly on an ordinary restoration journal while a file handle permits reading the owned lock but prevents its deletion."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a77",
+          "AGENTS.md native recovery"
+        ],
+        "actual": "The ordinary branch restores Mods, Params.xml and registry state before checking the lock\u2019s run ID. The release-only branch passes the journal\u2019s lock path directly to Exit-RuntimeLock, which skips ownership comparison for an empty run ID. Its read and delete also operate through separate opens of the path.",
+        "blocking_rationale": "Recovery can change another transaction\u2019s state before reporting an ownership mismatch, or remove a lock outside the recovering lab.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "Recovery establishes ownership of the current lab\u2019s transaction before making changes and removes only the lock it verified.",
+        "id": "R5-F3",
+        "location": {
+          "file": "scripts/runtime/RuntimeLab.Common.ps1",
+          "line": 223
+        },
+        "priority": "P1",
+        "requested_correction": "Use the configured lab lock as the authority, require a nonempty matching run ID, and check ownership before restoration. Keep the ownership check effective through deletion and preserve a successor\u2019s lock and journal.",
+        "requested_evidence": "Use two disposable lab states. Show that an ordinary journal paired with another run\u2019s lock leaves the staged files untouched, and that a release-only journal with a foreign path or empty ID preserves both locks. Cover replacement of the lock between inspection and removal.",
+        "title": "Recovery can act on state outside the verified transaction",
+        "trigger": "Recover an ordinary journal for run A while the local lock records run B, or replay a stale release-only journal whose stored lock path belongs to another lab."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a75",
+          "mission \u00a76"
+        ],
+        "actual": "The field-presence test and subsequent property reads use PowerShell\u2019s case-insensitive member lookup. A manifest containing only managerversion passes the presence, type and ordinal value checks for ManagerVersion.",
+        "blocking_rationale": "The standalone validator can certify a shipping manifest that omits the required ManagerVersion JSON member.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "The supplied JSON contains the required shipping members with their declared names and values.",
+        "id": "R5-F4",
+        "location": {
+          "file": "scripts/Validate-Package.ps1",
+          "line": 74
+        },
+        "priority": "P2",
+        "requested_correction": "Check the actual property names with ordinal equality before reading the five required shipping fields. Apply the same check on ZIP and bare-manifest routes.",
+        "requested_evidence": "Change only the spelling of ManagerVersion in a ZIP manifest and EntryMethod in a bare manifest. Show standalone rejection and retain a genuine passing pair.",
+        "title": "Manifest admission accepts a missing required field under different casing",
+        "trigger": "Rename ManagerVersion to managerversion in an otherwise genuine manifest while preserving the value 0.31.1."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a76",
+          "mission \u00a77",
+          "AGENTS.md native transaction"
+        ],
+        "actual": "ZIP preparation verifies the private file and then closes it. Staging later reopens that path with Expand-Archive directly into Mods. It checks the staged DLL digest and shipping Id, but the ZIP branch does not check the staged manifest digest or bind extraction to the validated archive bytes. An additional top-level entry also falls outside the product folder recorded for cleanup.",
+        "blocking_rationale": "A run can stage a different load target under the validated DLL identity, and an extra extracted folder can survive owner-profile restoration.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "The runner stages only the validated archive contents, including the manifest that selected the product load target.",
+        "id": "R5-F5",
+        "location": {
+          "file": "scripts/runtime/NativeProduct.ps1",
+          "line": 53
+        },
+        "priority": "P1",
+        "requested_correction": "Bind extraction to a stable snapshot whose digest matches the validated ZIP, or verify an isolated extracted file set before copying the admitted files into Mods. Verify the staged manifest before any requested ManagerVersion override.",
+        "requested_evidence": "In the disposable staging fixture, change the prepared ZIP after validation while retaining its product DLL and Id. Show that a changed manifest or additional entry is refused without leaving files in the destination. Retain the genuine ZIP staging control.",
+        "title": "ZIP staging can install contents that were never validated",
+        "trigger": "The private ZIP changes between preparation and extraction while its shipping DLL and manifest Id remain the same."
+      }
+    ],
+    "prior_finding_assessments": [
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R4-F1",
+        "rationale": "Both Git comparisons now cover all of src. The candidate gate records refusal after a committed src/Directory.Build.targets change, successful packaging after rebuilding, and frozen-DLL reuse after a documentation-only commit."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R4-F2",
+        "rationale": "Game-copy selection excludes inherited shipping Ids in product-present runs. The runner checks the effective profile before staging and requires one canonical shipping folder afterward. The ZIP, bare-DLL and conflicting-owner-profile fixtures passed."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R4-F3",
+        "rationale": "The inventory enumerates folder records with -Force. The candidate gate records refusal for the Keys folder and the hidden shipping folder, plus acceptance of the unrelated-mod control."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R4-F4",
+        "rationale": "Set-GameCopyMods reads Ids from the selected source folders. The gate covered an empty selection, a valid named subset and explicit selection of the malformed manifest."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R4-F5",
+        "rationale": "The validator now compares fixed field values ordinally, and the compiler gate uses ordinal CLR identity comparison. All four soft-hyphen manifest cases passed. R5-F4 concerns lookup of the JSON member name."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R4-F6",
+        "rationale": "The normal completion fixture records integrity-failed, the preserved scenario result and lockReleased false when deletion fails. The generated release-only journal supports retry and refuses a different recorded owner in the tested case. R5-F2 concerns entry through an ordinary interrupted-run journal."
+      }
+    ],
+    "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r05-54bf7e",
+    "round": 5,
+    "schema_version": "agent-review.review.v1",
+    "summary": {
+      "delivered_behavior": "The shipping manifest declares UMM 0.31.1. The production build and packaged DLL evidence identify UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1. The six round-four corrections passed their focused checks. Package admission and guarded recovery still have the five defects listed above.",
+      "pending_later_phase_work": [],
+      "remaining_owner_review": [
+        "The owner retains the merge and release decisions for draft PR #3 after the blocking findings are resolved."
+      ],
+      "scope_reviewed": "The final Cutscene Skip candidate for PR #3, including its production references, package provenance, standalone validation, native-runner staging and recovery, and version-specific compatibility evidence.",
+      "unresolved_questions": []
+    }
+  },
+  "round": 5,
+  "validated_at": "2026-11-24T06:30:29Z",
+  "workflow_fingerprint": "6d613defe7bfe2f01a5818a2cd41b281965f438c45a0ca37ce15957e4dcffe19"
+}

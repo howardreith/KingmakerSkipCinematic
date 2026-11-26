@@ -1,0 +1,207 @@
+{
+  "B": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "H": "8cc7ab59373b651278f2de15a1011a65d99f3650",
+  "M": "6c1d65aba5bb4624a7e23819210400d0c281054e",
+  "amendment_revision": 1,
+  "amendment_sha256": "a2f26787968fd209dccca023305660a73ad7dbba2bbb1c15dff0131891965f67",
+  "checkpoint_id": "final",
+  "checkpoint_type": "final",
+  "fatal": false,
+  "guidance_revision": null,
+  "guidance_sha256": "none",
+  "invocation": {
+    "completed": true,
+    "duration_s": 882.2,
+    "errors": [],
+    "exit_code": 0,
+    "failed": false,
+    "observed": {
+      "approval_policy": "never",
+      "cli_version": "0.170.0",
+      "network": "restricted",
+      "observed_effort": "max",
+      "observed_model": "gpt-6.2-astra",
+      "plan_type": "pro",
+      "rollout_found": true,
+      "sandbox": "read-only",
+      "source": "Codex session rollout (CLI-recorded thread settings; not model-authored)",
+      "subagent_suspected": false,
+      "turn_efforts": [
+        "max"
+      ],
+      "turn_models": [
+        "gpt-6.2-astra"
+      ],
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 1997312,
+        "input_tokens": 2132756,
+        "output_tokens": 26851,
+        "reasoning_output_tokens": 19018,
+        "total_tokens": 2159607
+      }
+    },
+    "requested": {
+      "effort": "max",
+      "model": "gpt-6.2-astra",
+      "sandbox": "read-only"
+    },
+    "thread_id": "01a2182f-c516-7090-a42b-cc3771b6b36d",
+    "timed_out": false
+  },
+  "mission": {
+    "id": "kingmaker-umm-0311-mission-20261123",
+    "sha256": "f7d990f396c858ad663020133baba66e0cefb57f2b8be54a26d96186f86b24d5"
+  },
+  "ok": true,
+  "path": "~\\.agent-review\\state\\ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f\\rounds\\r08\\envelope-1.json",
+  "pr": 3,
+  "project_sha256": "9363dae8e8c7b3854c5e46e22149d5639bdd2f5b48fa2d8f456889f2331df6f1",
+  "protocol": "agent-review.v1",
+  "publication": "r08-review",
+  "published": [
+    {
+      "comment_id": 7194746065,
+      "of": 1,
+      "part": 1,
+      "url": "https://github.com/howardreith/KingmakerSkipCinematic/pull/3#issuecomment-7194746065"
+    }
+  ],
+  "raw_result_if_rejected": null,
+  "reasons": [],
+  "repository": "howardreith/KingmakerSkipCinematic",
+  "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r08-30263f",
+  "response_sha256": "84b1a894363b27743d50dc4aa8b49a83d76a515a78eb69ae7654a0bac99aaf2d",
+  "result": {
+    "candidate_commit": "8cc7ab59373b651278f2de15a1011a65d99f3650",
+    "checkpoint_id": "final",
+    "checkpoint_type": "final",
+    "decision": "changes_required",
+    "decision_rationale": "The candidate passed the controller gate and fixed the legacy receipt check. Two package issues remain. The manifest validator can still certify conflicting loader minimums, and the documented `-ProductZip` installation path can stage a supplied archive without checking its DLL references.\n\nContinuation for Claude\n\nUse one parsing rule for manifest strings and member names on the ZIP and bare-DLL paths. Add a regression case where a brace inside a single-quoted value precedes conflicting declarations, alongside a genuine passing control. For supplied ZIPs, make successful standalone validation of the exact archive part of the documented installation procedure before staging. Keep that correction limited to product-present ZIP admission and preserve the base runner\u2019s lock, journal, and recovery protocol. Exercise both corrections with temporary files, record the specific refusal reasons, and run the configured test gate on the corrected commit within the existing allowance.",
+    "evidence_assessment": {
+      "executed_verification": [
+        "The controller receipt records `scripts/Test.ps1` exiting 0 on 8cc7ab59373b651278f2de15a1011a65d99f3650 in 80.3 seconds with the worktree unchanged. Its output tail shows 33 package-provenance cases with zero failures, including rejection of the contradictory legacy receipt, acceptance of the genuine legacy receipt, and verification of both pinned compiler inputs.",
+        "In a read-only Windows PowerShell 5.1.19041.7844 check, `ConvertFrom-Json` accepted single-quoted text values containing braces and two declarations of ManagerVersion. It returned the final value, 0.31.1, alongside the expected product identity.",
+        "Git confirmed that the complete `scripts/runtime` tree is identical at the merge base and candidate, and that 8cc7ab5 changes only `docs/VALIDATION.md` after a7a33bc. The recorded production build inputs are unchanged from 9f35cb2.",
+        "Verified the supplied mission and amendment hashes and the indexed hashes of all nine JSON and Markdown evidence exports. The build receipt, package records, and static audit identify the same DLL SHA-256, a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba."
+      ],
+      "inspected": [
+        "The complete feature diff, round-8 correction diff, eight pending ledger entries, developer report, transcript notice, controller gate receipt, AGENTS.md, and CLAUDE.md.",
+        "The shipping manifest, reference pins, production MSBuild targets, build and package scripts, standalone validator, affected test fixtures, restored runner, compatibility guide, validation record, and artifact evidence."
+      ],
+      "limitations": [
+        "The full foreground transcript and gate log were withheld. The receipt confirms the complete gate passed. The reported 55 unit and 62 provenance totals precede the retained output tail, and the separate direct run at a7a33bc has no supplied controller receipt.",
+        "Reviewer checks were read-only. The static audit covers UMM 0.31.1, 0.32.4, owner-installed 0.33.0, and 0.33.4. Native and combined-stack results for the first three versions are historical observations on the frozen DLL. The 0.33.4 row has static evidence only and lacks a reviewed native profile."
+      ],
+      "required_gaps": [
+        "Show that both manifest routes reject the conflicting declarations described in R6-F4 for the intended reason and accept the genuine controls.",
+        "Show that the supported supplied-ZIP installation procedure refuses an incompatible packaged DLL before staging and admits the genuine archive."
+      ],
+      "source_inspection_only": [
+        "Traced the shared declaration scanner and identity check on both manifest routes. The decoder observation was executed in memory. The resulting ZIP and bare-DLL admission behavior was established from source.",
+        "Traced `-ProductZip` from its existence check through hashing and extraction. Reviewed the removal of the mission-added recovery paths by comparison with the merge base."
+      ]
+    },
+    "findings": [
+      {
+        "acceptance_ids": [
+          "mission \u00a75",
+          "mission \u00a76"
+        ],
+        "actual": "The scanner skips double-quoted strings only. It treats a brace inside a single-quoted value as object structure and can consequently skip an earlier ManagerVersion declaration. Windows PowerShell accepts that value syntax and keeps the last ManagerVersion. The post-conversion identity check then sees one correctly named property with the expected value. Both manifest routes use these steps.",
+        "blocking_rationale": "The standalone validator can report success for an archive or bare manifest containing conflicting loader minimums. This contradicts the package contract documented in `docs/VALIDATION.md`.",
+        "blocks_readiness": true,
+        "category": "defect",
+        "expected": "Every accepted manifest has one unambiguous declaration of each required member. Punctuation inside a string has no effect on which declarations are counted.",
+        "id": "R6-F4",
+        "location": {
+          "file": "scripts/Validate-Package.ps1",
+          "line": 98
+        },
+        "priority": "P2",
+        "requested_correction": "Use consistent token handling for counting and decoding. Reject unsupported string syntax wherever a value or member name can occur, or use a reader that exposes duplicate declarations before conversion collapses them.",
+        "requested_evidence": "Exercise the ZIP and bare-manifest paths with a single-quoted text value containing a brace before conflicting required fields. Assert the specific syntax or duplicate-declaration refusal. Retain a passing control with punctuation inside an ordinary double-quoted display name.",
+        "title": "A brace inside a single-quoted value can hide a duplicate manifest field",
+        "trigger": "A supplied Info.json contains a single-quoted display value with a literal opening brace, followed by conflicting ManagerVersion declarations whose final value is 0.31.1."
+      },
+      {
+        "acceptance_ids": [
+          "mission \u00a76",
+          "OWNER AMENDMENT 1 package scope"
+        ],
+        "actual": "Round 8 removed the pre-install validator call. The runner checks that the ZIP exists, records its hash, expands it into Mods, and then hashes the extracted DLL. The README provides a separate manual validation command, but the `-ProductZip` invocation documented in `docs/COMPATIBILITY.md` proceeds directly to extraction.",
+        "blocking_rationale": "An ordinary supplied archive can install a DLL that targets a newer UMM while declaring the baseline minimum. This is a missing package check on a documented installation path and requires no archive replacement or concurrent operation to trigger.",
+        "blocks_readiness": true,
+        "category": "required_gap",
+        "expected": "The supported procedure for installing a supplied ZIP checks the actual packaged DLL references with the standalone validator and stops before staging if validation fails.",
+        "id": "R8-F1",
+        "location": {
+          "file": "scripts/runtime/Invoke-NativeRun.ps1",
+          "line": 147
+        },
+        "priority": "P2",
+        "requested_correction": "Make successful validation of the exact supplied archive a prerequisite of the documented product-present ZIP installation path. A narrow preflight or a checked entry point around the base runner is sufficient. Preserve the comparison-only use of a ZIP with `-NoProduct`.",
+        "requested_evidence": "Use a temporary four-file ZIP declaring 0.31.1 whose DLL references UMM 0.33.0. Show that the supplied-ZIP procedure stops on the reference mismatch before staging, and that a genuine baseline ZIP reaches the handoff. This can be checked before any native transaction.",
+        "title": "The supplied-ZIP installation path bypasses standalone validation",
+        "trigger": "Use the documented `-ProductZip` route with an archive acquired independently of `Package.ps1`."
+      }
+    ],
+    "prior_finding_assessments": [
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R5-F3",
+        "rationale": "OWNER AMENDMENT 1 permits removal of unnecessary mission-added recovery machinery. The two-stage liveness check and journal handoff are gone, and Git confirms the runner matches the merge base. This verifies removal of the PR-specific recovery change."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R6-F1",
+        "rationale": "Package.ps1 now checks recorded product changes after selecting and type-checking either dirty flag. The gate confirms the alternate DLL\u2019s matching legacy receipt was refused for its contradictory change list and the genuine clean legacy receipt packaged successfully."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R6-F2",
+        "rationale": "The mission-added directory publication and cleanup in NativeProduct.ps1 were removed under OWNER AMENDMENT 1. Main\u2019s existing path-based rollback over `staged` is still present. The verified correction is removal of the added staging path and its ownership claim."
+      },
+      {
+        "assessment": "fix_rejected",
+        "finding_id": "R6-F4",
+        "rationale": "The new guard catches single-quoted and unquoted names while the scanner is at depth one. An accepted single-quoted value can still change the scanner\u2019s apparent depth and hide a conflicting declaration on either route."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R7-F1",
+        "rationale": "The restored reader consumes the `staged` member written by main. The `created`-only fallback that treated an older journal as owning zero paths was removed."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R7-F2",
+        "rationale": "The runner records `staged` before directory creation or ZIP extraction. Removing the later `created` callback eliminates the reported interruption window between creation and that required record."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R7-F3",
+        "rationale": "The restored writer uses Windows PowerShell\u2019s `Set-Content -Encoding UTF8`, which emits the byte-order mark recognized by the existing reader. The mission-added BOM-less writer was removed."
+      },
+      {
+        "assessment": "fix_verified",
+        "finding_id": "R7-F4",
+        "rationale": "The validation record removes both conflicting held-lock outcomes and the unsupported byte-preservation claim. It attributes the earlier suite to fd1ac03 and identifies the runner cases removed in round 8."
+      }
+    ],
+    "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r08-30263f",
+    "round": 8,
+    "schema_version": "agent-review.review.v1",
+    "summary": {
+      "delivered_behavior": "Cutscene Skip declares UMM 0.31.1. The wrapper and direct production builds verify UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1. Packaging binds the DLL to its build receipt and inspects the four-entry ZIP. Modern and legacy receipts now receive the same clean-input consistency check.",
+      "pending_later_phase_work": [],
+      "remaining_owner_review": [
+        "Disposition of draft PR #3 after the two package findings clear independent review."
+      ],
+      "scope_reviewed": "Cutscene Skip PR #3 at 8cc7ab5 against merge base 6c1d65a, including the corrections since 45f5c20 and the scope freeze in OWNER AMENDMENT 1.",
+      "unresolved_questions": []
+    }
+  },
+  "round": 8,
+  "validated_at": "2026-11-26T14:23:15Z",
+  "workflow_fingerprint": "6d613defe7bfe2f01a5818a2cd41b281965f438c45a0ca37ce15957e4dcffe19"
+}

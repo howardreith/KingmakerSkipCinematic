@@ -1,0 +1,327 @@
+<!-- agent-review:v1 enrollment=ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f key=r04-review part=1/1 sha256=d165a2694484a6eef7afd8b4ab0ab1172937d805d2bc3819ebff2a4976219748 -->
+### Codex GPT-6.2 Astra — review — round 4 — candidate `e300170b39`
+
+**Decision:** `changes_required` — The candidate passes the controller gate and fixes all seven prior findings for their reported triggers. Changes are still required because packaging can accept a stale DLL, native qualification can identify the wrong product, and a failed lock release can leave a passing summary and an unrecoverable lock.
+
+## Continuation for Claude
+
+Extend the receipt comparison to the production project's MSBuild inputs under src. Use ordinal equality for fixed manifest and CLR identities. In the native runner, inspect the selected mod folders, verify the shipping Id in both product modes, and record the outcome of releasing the owned lock. Preserve enough transaction state to retry a failed release safely.
+
+Exercise the cases in the findings with temporary checkouts, packages and mod profiles. Rerun the controller test gate on the corrected commit. Use the ZIP digest from the matching package manifest and validation record in the next report. Keep the work within Cutscene Skip's build, package and guarded harness tooling. The existing gameplay evidence stays attached to its recorded DLL and scenarios.
+
+#### Findings
+
+**R4-F1** · P1 · defect · blocks readiness — MSBuild inputs under src can change without invalidating the DLL receipt
+- Location: `scripts/Common.ps1:162`; acceptance: mission §5, mission §6
+- Trigger: Build the product, commit a compiler-affecting src/Directory.Build.targets, then run Package.ps1 with the existing DLL and receipt.
+- Expected: A change to a repository-owned, automatically imported production build file invalidates the frozen DLL receipt.
+- Actual: ProductInputPaths covers the repository root's Directory.Build files and the src/KingmakerCutsceneSkip subtree. It omits src/Directory.Build.props and src/Directory.Build.targets. MSBuild searches this intervening directory for the production project, while both receipt comparisons skip it.
+- Why it blocks / does not: Package.ps1 can report provenance_verified for an old DLL after a committed change that alters or prevents compilation at the packaging revision.
+- Requested correction: Cover the src-level Directory.Build.props and Directory.Build.targets in the shared working-tree and between-commit product-input comparison.
+- Requested evidence: In the temporary checkout, commit a material src/Directory.Build.targets or .props change after building. Show refusal of the old receipt, successful packaging after a coherent rebuild, and continued reuse for a documentation-only commit.
+
+**R4-F2** · P1 · defect · blocks readiness — A product-present run can admit two installations with the shipping Id
+- Location: `scripts/runtime/Invoke-NativeRun.ps1:140`; acceptance: mission §6, mission §7
+- Trigger: Run with the candidate and an owner profile that already contains Cutscene Skip under a name such as CutsceneSkip-0.1.2.
+- Expected: The effective profile contains a single Cutscene Skip installation corresponding to the validated candidate, or staging refuses the ambiguity.
+- Actual: The runner excludes or checks inherited shipping Ids only in no-product mode. In a product-present run it checks whether the canonical destination folder exists. A renamed installation survives beside the staged candidate. The host accepts the scenario status without comparing the harness's recorded product MVID with the validated DLL.
+- Why it blocks / does not: A passing skip or persistence result can be attributed to the staged candidate even when UMM selected the inherited installation.
+- Requested correction: Apply the shipping-Id inventory before product-present staging too. Exclude the inherited copy from a disposable selection or refuse the conflicting profile while preserving its source.
+- Requested evidence: Use a temporary owner profile containing an older shipping Id under another folder name. Exercise the ZIP and bare-DLL staging paths and show that only the validated candidate is eligible to load, or that staging refuses before launch.
+
+**R4-F3** · P2 · defect · blocks readiness — A folder named Keys can hide Cutscene Skip from the no-product check
+- Location: `scripts/runtime/NativeProduct.ps1:84`; acceptance: mission §6, mission §7
+- Trigger: Check an existing Mods directory containing Mods/Keys/Info.json with Id KingmakerCutsceneSkip.
+- Expected: The final effective-profile check inspects each installed manifest regardless of its folder name.
+- Actual: Get-ModFolderIds uses folder names as ordered-dictionary keys. With a folder named Keys, PowerShell resolves $ids.Keys to that entry's value. For a single Keys folder containing the shipping Id, the candidate's loop returned without refusal in the read-only expression check. The inventory also omits hidden folders already present in an effective Mods directory.
+- Why it blocks / does not: The host can label a profile as a no-product control while a shipping manifest is present.
+- Requested correction: Enumerate the actual dictionary entries or mod-folder records independently of their names. Include hidden folders when checking the effective Mods directory.
+- Requested evidence: Use temporary effective profiles with the shipping manifest in a folder named Keys and in a hidden folder. Show refusal and unchanged source files. Retain the passing unrelated-mod control.
+
+**R4-F4** · P2 · defect · blocks readiness — An unselected manifest can block an isolated no-product run
+- Location: `scripts/runtime/RuntimeLab.Common.ps1:338`; acceptance: mission §7
+- Trigger: Use -NoProduct with an isolated game copy whose pristine owner collection contains a malformed manifest outside the requested ModSet.
+- Expected: Only mods selected for the disposable copy affect admission. A selected manifest that cannot be read can still cause refusal.
+- Actual: Set-GameCopyMods computes the selected names, then calls Get-ModFolderIds on the entire pristine Mods directory. An invalid Info.json in an unselected mod throws before the filter runs, even when the selected set is empty.
+- Why it blocks / does not: An unrelated owner mod can prevent the supported isolated persistence control from running.
+- Requested correction: Read manifest Ids from the selected source folders and retain the final check of the staged Mods directory.
+- Requested evidence: With a malformed manifest in an unselected pristine folder, show that an empty isolated selection and a valid named subset both succeed. Select the malformed folder and show refusal.
+
+**R4-F5** · P2 · defect · blocks readiness — The manifest comparison accepts distinct load targets and version strings
+- Location: `scripts/Validate-Package.ps1:77`; acceptance: mission §5, mission §6, AGENTS.md fixed product identity
+- Trigger: Validate an otherwise genuine manifest containing a linguistically ignorable character in a fixed field.
+- Expected: Fixed identifiers and the declared loader floor match their required strings exactly.
+- Actual: Assert-ManifestIdentity uses PowerShell -cne, a case-sensitive linguistic comparison. In Windows PowerShell it accepted an entry method containing an extra U+00AD soft hyphen and a ManagerVersion with the same extra character. Ordinal comparison distinguished both values. The new compiler helper uses the same operator for the declared CLR identity.
+- Why it blocks / does not: The standalone validator can certify a manifest with a different load target or a ManagerVersion other than the required literal 0.31.1.
+- Requested correction: Use explicit ordinal equality for the fixed manifest fields and the CLR identity checks shared by the validator and compiler gate.
+- Requested evidence: Exercise a ZIP and a bare manifest containing a soft hyphen in an otherwise correct entry method or ManagerVersion. Show refusal alongside the genuine passing pair.
+
+**R4-F6** · P2 · defect · blocks readiness — A lock-release failure leaves a passing summary and no recovery journal
+- Location: `scripts/runtime/NativeProduct.ps1:111`; acceptance: mission §7, mission §8, AGENTS.md native recovery
+- Trigger: The scenario, restoration and private-copy cleanup succeed while a Windows file handle prevents deletion of the owned lock.
+- Expected: A failed owned-lock release is recorded as a failed host outcome and remains recoverable after the obstruction clears.
+- Actual: Complete-NativeRun writes host-summary.json before Exit-RuntimeLock. If lock deletion throws, the saved status can still be passed. Restore-RunJournal has already removed the journal, so -RecoverOnly returns immediately and subsequent runs remain locked out.
+- Why it blocks / does not: One terminal cleanup failure can both certify a failed invocation and strand its shared runtime lock.
+- Requested correction: Include the owned-lock release outcome in final reporting and retain sufficient ownership and recovery state to retry that release safely. Keep summary-write and private-copy cleanup failures independently reportable.
+- Requested evidence: In a disposable lab, hold the owned lock file open against deletion after successful restoration. Verify a failed saved host status with the scenario result preserved. Release the handle and show guarded recovery clears only that transaction's lock.
+
+#### Prior finding assessments
+
+- **R2-F4** — `fix_verified` — The expected load target now comes from fixed product data. The default-checkout fixtures reject changed Id, AssemblyName and EntryMethod values, and bare staging verifies the manifest digest before the override. R4-F5 concerns the equality operation used on those values.
+- **R2-F5** — `fix_verified` — The former folder-name-only rule now reads manifest Ids. The requested renamed-folder fixtures cover exclusion with and without a comparison ZIP, refusal on the existing profile, and preservation of unrelated files. R4-F3 identifies a separate enumeration error in the new implementation.
+- **R3-F1** — `fix_verified` — The root Directory.Build.targets is in the shared path list. The temporary-checkout case rejects the old receipt after committing that root file and passes after rebuilding. R4-F1 concerns the intervening src directory.
+- **R3-F2** — `fix_verified` — Both compiler-gate phases derive the digest and CLR identity from one byte array. The candidate receipt shows the genuine Harmony 1.2.0.1 bytes rejected under a 1.2.0.2 declaration and a successful rebuild after restoring the pin.
+- **R3-F3** — `fix_verified` — The supplied Info.json now contributes its snapshot identity and current path to report publication checks. The recorded equal-path and hard-link cases preserve both input hashes, and a separate report records the pair successfully.
+- **R3-F4** — `fix_verified` — The two original digests agree with the first export at f7e5387. The current export hashes beginning 1185ca9b and c67b8d2b independently match the corresponding Git content.
+- **R3-F5** — `fix_verified` — Private-copy removal now precedes summary publication. The held-private-file fixture checks a saved integrity-failed result, preserved scenario and restoration observations, owned-lock release and a surfaced cleanup error. R4-F6 concerns failure of lock deletion itself.
+
+#### Evidence assessment
+
+- **Inspected:** The enrolled mission, AGENTS.md, CLAUDE.md, engine notes, developer report, transcript notice, gate receipt, prior ledger and complete feature diff.; The production project, MSBuild targets, pin definitions, build and package receipts, standalone validator, native staging and recovery code, and the tests that exercise them.; The compatibility guide, profile definitions, static API audit, evidence index and historical skip and persistence records.
+- **Executed verification:** The controller ran scripts/Test.ps1 at e300170b392a8c061d8acb53a53df657cd5afa2f. The receipt records exit 0 in 48.3 seconds and an unchanged worktree. Its output tail confirms the declared Harmony version refusal, the successful rebuild after restoration, and 13 passing package-provenance cases.; The detailed export at d2ca1d9 records 55/55 unit, 65/65 provenance and 13/13 package-provenance cases. Git shows only documentation and evidence changes between that revision and the candidate.; The clean build receipt at 50a92c9 and the standalone package validation agree on DLL SHA-256 a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba. The validator records MVID a494d31e-dfb6-469f-b2a7-787e3094639d and the expected UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1 references.; Read-only Git and hash checks confirmed the candidate, merge base, mission digest and both corrected historical evidence rows. In-memory Windows PowerShell checks also confirmed the Keys enumeration error and the non-ordinal manifest comparison in the findings.
+- **Source inspection only:** The src-level import omission, duplicate product admission, parsing of unselected manifests and lock-release ordering were traced through their production callers. The supplied gate has no regression case for those paths.; The PowerShell checks exercised the comparison and enumeration expressions in memory. They establish the language behavior without claiming a native loader outcome.
+- **Required gaps:** Receipt invalidation for material src-level MSBuild imports.; Temporary-profile checks for duplicate shipping Ids in product-present runs, reliable enumeration in no-product runs, and isolation from unselected manifests.; Package and bare-manifest refusal for ordinally different fixed fields.; A saved failure outcome and successful guarded recovery after an owned-lock deletion failure.
+- **Limitations:** The full foreground transcript was withheld. The candidate-bound gate receipt and committed exports supply the execution evidence. This review used read-only inspection and did not run a build or game process.; The developer summary cites ZIP prefix 171ffb0d. Both the clean package manifest and its validation report identify ff666d858218af0c1940cf39a7b2b2e6f2c48a106628d850ea7fae2188d6c69d. The latter is the evidenced ZIP digest.; Native skip and persistence observations for 0.31.1, 0.32.4 and owner 0.33.0 are historical on the matching DLL. The 0.33.4 row has static API evidence only and documents the missing reviewed native profile. This round produced no new native or combined-stack observation.
+
+#### Summary
+
+- **Delivered behavior:** Cutscene Skip declares UMM 0.31.1 and the evidenced production DLL references UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1. The build and standalone package checks now inspect compiler inputs, packaged references and manifest identity. The remaining findings affect receipt reuse and the reliability of validation outcomes.
+- **Scope reviewed:** The final Cutscene Skip checkpoint for PR #3, including the complete feature diff, the seven pending dispositions and the consumers of the round-four changes.
+- **Pending later-phase work:** none
+- **Unresolved questions:** none
+- **Remaining owner review:** The owner retains the decision to merge draft PR #3 and to authorize any later release.
+
+#### Provenance (controller-recorded)
+
+| | Requested | Observed |
+|---|---|---|
+| Model | `gpt-6.2-astra` | `gpt-6.2-astra` (turns ['gpt-6.2-astra']) |
+| Reasoning effort | `max` | `max` (turns ['max']) |
+| Sandbox / approvals | read-only / never | `read-only` / `never` |
+
+Owner guidance bound to this review: none.
+
+Owner amendments bound to this review: none.
+
+Codex CLI `0.170.0`, thread `01a20c20-1917-7263-bcf3-68240ab6f156`, duration 712.1s, response sha256 `f4a80105e651cfc4dc6526c35c519d7242b9643ccc939a184050728d94e12722`, request `ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r04-cd2ad7`. Observed values come from the Codex session rollout's recorded thread settings, not from the model's own statements; the serving backend's model identity is not separately exposed.
+
+<details><summary>Complete structured review (agent-review.review.v1)</summary>
+
+```json
+{
+  "candidate_commit": "e300170b392a8c061d8acb53a53df657cd5afa2f",
+  "checkpoint_id": "final",
+  "checkpoint_type": "final",
+  "decision": "changes_required",
+  "decision_rationale": "The candidate passes the controller gate and fixes all seven prior findings for their reported triggers. Changes are still required because packaging can accept a stale DLL, native qualification can identify the wrong product, and a failed lock release can leave a passing summary and an unrecoverable lock.\n\n## Continuation for Claude\n\nExtend the receipt comparison to the production project's MSBuild inputs under src. Use ordinal equality for fixed manifest and CLR identities. In the native runner, inspect the selected mod folders, verify the shipping Id in both product modes, and record the outcome of releasing the owned lock. Preserve enough transaction state to retry a failed release safely.\n\nExercise the cases in the findings with temporary checkouts, packages and mod profiles. Rerun the controller test gate on the corrected commit. Use the ZIP digest from the matching package manifest and validation record in the next report. Keep the work within Cutscene Skip's build, package and guarded harness tooling. The existing gameplay evidence stays attached to its recorded DLL and scenarios.",
+  "evidence_assessment": {
+    "executed_verification": [
+      "The controller ran scripts/Test.ps1 at e300170b392a8c061d8acb53a53df657cd5afa2f. The receipt records exit 0 in 48.3 seconds and an unchanged worktree. Its output tail confirms the declared Harmony version refusal, the successful rebuild after restoration, and 13 passing package-provenance cases.",
+      "The detailed export at d2ca1d9 records 55/55 unit, 65/65 provenance and 13/13 package-provenance cases. Git shows only documentation and evidence changes between that revision and the candidate.",
+      "The clean build receipt at 50a92c9 and the standalone package validation agree on DLL SHA-256 a2a8706bbb8d8bd89a50fe4d005cd30ed22f7913685adcecd212f464bd15a1ba. The validator records MVID a494d31e-dfb6-469f-b2a7-787e3094639d and the expected UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1 references.",
+      "Read-only Git and hash checks confirmed the candidate, merge base, mission digest and both corrected historical evidence rows. In-memory Windows PowerShell checks also confirmed the Keys enumeration error and the non-ordinal manifest comparison in the findings."
+    ],
+    "inspected": [
+      "The enrolled mission, AGENTS.md, CLAUDE.md, engine notes, developer report, transcript notice, gate receipt, prior ledger and complete feature diff.",
+      "The production project, MSBuild targets, pin definitions, build and package receipts, standalone validator, native staging and recovery code, and the tests that exercise them.",
+      "The compatibility guide, profile definitions, static API audit, evidence index and historical skip and persistence records."
+    ],
+    "limitations": [
+      "The full foreground transcript was withheld. The candidate-bound gate receipt and committed exports supply the execution evidence. This review used read-only inspection and did not run a build or game process.",
+      "The developer summary cites ZIP prefix 171ffb0d. Both the clean package manifest and its validation report identify ff666d858218af0c1940cf39a7b2b2e6f2c48a106628d850ea7fae2188d6c69d. The latter is the evidenced ZIP digest.",
+      "Native skip and persistence observations for 0.31.1, 0.32.4 and owner 0.33.0 are historical on the matching DLL. The 0.33.4 row has static API evidence only and documents the missing reviewed native profile. This round produced no new native or combined-stack observation."
+    ],
+    "required_gaps": [
+      "Receipt invalidation for material src-level MSBuild imports.",
+      "Temporary-profile checks for duplicate shipping Ids in product-present runs, reliable enumeration in no-product runs, and isolation from unselected manifests.",
+      "Package and bare-manifest refusal for ordinally different fixed fields.",
+      "A saved failure outcome and successful guarded recovery after an owned-lock deletion failure."
+    ],
+    "source_inspection_only": [
+      "The src-level import omission, duplicate product admission, parsing of unselected manifests and lock-release ordering were traced through their production callers. The supplied gate has no regression case for those paths.",
+      "The PowerShell checks exercised the comparison and enumeration expressions in memory. They establish the language behavior without claiming a native loader outcome."
+    ]
+  },
+  "findings": [
+    {
+      "acceptance_ids": [
+        "mission \u00a75",
+        "mission \u00a76"
+      ],
+      "actual": "ProductInputPaths covers the repository root's Directory.Build files and the src/KingmakerCutsceneSkip subtree. It omits src/Directory.Build.props and src/Directory.Build.targets. MSBuild searches this intervening directory for the production project, while both receipt comparisons skip it.",
+      "blocking_rationale": "Package.ps1 can report provenance_verified for an old DLL after a committed change that alters or prevents compilation at the packaging revision.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "A change to a repository-owned, automatically imported production build file invalidates the frozen DLL receipt.",
+      "id": "R4-F1",
+      "location": {
+        "file": "scripts/Common.ps1",
+        "line": 162
+      },
+      "priority": "P1",
+      "requested_correction": "Cover the src-level Directory.Build.props and Directory.Build.targets in the shared working-tree and between-commit product-input comparison.",
+      "requested_evidence": "In the temporary checkout, commit a material src/Directory.Build.targets or .props change after building. Show refusal of the old receipt, successful packaging after a coherent rebuild, and continued reuse for a documentation-only commit.",
+      "title": "MSBuild inputs under src can change without invalidating the DLL receipt",
+      "trigger": "Build the product, commit a compiler-affecting src/Directory.Build.targets, then run Package.ps1 with the existing DLL and receipt."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a76",
+        "mission \u00a77"
+      ],
+      "actual": "The runner excludes or checks inherited shipping Ids only in no-product mode. In a product-present run it checks whether the canonical destination folder exists. A renamed installation survives beside the staged candidate. The host accepts the scenario status without comparing the harness's recorded product MVID with the validated DLL.",
+      "blocking_rationale": "A passing skip or persistence result can be attributed to the staged candidate even when UMM selected the inherited installation.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "The effective profile contains a single Cutscene Skip installation corresponding to the validated candidate, or staging refuses the ambiguity.",
+      "id": "R4-F2",
+      "location": {
+        "file": "scripts/runtime/Invoke-NativeRun.ps1",
+        "line": 140
+      },
+      "priority": "P1",
+      "requested_correction": "Apply the shipping-Id inventory before product-present staging too. Exclude the inherited copy from a disposable selection or refuse the conflicting profile while preserving its source.",
+      "requested_evidence": "Use a temporary owner profile containing an older shipping Id under another folder name. Exercise the ZIP and bare-DLL staging paths and show that only the validated candidate is eligible to load, or that staging refuses before launch.",
+      "title": "A product-present run can admit two installations with the shipping Id",
+      "trigger": "Run with the candidate and an owner profile that already contains Cutscene Skip under a name such as CutsceneSkip-0.1.2."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a76",
+        "mission \u00a77"
+      ],
+      "actual": "Get-ModFolderIds uses folder names as ordered-dictionary keys. With a folder named Keys, PowerShell resolves $ids.Keys to that entry's value. For a single Keys folder containing the shipping Id, the candidate's loop returned without refusal in the read-only expression check. The inventory also omits hidden folders already present in an effective Mods directory.",
+      "blocking_rationale": "The host can label a profile as a no-product control while a shipping manifest is present.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "The final effective-profile check inspects each installed manifest regardless of its folder name.",
+      "id": "R4-F3",
+      "location": {
+        "file": "scripts/runtime/NativeProduct.ps1",
+        "line": 84
+      },
+      "priority": "P2",
+      "requested_correction": "Enumerate the actual dictionary entries or mod-folder records independently of their names. Include hidden folders when checking the effective Mods directory.",
+      "requested_evidence": "Use temporary effective profiles with the shipping manifest in a folder named Keys and in a hidden folder. Show refusal and unchanged source files. Retain the passing unrelated-mod control.",
+      "title": "A folder named Keys can hide Cutscene Skip from the no-product check",
+      "trigger": "Check an existing Mods directory containing Mods/Keys/Info.json with Id KingmakerCutsceneSkip."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a77"
+      ],
+      "actual": "Set-GameCopyMods computes the selected names, then calls Get-ModFolderIds on the entire pristine Mods directory. An invalid Info.json in an unselected mod throws before the filter runs, even when the selected set is empty.",
+      "blocking_rationale": "An unrelated owner mod can prevent the supported isolated persistence control from running.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "Only mods selected for the disposable copy affect admission. A selected manifest that cannot be read can still cause refusal.",
+      "id": "R4-F4",
+      "location": {
+        "file": "scripts/runtime/RuntimeLab.Common.ps1",
+        "line": 338
+      },
+      "priority": "P2",
+      "requested_correction": "Read manifest Ids from the selected source folders and retain the final check of the staged Mods directory.",
+      "requested_evidence": "With a malformed manifest in an unselected pristine folder, show that an empty isolated selection and a valid named subset both succeed. Select the malformed folder and show refusal.",
+      "title": "An unselected manifest can block an isolated no-product run",
+      "trigger": "Use -NoProduct with an isolated game copy whose pristine owner collection contains a malformed manifest outside the requested ModSet."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a75",
+        "mission \u00a76",
+        "AGENTS.md fixed product identity"
+      ],
+      "actual": "Assert-ManifestIdentity uses PowerShell -cne, a case-sensitive linguistic comparison. In Windows PowerShell it accepted an entry method containing an extra U+00AD soft hyphen and a ManagerVersion with the same extra character. Ordinal comparison distinguished both values. The new compiler helper uses the same operator for the declared CLR identity.",
+      "blocking_rationale": "The standalone validator can certify a manifest with a different load target or a ManagerVersion other than the required literal 0.31.1.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "Fixed identifiers and the declared loader floor match their required strings exactly.",
+      "id": "R4-F5",
+      "location": {
+        "file": "scripts/Validate-Package.ps1",
+        "line": 77
+      },
+      "priority": "P2",
+      "requested_correction": "Use explicit ordinal equality for the fixed manifest fields and the CLR identity checks shared by the validator and compiler gate.",
+      "requested_evidence": "Exercise a ZIP and a bare manifest containing a soft hyphen in an otherwise correct entry method or ManagerVersion. Show refusal alongside the genuine passing pair.",
+      "title": "The manifest comparison accepts distinct load targets and version strings",
+      "trigger": "Validate an otherwise genuine manifest containing a linguistically ignorable character in a fixed field."
+    },
+    {
+      "acceptance_ids": [
+        "mission \u00a77",
+        "mission \u00a78",
+        "AGENTS.md native recovery"
+      ],
+      "actual": "Complete-NativeRun writes host-summary.json before Exit-RuntimeLock. If lock deletion throws, the saved status can still be passed. Restore-RunJournal has already removed the journal, so -RecoverOnly returns immediately and subsequent runs remain locked out.",
+      "blocking_rationale": "One terminal cleanup failure can both certify a failed invocation and strand its shared runtime lock.",
+      "blocks_readiness": true,
+      "category": "defect",
+      "expected": "A failed owned-lock release is recorded as a failed host outcome and remains recoverable after the obstruction clears.",
+      "id": "R4-F6",
+      "location": {
+        "file": "scripts/runtime/NativeProduct.ps1",
+        "line": 111
+      },
+      "priority": "P2",
+      "requested_correction": "Include the owned-lock release outcome in final reporting and retain sufficient ownership and recovery state to retry that release safely. Keep summary-write and private-copy cleanup failures independently reportable.",
+      "requested_evidence": "In a disposable lab, hold the owned lock file open against deletion after successful restoration. Verify a failed saved host status with the scenario result preserved. Release the handle and show guarded recovery clears only that transaction's lock.",
+      "title": "A lock-release failure leaves a passing summary and no recovery journal",
+      "trigger": "The scenario, restoration and private-copy cleanup succeed while a Windows file handle prevents deletion of the owned lock."
+    }
+  ],
+  "prior_finding_assessments": [
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R2-F4",
+      "rationale": "The expected load target now comes from fixed product data. The default-checkout fixtures reject changed Id, AssemblyName and EntryMethod values, and bare staging verifies the manifest digest before the override. R4-F5 concerns the equality operation used on those values."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R2-F5",
+      "rationale": "The former folder-name-only rule now reads manifest Ids. The requested renamed-folder fixtures cover exclusion with and without a comparison ZIP, refusal on the existing profile, and preservation of unrelated files. R4-F3 identifies a separate enumeration error in the new implementation."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R3-F1",
+      "rationale": "The root Directory.Build.targets is in the shared path list. The temporary-checkout case rejects the old receipt after committing that root file and passes after rebuilding. R4-F1 concerns the intervening src directory."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R3-F2",
+      "rationale": "Both compiler-gate phases derive the digest and CLR identity from one byte array. The candidate receipt shows the genuine Harmony 1.2.0.1 bytes rejected under a 1.2.0.2 declaration and a successful rebuild after restoring the pin."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R3-F3",
+      "rationale": "The supplied Info.json now contributes its snapshot identity and current path to report publication checks. The recorded equal-path and hard-link cases preserve both input hashes, and a separate report records the pair successfully."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R3-F4",
+      "rationale": "The two original digests agree with the first export at f7e5387. The current export hashes beginning 1185ca9b and c67b8d2b independently match the corresponding Git content."
+    },
+    {
+      "assessment": "fix_verified",
+      "finding_id": "R3-F5",
+      "rationale": "Private-copy removal now precedes summary publication. The held-private-file fixture checks a saved integrity-failed result, preserved scenario and restoration observations, owned-lock release and a surfaced cleanup error. R4-F6 concerns failure of lock deletion itself."
+    }
+  ],
+  "request_id": "ksc-claude-umm-0311-package-refs-20261124-20261123222059-762f-r04-cd2ad7",
+  "round": 4,
+  "schema_version": "agent-review.review.v1",
+  "summary": {
+    "delivered_behavior": "Cutscene Skip declares UMM 0.31.1 and the evidenced production DLL references UnityModManager 0.31.1.0 and 0Harmony12 1.2.0.1. The build and standalone package checks now inspect compiler inputs, packaged references and manifest identity. The remaining findings affect receipt reuse and the reliability of validation outcomes.",
+    "pending_later_phase_work": [],
+    "remaining_owner_review": [
+      "The owner retains the decision to merge draft PR #3 and to authorize any later release."
+    ],
+    "scope_reviewed": "The final Cutscene Skip checkpoint for PR #3, including the complete feature diff, the seven pending dispositions and the consumers of the round-four changes.",
+    "unresolved_questions": []
+  }
+}
+```
+</details>
+
+_Model-generated review by Codex using the requested model, posted by the agent-review controller through the owner's GitHub account. Not a human review or approval._
