@@ -278,8 +278,9 @@ try {
     $lockBefore = Test-Path -LiteralPath $labLock
     $copiesBefore = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -File -Filter 'kmcs-validated-product-*.zip' -ErrorAction SilentlyContinue).Count
     $badZip = Join-Path $fixtures 'newer-umm.zip'
-    $runnerOutput = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -Scenario $scenarioFile -ProductZip $badZip 2>&1) | ForEach-Object { "$_" }) -join ' '
-    $runnerExit = $LASTEXITCODE
+    $previousPreference = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $runnerOutput = (($null | & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -Scenario $scenarioFile -ProductZip $badZip 2>&1) | ForEach-Object { "$_" }) -join ' '; $runnerExit = $LASTEXITCODE }
+    finally { $ErrorActionPreference = $previousPreference }
     $copiesAfter = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -File -Filter 'kmcs-validated-product-*.zip' -ErrorAction SilentlyContinue).Count
     Assert-Case 'RunnerRefusesAProductZipThatFailsValidationBeforeLocking' ($runnerExit -ne 0 -and $runnerOutput -match 'The product ZIP failed standalone validation; nothing was locked or staged' -and (Test-Path -LiteralPath $labLock) -eq $lockBefore -and $copiesAfter -eq $copiesBefore)
     $genuineInfoCopy = Join-Path $fixtures 'genuine bare Info.json'; Copy-Item -LiteralPath (Join-Path (Get-RepositoryRoot) 'Info.json') -Destination $genuineInfoCopy
