@@ -63,8 +63,9 @@ mod.
   watching it (about 0.2–1 s per short segment, and about 7 s over the 2½-minute Kingdom of the Cleansed gathering, in
   testing). Timed effects count that extra time, so a buff close to expiring can run out during a skipped cinematic but
   not during a watched one.
-* If Bag of Tricks or another mod replaces the skip's time multiplier, the skip ends and the scene becomes visible
-  again. The other mod's multiplier is left unchanged.
+* Bag of Tricks' game-speed setting no longer slows skips down (in 0.1.2, a setting other than 1 could leave a skip
+  black at that speed). The setting is back in effect after the skip. If any other mod changes the game speed
+  during a skip, the skip ends and the scene becomes visible again; that mod's speed is left unchanged.
 * Tested in the prologue, the opening of the night attack, Tristian's Kingdom of the Cleansed gathering and the opening
   of Varnhold's Lot (see `docs/VALIDATION.md`). Other cinematics use the same
   engine paths but were not individually tested, so a problem in a particular later scene cannot be ruled out. Keep a

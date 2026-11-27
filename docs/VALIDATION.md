@@ -5,23 +5,33 @@
 Report: Varnhold DLC cinematics and later multi-stage scenes such as "the Kingdom of the Cleansed one with Remus'
 speech" go black when skipped but keep playing at ordinary speed until Escape.
 
-**Outcome: not reproduced; root cause in the reporter's game not established.** Both report targets were reached through
-their normal triggers on DATA and skip correctly with the released 0.1.2 build, PR #4 and the candidate below. One
-mechanism that produces exactly the reported symptom was reproduced natively, by test injection: another owner
-replacing the skip's time multiplier. 0.1.2 then stays black at about ordinary speed until the 60 s watchdog; the
-candidate reveals at once. Nothing in the tested environment performs that override during real play, so this is not
-shown to be what happens in the reporter's game. The report stays open.
+**Outcome.** A cause that produces this behaviour through a scene's normal trigger was found and corrected:
+
+* **Cause.** Unity computes `Time.deltaTime` before the skip raises `Time.timeScale`, so the first accelerated frame
+  needs only one step. The frame driver handed such frames to the native `GameMode.Tick`. That ran
+  `TimeController.Tick`, where Bag of Tricks' game-speed multiplier (when not 1) re-applies itself.
+* **Effect with 0.1.2.** The skip then ran black at Bag of Tricks' speed until a boundary, Escape or the 60 s
+  watchdog. The condition is met when the unscaled frame time multiplied by the prior speed is at most 1/30 s: for
+  example Bag of Tricks at 2 or less at 60 fps, or at 4.8 or less at 144 fps. Long scenes then stay black far longer
+  than short ones.
+* **Effect with PR #4's earlier head.** The same frame ended every such skip at once, so skipping did nothing.
+* **Correction.** The candidate runs every advancing Cutscene-mode frame in the driver and skips these scenes at ×10.
+
+**Not established:** whether the reporter uses Bag of Tricks, or another mod that writes the time scale. Their
+Varnhold scene is also unknown. The report stays open until they confirm. In the default configuration (Bag of
+Tricks at 1, or not installed), both report targets skip correctly with 0.1.2, PR #4 and the candidates.
 
 ### Candidate
 
 | Item | Value |
 |---|---|
-| Product commits | `2cd8579` (time-override ownership check), `0ff67e3` (game time in the skip report); candidate built and packaged at `f57cd00` from a clean tree |
-| `KingmakerCutsceneSkip.dll` | `38e97ae6be46992b3d598dcf1f4e386cd664379d299524a674f22614a9def7f9`, MVID `648f71bb-4a4e-43e6-aa71-72ae387d12e1` |
-| `KingmakerCutsceneSkip-0.1.2.zip` | `2967eafc70691ac6680c9c940931b09fe2aabdcbc9e6696fff02e89f8dc42e96` (version string unchanged; identify by hash). `Validate-Package.ps1` passed (references UnityModManager 0.31.1.0, 0Harmony12 1.2.0.1) |
-| Compared builds | released 0.1.2 ZIP `c1be6ae2…05fb` (DLL `a2a8706b…a1ba`); PR #4 head `2cd8579` DLL `9f853960…ac58` |
-| Tests | `scripts/Test.ps1` at `0ff67e3`: unit 64/64, provenance 70/70, package provenance 35/35 (.NET Framework 4.7.2, C# 7.3, warnings as errors) |
-| Environment | DATA, Kingmaker 2.1.7b (build 6757524), disposable game copy, owner's 16 mods on UMM 0.33.0 unless noted, English |
+| Product commits | `2cd8579` (time-override ownership check), `0ff67e3` and `51f4c33` (game time in the skip report), `182e7b4` (driver runs every advancing frame) |
+| `KingmakerCutsceneSkip.dll` | `773244f2d811ede224f019c8503c772872f0ddcb745a6656d9fbd96c711e2123`, MVID `a10ed3e1-415f-449f-9b5e-95555662ecbd`, built and packaged at `51f4c33` from a clean tree |
+| `KingmakerCutsceneSkip-0.1.2.zip` | `44886f18e7b6d7ad295118172d984b84166cfc32cea19da91811a16b241738b3` (version string unchanged; identify by hash). `Validate-Package.ps1` passed: UnityModManager 0.31.1.0, 0Harmony12 1.2.0.1. Later commits change only documentation and test tooling, so a ZIP packaged after them differs only in `README.md` |
+| Earlier builds | released 0.1.2 ZIP `c1be6ae2…05fb` (DLL `a2a8706b…a1ba`); PR #4 head `2cd8579` DLL `9f853960…ac58`; interim candidate `f57cd00` DLL `38e97ae6…f7f9`, ZIP `2967eafc…2e96` (without the driver correction) |
+| Tests | `scripts/Test.ps1` at `51f4c33`: unit 65/65, provenance 70/70, package provenance 35/35 (.NET Framework 4.7.2, C# 7.3, warnings as errors) |
+| Environment | DATA, Kingmaker 2.1.7b (build 6757524), disposable game copy, the owner's 16 mods on UMM 0.33.0 unless noted, English, about 30 fps (RDP) |
+| Harness | runs on the final candidate used harness `cd1720d4`; earlier groups used `66447ea0` (interim matrix), `df53030d` (override runs 162758Z/163116Z) and per-run builds recorded in each `host-summary.json` |
 
 ### Report targets and triggers
 
@@ -36,92 +46,112 @@ shown to be what happens in the reporter's game. The report stays open.
   It does not load under the current mod set. It names 28 blueprints that no installed mod provides (2 features,
   6 feature selections and 10 spells on party members, a kingdom event, and 9 vendor items), so Kingmaker drops
   `Player.MainCharacter` and `Player.PostLoad` throws. The scenarios register inert, component-free stand-ins for
-  exactly those GUIDs before loading; the save file is not modified (`placeholderNote` in the scenarios).
+  exactly those GUIDs before loading; the save file is not modified. Both arms of every comparison use the same
+  stand-ins, but the fixture is not identical to the save as the owner played it.
 * **Varnhold's Lot**: no Varnhold campaign save exists on DATA. A new DLC campaign is started from the main menu with
   the first pregen (`VarnholdPregenBardUnit`) through the engine's `FastStartNewGame` calls and the DLC's
   `StartGamePreset`. The pregen is not levelled to the preset experience. The run plays `StartDLC2_enterchapter` and the
   interchapter dialogue, then the opening `BaronationCeremonyDLC2` (about 125 s, voiced barks). Only this Varnhold
-  cinematic was tested; the reporter's Varnhold scene is unknown and remains unverified.
+  cinematic was tested; the reporter's Varnhold scene is unknown.
 
-### Measurements
+### The cause, natively (gathering, normal trigger, skip requested through the product API 2 s in)
 
-`tools/native/summarize_diag.py` over the harness's per-frame `diag.jsonl` (time controller identity, multipliers,
-planned/executed substeps, bark handles). Skips requested through the product API 2 s into each episode (`*-direct`).
+Bag of Tricks' game-speed field set before the trigger, as its slider sets it (`cleansed-gathering-bot-*-direct`). At
+this lab's about 30 fps, 0.9 is the setting that gives the first accelerated frame a single step. A 60 fps machine meets
+the same condition with values up to 2.
+
+| Bag of Tricks speed, build | Run | First accelerated frame | Result |
+|---|---|---|---|
+| 0.9, released 0.1.2 | 165303Z | native tick; Bag of Tricks wrote 0.9 | black for the 60 s watchdog (`Watchdog`), 53.6 game s in 60 s (×0.89), commands still progressing |
+| 0.9, interim candidate `f57cd00` | 165706Z | native tick | `TimeScaleUnavailable` after 0.03 s: the skip did nothing |
+| 0.9, candidate | 170555Z | driver | 16.71 s for 164.37 game s (×9.84), stopped at the dialogue; Bag of Tricks' 0.9 back in place afterwards |
+| 2, released 0.1.2 / `f57cd00` / candidate | 164958Z / 165120Z / 173811Z | two steps at 30 fps, so driver in all three | ×9.84 each (the condition is not met at this frame rate) |
+
+### Measurements, default configuration
+
+`tools/native/summarize_diag.py` over the harness's per-frame `diag.jsonl`. "Executed" substeps are derived from game
+time advanced, not counted.
 
 | Scene, build | Run | Real s advancing | Game s | Ratio | Substeps executed/planned | End |
 |---|---|---|---|---|---|---|
 | Gathering, normal playback | 152145Z | trigger to dialogue 160.6 | 159.0 | 1.0 | – | dialogue |
 | Gathering, 0.1.2 | 152837Z | 16.58 | 163.39 | 9.86 | 5134/5143 | `ControlReturned` (the engine's one Default frame before the dialogue) |
-| Gathering, PR #4 | 152620Z | 16.57 | 163.16 | 9.85 | 5129/5134 | same |
-| Gathering + AmaliaRun, PR #4 | 153526Z | 16.44 + 1.46 | 162.19 + 13.90 | 9.87, 9.50 | 5099/5101, 439/448 | `ControlReturned`, `InteractionBoundary` |
-| Varnhold opening, 0.1.2 / PR #4 | 154751Z / 154550Z | 12.50 / 12.53 | 121.11 / 121.36 | 9.69 / 9.68 | 3811/3819, 3818/3825 | `ControlReturned` (free control) |
-| Gathering, candidate | 160931Z | 16.85 | 163.97 | 9.7 | – | `ControlReturned` |
-| Varnhold opening, candidate | 161724Z | 12.27 | 121.41 | 9.9 | – | `ControlReturned` |
+| Gathering, PR #4 head | 152620Z | 16.57 | 163.16 | 9.85 | 5129/5134 | same |
+| Varnhold opening, 0.1.2 / PR #4 head | 154751Z / 154550Z | 12.50 / 12.53 | 121.11 / 121.36 | 9.69 / 9.68 | 3811/3819, 3818/3825 | `ControlReturned` (free control) |
+| Gathering, candidate | 171654Z | 16.80 | 163.65 | 9.74 | 5143/5144 | `ControlReturned` |
+| Gathering + AmaliaRun, candidate | 171139Z | 16.57 + 1.46 | 161.68 + 13.90 | 9.76, 9.51 | 5080/5081, 435/444 | `ControlReturned`, `InteractionBoundary` |
+| Varnhold opening, candidate | 172443Z | 12.23 | 121.07 | 9.90 | 3820/3827 | `ControlReturned` |
 
-In every run the time controller kept one identity and `DebugTimeScale` stayed 10. Each accelerated frame was cut short
-at most once, by the `StopMode` deferred action that starts the next mode. Every awaited Gathering bark used
-`BarkController` (engine time) with the speaker outside fog of war. The Varnhold voiced barks were interrupted when
-acceleration began or the command started. No `BarkVm` (real-time) handle was seen.
+With the candidate no advancing frame ran the native tick. In each skip exactly one frame was cut short: the last,
+by the deferred `StopMode` that starts the next mode. With the earlier builds, the first advancing frame was native
+whenever its unscaled time was at most 33.3 ms (e.g. 161724Z, 163116Z); at Bag of Tricks ×1 that changed nothing.
+Every awaited Gathering bark used `BarkController` (engine time) with the speaker outside fog of war. The Varnhold
+voiced barks were interrupted. No `BarkVm` (real-time) handle was seen.
 
 ### Story state, candidate ZIP (`compare_runs.py`, tolerances unchanged)
 
 | Comparison | Runs | Result |
 |---|---|---|
-| Gathering normal vs skip, at the dialogue | 160543Z / 160931Z | MATCH (26 units, 65 quests, 404 flags, 346 stacks); game time +7.36 s; real 159.7 s → 18.8 s |
-| Gathering normal vs skip cancelled 3 s into advancing, at the dialogue | 160543Z / 161057Z | MATCH; +0.20 s; the cutscene continued natively |
-| Gathering + AmaliaRun normal vs skips, at the combat auto-pause | 155947Z / 160406Z | **DIFFERENT (1)**: `C22-Amalia` 1.7 m behind (tolerance 1.5 m); everything else equal; +6.72 s; real 177.8 s → 26.2 s |
-| Same, PR #4 head (earlier build) | 153048Z / 153526Z | same difference: Amalia 1.9 m behind, +8.00 s |
-| Gathering + AmaliaRun normal vs normal (control) | 153048Z / 155947Z | MATCH; +0.42 s |
-| Varnhold opening normal vs skip, at free control | 161416Z / 161724Z | MATCH (32 units); −0.53 s; real 126.7 s → 16.1 s |
-| Varnhold opening normal vs cancelled skip | 161416Z / 161842Z | MATCH; +0.30 s |
-| Prologue chain normal vs 3 skips (regression), at free control | 162123Z / 162320Z | MATCH; +0.97 s |
+| Gathering normal vs skip, at the dialogue | 171310Z / 171654Z | MATCH (26 units, 65 quests, 404 flags, 346 stacks); game time +7.00 s; real 159.4 s → 18.8 s |
+| Gathering normal vs skip cancelled 3 s into advancing, at the dialogue | 171310Z / 171818Z | MATCH; +0.61 s; the cutscene continued natively |
+| Gathering + AmaliaRun normal vs skips, at the combat auto-pause | 170736Z / 171139Z | **DIFFERENT (1)**: `C22-Amalia` 1.8 m behind (tolerance 1.5 m); +7.81 s; real 177.1 s → 26.1 s |
+| Same with PR #4 head and with `f57cd00` | 153048Z / 153526Z; 155947Z / 160406Z | same difference (1.9 m, 1.7 m) |
+| Gathering + AmaliaRun normal vs normal (different builds, product idle) | 153048Z / 155947Z | MATCH; +0.42 s |
+| Varnhold opening normal vs skip, at free control | 172137Z / 172443Z | MATCH (32 units); −0.80 s; real 126.8 s → 16.1 s |
+| Varnhold opening normal vs cancelled skip | 172137Z / 172600Z | MATCH; +0.09 s |
+| Prologue chain normal vs 3 skips (regression), at free control | 172838Z / 173044Z | MATCH; +0.74 s |
 
-The Amalia difference is skip-related and repeatable. Amalia runs off during `C22-GatheringAmaliaRun` and is still
-moving when combat pauses. Her command starts at the same game time in both runs (±0.1 s) and the next dialogue starts
-0.6 s later in the skipped run, yet she has covered less ground. 1.7 m is about one rendered frame of ×10 game time at
-this frame rate. That fits the documented limitation for Unity-driven systems (Animator, per-rendered-frame updates),
-but her movement start was not instrumented, so this is not proven. Quests, flags, inventory and every other unit
-match. The extra game time of the long Gathering (+7.4 s over 157 s) is larger than the 0.2–1.3 s measured on prologue
-segments. It comes from the same per-rendered-frame animation completion; the scene contains many sequential
+0.1.2 was measured for speed and end reason only; its story state was not compared in these scenes.
+
+The Amalia difference is skip-related and repeatable, and this change neither introduced nor fixed it. Amalia runs off
+during `C22-GatheringAmaliaRun` and is still moving when combat pauses. Her command starts at the same game time in both
+runs (±0.1 s) and the next dialogue starts 0.6 s later in the skipped run, yet she has covered less ground. 1.7–1.9 m
+is about one rendered frame of ×10 game time at this frame rate. That would fit the documented limitation for
+Unity-driven systems, but her movement start was not instrumented, so the cause is not established. Because she is a
+combatant in the following fight, the fight's opening positions differ by that distance. Quests, flags, inventory and
+every other unit match.
+
+The extra game time of the long gathering (+7.0 s over 157 s) is larger than the 0.2–1.3 s measured on prologue
+segments. Its cause was not instrumented. Per-rendered-frame animation completion, the documented cause of the extra
+time on short segments, is the likely contributor: the scene contains many sequential
 `CommandUnitPlayCutsceneAnimation`s.
 
-### Mechanism: another owner replaces the skip's multiplier (test injection, not a gameplay trigger)
+### Another owner replacing the multiplier (test injection)
 
-`cleansed-gathering-override-direct`: skip 2 s into the gathering, and 3 s into advancing the harness sets
-`DebugTimeScale = 1`.
+`cleansed-gathering-override-direct`: 3 s into advancing, the harness sets `DebugTimeScale = 1`.
 
 | Build | Run | Result |
 |---|---|---|
-| released 0.1.2 | 162758Z | screen black for the 60 s watchdog (`Watchdog`), scene advancing at ×1.44 (86 game s in 60 s), commands still progressing |
-| candidate | 163116Z | `TimeScaleUnavailable` 3.07 s into advancing; overrides released; the other value (1) left in place |
-
-Bag of Tricks, the one installed mod that writes `DebugTimeScale`, does so in a `TimeController.Tick` prefix that
-substepped frames never call (`ENGINE-NOTES.md`). At its configured ×1 it writes nothing.
+| released 0.1.2 | 162758Z | ×10 for 3.1 s, then black for the rest of the 60 s watchdog at ×0.98 (56.0 game s in 56.8 s) |
+| interim candidate / candidate | 163116Z / 173442Z | `TimeScaleUnavailable` 3.07 / 3.09 s into advancing; overrides released; the other value left in place |
 
 ### Loader checks
 
-`startgame-skip-direct` with the candidate ZIP, isolated profile: UMM 0.31.1 (162457Z; loaded `UnityModManager
-0.31.1.0`, `0Harmony12 1.2.0.1`) and UMM 0.32.4 (162603Z): one operation each, `InteractionBoundary` at Amiri's
-dialogue. UMM 0.33.0 (owner loader): every run above. 0.27.12 and the synthetic profile were not rerun.
+`startgame-skip-direct`, candidate ZIP, isolated profile: UMM 0.31.1 (173226Z; loaded `UnityModManager 0.31.1.0`,
+`0Harmony12 1.2.0.1`) and UMM 0.32.4 (173334Z). Each had one operation ending `InteractionBoundary` at Amiri's
+dialogue. UMM 0.33.0 (owner loader): every other candidate run. 0.27.12 and the synthetic profile were not rerun.
 
 ### Not executed or not resolved
 
 * **Real keys.** Enter and Escape were not sent: the RDP session was unattended and Windows refused the foreground
   change (154946Z; the harness sends no input then). Cancellation was exercised through the product API. That shows
-  release of overrides and native continuation (MATCH above), but not that a real Escape press opens no menu and selects
-  no dialogue answer in these scenes. Scenarios ready: `cleansed-gathering-chain-skip-enter`,
-  `cleansed-gathering-cancel-escape`.
-* The reporter's mods, settings, frame rate, language and exact Varnhold scene are unknown. A `BarkVm` real-time wait
-  (unvoiced bark by a fogged speaker) and native-tick frames under Bag of Tricks ≠ 1 remain possible slow paths. Neither
-  occurred in these scenes.
-* To resume: the reporter's UMM log after a failing skip now contains `advance Xs (Y game s, xR)`, and the warning
-  names the end reason and the playing commands. Also needed: their mod list, or a save from just before the Varnhold
-  scene they skipped.
-* Runs that are not evidence: 140338Z, 142005Z, 143940Z, 144916Z, 151242Z, 151539Z, 151737Z, 151944Z (fixture would not
-  load before the stand-ins were complete), 153927Z (runner error before launch), 153949Z (new-game path incomplete).
-  All were restored with owner saves and installation unchanged.
+  release of overrides and native continuation (MATCH above), but not that a real Escape opens no menu and selects no
+  dialogue answer in these scenes. Ready: `cleansed-gathering-chain-skip-enter`, `cleansed-gathering-cancel-escape`.
+* **Frame rates above 30 fps** were not available. The Bag of Tricks condition was produced at 30 fps with 0.9 instead
+  of 2. The arithmetic (`min(speed × 10 / 12, unscaled frame × prior speed)` against one 1/30 s step) is the
+  driver's own.
+* **Reporter.** Ask for their Bag of Tricks game-speed value (or any other speed mod), and the Cutscene Skip lines of
+  the UMM log after a failing skip. Those lines now include `advance Xs (Y game s, xR)`, the end reason and the playing
+  commands. Also needed: the Varnhold scene they skipped, ideally a save just before it.
+* A `BarkVm` real-time wait (an unvoiced bark by a speaker in fog of war) remains a possible slow path; it did not
+  occur in these scenes.
+* Pre-existing, not changed: Bag of Tricks' "stop game time" option removes the game-time increment in
+  `TimeController.Tick`, but accelerated frames advance `Player.GameTime` themselves.
+* Runs that are not evidence: 140338Z, 142005Z, 143940Z, 144916Z, 151242Z, 151539Z, 151737Z and 151944Z (the fixture
+  would not load before the stand-ins were complete); 153927Z (runner error before launch); 153949Z (new-game path
+  incomplete). Development runs not cited above: 145201Z (diagnostics shakedown) and 154152Z (Varnhold discovery).
 
-Every run listed reports the installation restored and the owner's 95 saves and installation unchanged. The candidate
+Every run listed reports the installation restored and the owner's 95 saves and installation unchanged. The candidates
 and harness were never installed in the owner's game.
 
 ## Package contract: the packaged DLL's actual loader references (2026-11-24)
@@ -487,6 +517,6 @@ run: `scripts\runtime\Invoke-NativeRun.ps1 -RecoverOnly`.
 
 ## Resume point
 
-PR #4 (blackout report): see the top section. The report is not reproduced and stays open; the real-key
-Enter/Escape rows for the gathering need the owner present. 0.1.2 is released. The package-contract check above is a tooling change on a draft PR; merging it and any later release
+PR #4 (blackout report): see the top section. A cause (Bag of Tricks speed re-applied on a native first frame) is
+corrected; whether it is the reporter's needs their reply. The real-key Enter/Escape rows need the owner present. 0.1.2 is released. The package-contract check above is a tooling change on a draft PR; merging it and any later release
 or Nexus upload are the owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.

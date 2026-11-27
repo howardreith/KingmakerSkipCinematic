@@ -31,8 +31,9 @@ prologue cinematic.
   7 s over a long scene such as the Kingdom of the Cleansed gathering. Timed effects count that time, so a buff
   about to expire can run out during a skipped scene when it would not have during a watched one.
 * Skips are not available on the global map or in turn-based mode.
-* If Bag of Tricks or another mod replaces the skip's time multiplier, the skip ends and the scene becomes visible
-  again. The other mod's multiplier is left unchanged.
+* Bag of Tricks' game-speed setting no longer slows skips down (in 0.1.2, a setting other than 1 could leave a skip
+  black at that speed). The setting is back in effect after the skip. If any other mod changes the game speed
+  during a skip, the skip ends and the scene becomes visible again; that mod's speed is left unchanged.
 
 **Saves.** The mod adds no data of its own to save files, so a save does not need the mod to load. A skip still runs the
 game's scripts, and their results are saved as usual.

@@ -122,7 +122,7 @@ decides the clock:
 
 `FogOfWarController` runs in the Cutscene mode; a unit is fogged beyond about 11.7–13.7 m of every revealer or behind an
 obstacle. In both native scenes measured for the report every awaited bark used `BarkController` with the speaker
-visible, so the `BarkVm` real-time path was not exercised; it remains a possible slow wait for an unvoiced bark by a
+visible. The `BarkVm` real-time path was not exercised; it remains a possible slow wait for an unvoiced bark by a
 fogged speaker.
 
 ## Accelerated frames: whole-tick substepping
@@ -132,7 +132,11 @@ fogged speaker.
 
 * The frame's engine delta is `TimeController.Tick`'s own formula, `min(PlayerTimeScale·DebugTimeScale/12,
   Time.deltaTime)`; it is divided into `n = ceil(delta / (1/30))` equal substeps, at most 25 (the formula's cap at ×10).
-  Frames that need no division, the frame a mode was just activated, and turn-based combat use the native tick.
+  Every advancing Cutscene-mode frame is run this way, a frame shorter than one step as a single tick
+  (`Core/AcceleratedFramePolicy`): the first accelerated frame is such a frame, because Unity computed its
+  `Time.deltaTime` before the skip raised `Time.timeScale`. Only the time controller's just-activated frame,
+  turn-based combat and a controller list without exactly one `TimeController` use the native tick, so
+  `TimeController.Tick` (and any mod patch on it) does not run while a skip advances.
 * Each substep ticks the mode's controller list in native order. `TimeController` is replaced by its own Cutscene-mode
   bookkeeping for one substep (`DeltaTime` and `GameDeltaTime` = step, `Player.GameTime += step`, `Time.timeScale`
   re-derived). Each controller is isolated with try/catch as in `GameMode.Tick`.
@@ -214,17 +218,20 @@ contract leaves the game untouched and the mod reports itself inactive.
   outside those commands and `CommandCustomLoadingScreen` were not reached in a native fixture. Voiced barks were
   reached in the Varnhold's Lot opening (`VALIDATION.md`).
 * Turn-based mode: a skip is declined, and ends, while turn-based combat is active.
-* Bag of Tricks (1.16.4) applies its game-speed multiplier, when set ≠ 1, in a `TimeController.Tick` prefix.
-  Substepped frames do not call `TimeController.Tick` (the driver does the Cutscene-mode time bookkeeping), so it can
-  only replace the skip's multiplier on a frame that runs the native tick, e.g. one that needs no substeps (an
-  unscaled frame under about 3.3 ms). The skip then ends `TimeScaleUnavailable` and reveals; ownership rules leave Bag
-  of Tricks' value in place.
+* Bag of Tricks (1.16.4) applies its game-speed multiplier, when set ≠ 1, in a `TimeController.Tick` prefix (its
+  "set to default" button also writes `DebugTimeScale`). Before PR #4 the first accelerated frame took the native
+  tick whenever unscaled frame time × prior speed ≤ 1/30 s (e.g. Bag of Tricks ≤ 2 at 60 fps), so Bag of Tricks
+  replaced the skip's ×10 on that frame. 0.1.2 then ran the skip black at Bag of Tricks' speed, the reported
+  blackout (`VALIDATION.md`). The driver now runs every advancing frame, so the prefix does not run during a skip.
+  The skip restores Bag of Tricks' value afterwards. Any other writer that replaces the multiplier ends the skip
+  `TimeScaleUnavailable`, and its value is left in place. Pre-existing: Bag of Tricks' "stop game time" option
+  removes the game-time increment in `TimeController.Tick`, but accelerated frames still advance `Player.GameTime`.
 * A cutscene that waits on something else that does not follow engine time would stall; the 10 s stall watchdog then
   reveals normal playback with the playing commands logged.
 * Logic coupled to Unity-driven systems (animation events, physics, coroutines) sees ×10 steps per rendered frame;
   only engine-time logic keeps normal granularity.
-* Mods that patch `TimeController.Tick` do not see the substeps of an accelerated frame (the mod performs the
-  Cutscene-mode time bookkeeping itself).
+* Mods that patch `TimeController.Tick` do not run while a skip advances (the mod performs the Cutscene-mode time
+  bookkeeping itself).
 
 ## Observed by the native harness
 
