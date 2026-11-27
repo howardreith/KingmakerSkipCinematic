@@ -1,5 +1,16 @@
 # Validation record — Mr. Bard's Kingmaker Cutscene Skip
 
+## Release 0.1.3
+
+| Item | Value |
+|---|---|
+| Released DLL SHA-256 | `06ec177fa880520b8b67b018f923ee882235462ca3e96654fba962da1f67ac01`, MVID `8e81148e-3481-43ae-b277-55139d021ad1`, file version 0.1.3.0, built and packaged at `467ca9a` from a clean tree |
+| `KingmakerCutsceneSkip-0.1.3.zip` SHA-256 | `b62c0d529ce8a143f692897ee9340a6a855bb3262e11deae9929cff944a6e014`; `Validate-Package.ps1` passed (UnityModManager 0.31.1.0, 0Harmony12 1.2.0.1, `ManagerVersion` 0.31.1) |
+| Relation to the validated candidate | product source identical to candidate `b3469cc` (DLL `05122289…`, section below) except the version strings (`Info.json`, `ProductMetadata.cs`, `AssemblyInfo.cs`) |
+| Tests at `467ca9a` | unit 66/66, provenance 70/70, package provenance 35/35 |
+| Native smoke test of the release ZIP | `cleansed-gathering-bot-slow-accept` 203035Z (×9.90, restored); `cleansed-gathering-skip-direct` 203241Z (×9.76); `varnhold-opening-skip-direct` 203438Z (×9.71); `startgame-skip-direct` on UMM 0.31.1, isolated, 203643Z (`InteractionBoundary`). All passed; product loaded as 0.1.3; installation restored, owner saves and installation unchanged |
+| Approved by the owner with | real Enter/Escape input in the new scenes still unverified (no attended session); the owner tests the release in their own game |
+
 ## Blackout while playback remains at normal speed (2026-11-27, PR #4, unreleased)
 
 Report: Varnhold DLC cinematics and later multi-stage scenes such as "the Kingdom of the Cleansed one with Remus'
@@ -550,5 +561,5 @@ run: `scripts\runtime\Invoke-NativeRun.ps1 -RecoverOnly`.
 
 PR #4 (blackout report): see the top section. A cause (Bag of Tricks speed re-applied on a native first frame) is
 corrected (acceptance check `cleansed-gathering-bot-slow-accept`); whether it is the reporter's needs their reply.
-The real-key Enter/Escape scenarios need an attended session. 0.1.2 is released. The package-contract check above is a tooling change on a draft PR; merging it and any later release
-or Nexus upload are the owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.
+The real-key Enter/Escape scenarios need an attended session. 0.1.3 is released on GitHub (top section; PR #4
+merged). A Nexus upload is the owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.
