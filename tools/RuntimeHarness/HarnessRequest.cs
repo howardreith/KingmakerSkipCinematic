@@ -82,6 +82,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         /// <summary>World position "x,y,z" for moveTo.</summary>
         [JsonProperty("position")] public string Position;
 
+        /// <summary>expectAcceleration: minimum game seconds per real second over the last advancing segment.</summary>
+        [JsonProperty("minRatio")] public double MinRatio;
+
+        /// <summary>expectAcceleration: minimum game seconds the last advancing segment must cover.</summary>
+        [JsonProperty("minGameSeconds")] public double MinGameSeconds;
+
         public override string ToString()
         {
             return Op + (string.IsNullOrEmpty(Label) ? string.Empty : "(" + Label + ")");

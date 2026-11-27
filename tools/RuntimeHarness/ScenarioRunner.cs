@@ -72,6 +72,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             SubscribeToSkipReports();
+            TrackAdvancing();
             recorder.Tick();
 
             if (Now - startedAt > request.TimeoutSeconds)
@@ -138,6 +139,66 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             menu.LoadGame(save);
             Enter(Stage.LoadingSave);
         }
+
+        /// <summary>
+        /// Measures every advancing segment from outside the product (game and real time when the product's phase enters
+        /// and leaves Advancing), so the same check applies to any build, including ones without a game-time report.
+        /// </summary>
+        private void TrackAdvancing()
+        {
+            Game game = Game.Instance;
+            if (game?.Player == null) return;
+            bool advancing = ProductAccess.Phase == "Advancing";
+            if (advancing && !wasAdvancing)
+            {
+                advanceStartGame = game.Player.GameTime.TotalSeconds;
+                advanceStartReal = Now;
+                advanceOperation = ProductAccess.StartedOperations;
+            }
+            else if (!advancing && wasAdvancing)
+            {
+                lastAdvanceGame = game.Player.GameTime.TotalSeconds - advanceStartGame;
+                lastAdvanceReal = Now - advanceStartReal;
+                lastAdvanceOperation = advanceOperation;
+                recorder.Event("advanceMeasured", new JObject { ["operation"] = advanceOperation, ["gameSeconds"] = Math.Round(lastAdvanceGame, 3), ["realSeconds"] = Math.Round(lastAdvanceReal, 3) });
+            }
+
+            wasAdvancing = advancing;
+        }
+
+        /// <summary>The operation started after the last input mark advanced fast enough over enough of the scene.</summary>
+        private StepStatus ExpectAcceleration(HarnessStep step)
+        {
+            if (lastAdvanceOperation <= operationsAtMark) return Fail(true, "no advancing segment was measured for an operation after the last input mark");
+            double ratio = lastAdvanceReal > 0 ? lastAdvanceGame / lastAdvanceReal : 0;
+            result["acceleration_" + stepIndex] = new JObject { ["gameSeconds"] = lastAdvanceGame, ["realSeconds"] = lastAdvanceReal, ["ratio"] = ratio };
+            if (lastAdvanceGame < step.MinGameSeconds) return Fail(true, "advanced only " + lastAdvanceGame.ToString("0.00", CultureInfo.InvariantCulture) + " game s (minimum " + step.MinGameSeconds + ")");
+            return Fail(ratio < step.MinRatio, "advanced at x" + ratio.ToString("0.00", CultureInfo.InvariantCulture) + " (minimum x" + step.MinRatio + ")");
+        }
+
+        /// <summary>The time scale, fade, manual loading screen and audio level are back to what markPresentation recorded.</summary>
+        private StepStatus ExpectRestored()
+        {
+            if (markedPresentation == null) return Fail(true, "markPresentation was not run");
+            JObject now = StateSnapshot.Presentation();
+            System.Collections.Generic.List<string> differences = new System.Collections.Generic.List<string>();
+            foreach (string key in new[] { "debugTimeScale", "fadeCanvas", "manualLoadingScreen", "audioLevel" })
+            {
+                if (!JToken.DeepEquals(markedPresentation[key], now[key])) differences.Add(key + " " + markedPresentation[key] + " -> " + now[key]);
+            }
+
+            result["restored_" + stepIndex] = now;
+            return Fail(differences.Count > 0, "presentation not restored: " + string.Join("; ", differences.ToArray()));
+        }
+
+        private bool wasAdvancing;
+        private double advanceStartGame;
+        private double advanceStartReal;
+        private int advanceOperation;
+        private double lastAdvanceGame;
+        private double lastAdvanceReal;
+        private int lastAdvanceOperation;
+        private JObject markedPresentation;
 
         /// <summary>MainMenu.StartNewGame(dlc) with the first pregenerated character, committed as MainMenu.FastStartNewGame does.</summary>
         private void StartDlcNewGame()
@@ -351,6 +412,17 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                 case "waitSkipIdle":
                     return WaitSkipIdle(step);
+
+                case "markPresentation":
+                    markedPresentation = StateSnapshot.Presentation();
+                    recorder.Event("markPresentation", markedPresentation);
+                    return StepStatus.Done;
+
+                case "expectRestored":
+                    return ExpectRestored();
+
+                case "expectAcceleration":
+                    return ExpectAcceleration(step);
 
                 case "expectNoSkip":
                     return Fail(!ProductAccess.IsIdle || ProductAccess.StartedOperations != operationsAtMark,

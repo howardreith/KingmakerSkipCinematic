@@ -1,5 +1,5 @@
 {
-  "description": "[skip requested via product API, not key input] Varnhold's Lot opening: new DLC campaign from the main menu with the first pregenerated character (harness newGameDlc: the engine's FastStartNewGame calls with the DLC StartGamePreset; the game is entered without levelling the pregen to the preset experience), StartDLC2_enterchapter, the interchapter dialogue answered by the deterministic rule, then BaronationCeremonyDLC2 (voiced barks); skip 2 s into BaronationCeremonyDLC2, then continue to free control.",
+  "description": "[skip requested via product API, not key input] Varnhold's Lot opening: new DLC campaign from the main menu with the first pregenerated character (harness newGameDlc: the engine's FastStartNewGame calls with the DLC StartGamePreset; the game is entered without levelling the pregen to the preset experience), StartDLC2_enterchapter, the interchapter dialogue answered by the deterministic rule, then BaronationCeremonyDLC2 (voiced barks); skip 2 s into BaronationCeremonyDLC2, then continue to free control. The skip must end at free control (ControlReturned), advance at least 80 game s at x5 or faster and restore the presentation.",
   "newGameDlc": "Varnhold",
   "captureEveryFrames": 15,
   "steps": [
@@ -25,11 +25,23 @@
       "label": "pre"
     },
     {
+      "op": "markPresentation"
+    },
+    {
       "op": "skipDirect"
     },
     {
       "op": "waitSkipIdle",
-      "timeoutSeconds": 120
+      "timeoutSeconds": 120,
+      "mode": "ControlReturned"
+    },
+    {
+      "op": "expectAcceleration",
+      "minRatio": 5.0,
+      "minGameSeconds": 80.0
+    },
+    {
+      "op": "expectRestored"
     },
     {
       "op": "snapshot",

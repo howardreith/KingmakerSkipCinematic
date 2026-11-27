@@ -1,5 +1,5 @@
 {
-  "description": "Kingdom of the Cleansed gathering: real Enter 2 s into the cutscene, real Escape 3 s after acceleration began. The skip must end Cancelled, the Escape menu must not open (mode stays Cutscene), and the cutscene continues natively to the FirstFaithful_BeforeFight dialogue with no answer chosen.",
+  "description": "Kingdom of the Cleansed gathering: real Enter 2 s into the cutscene, real Escape 3 s after acceleration began. The skip must end Cancelled, the Escape menu must not open (mode stays Cutscene), and the cutscene continues natively to the FirstFaithful_BeforeFight dialogue with no answer chosen. The operation mark is reset after the cancellation is confirmed, so expectNoSkip checks only for a new operation.",
   "save": "Quick_432.zks",
   "placeholderNote": "The owner save names 28 blueprints that no installed mod provides: 2 features, 6 feature selections and 10 spells on party members, one kingdom event, and 9 items in vendor stock. Without them Kingmaker drops Player.MainCharacter and the load fails in Player.PostLoad. The harness registers inert, component-free stand-ins for exactly these GUIDs before loading; the save file itself is unmodified.",
   "placeholderBlueprints": [
@@ -162,8 +162,18 @@
       "timeoutSeconds": 10
     },
     {
+      "op": "waitNotMode",
+      "mode": "EscMode",
+      "seconds": 1.0,
+      "timeoutSeconds": 6
+    },
+    {
       "op": "snapshot",
       "label": "cancelled"
+    },
+    {
+      "op": "markOperations",
+      "label": "after-cancel"
     },
     {
       "op": "wait",

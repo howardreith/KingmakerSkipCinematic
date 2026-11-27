@@ -1,5 +1,5 @@
 {
-  "description": "[skip requested via product API, not key input] Kingdom of the Cleansed gathering: same trigger as cleansed-gathering-normal; skip 2 s into the cutscene. The skip must accelerate the sermon and stop at the FirstFaithful_BeforeFight dialogue with no answer chosen. The cutscene releases its lock for one frame before the dialogue starts (Cutscene, Default, Dialog in normal playback too), so the skip may end ControlReturned at that frame.",
+  "description": "[skip requested via product API, not key input] Kingdom of the Cleansed gathering: same trigger as cleansed-gathering-normal; skip 2 s into the cutscene. The skip must accelerate the sermon and stop at the FirstFaithful_BeforeFight dialogue with no answer chosen. The cutscene releases its lock for one frame before the dialogue starts (Cutscene, Default, Dialog in normal playback too), so the skip may end ControlReturned at that frame. The skip must advance at least 100 game s at x5 or faster and restore the presentation.",
   "save": "Quick_432.zks",
   "placeholderNote": "The owner save names 28 blueprints that no installed mod provides: 2 features, 6 feature selections and 10 spells on party members, one kingdom event, and 9 items in vendor stock. Without them Kingmaker drops Player.MainCharacter and the load fails in Player.PostLoad. The harness registers inert, component-free stand-ins for exactly these GUIDs before loading; the save file itself is unmodified.",
   "placeholderBlueprints": [
@@ -138,6 +138,9 @@
       "label": "pre"
     },
     {
+      "op": "markPresentation"
+    },
+    {
       "op": "skipDirect"
     },
     {
@@ -146,10 +149,18 @@
       "timeoutSeconds": 120
     },
     {
+      "op": "expectAcceleration",
+      "minRatio": 5.0,
+      "minGameSeconds": 100.0
+    },
+    {
       "op": "waitMode",
       "mode": "Dialog",
       "seconds": 1.0,
       "timeoutSeconds": 420
+    },
+    {
+      "op": "expectRestored"
     },
     {
       "op": "snapshot",
