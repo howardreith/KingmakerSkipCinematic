@@ -62,7 +62,8 @@ mod.
 * Animations finish on whole frames at high speed, so a skipped cinematic uses a little more in-game time than
   watching it (about 0.2–1 s per segment in testing). Timed effects count that extra time, so a buff with less than
   about a second to spare can run out during a skipped cinematic but not during a watched one.
-* If Bag of Tricks' game-speed multiplier is set to anything other than 1, skips run at that speed instead.
+* If Bag of Tricks or another mod replaces the skip's time multiplier, the skip ends and the scene becomes visible
+  again. The other mod's multiplier is left unchanged.
 * Tested in the prologue and the opening of the night attack (see `docs/VALIDATION.md`). Other cinematics use the same
   engine paths but were not individually tested, so a problem in a particular later scene cannot be ruled out. Keep a
   save from before an important scene, as you would with any mod. If you see a problem, please report the quest and

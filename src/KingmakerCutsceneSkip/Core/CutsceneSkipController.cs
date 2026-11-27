@@ -146,7 +146,7 @@ namespace KingmakerCutsceneSkip.Core
             if (Phase != SkipPhase.Advancing) return false;
             try
             {
-                return !EndIfBoundaryReached();
+                return !EndIfBoundaryReached() && !EndIfTimeScaleUnavailable();
             }
             catch (Exception exception)
             {
@@ -197,15 +197,17 @@ namespace KingmakerCutsceneSkip.Core
 
             reachedFullBlack = true;
             fadeOutSeconds = elapsed;
-            scope.PrepareActiveCommandsForAcceleration();
             timeScale.Apply(tuning.TimeScale);
+            if (EndIfTimeScaleUnavailable()) return;
+
+            scope.PrepareActiveCommandsForAcceleration();
             watchdog.Reset(clock.RealTimeSeconds, scope.ProgressFingerprint);
             EnterPhase(SkipPhase.Advancing);
         }
 
         private void TickAdvancing()
         {
-            if (EndIfBoundaryReached()) return;
+            if (EndIfBoundaryReached() || EndIfTimeScaleUnavailable()) return;
 
             SkipEndReason? limit = watchdog.Observe(clock.RealTimeSeconds, scope.ProgressFingerprint);
             if (limit.HasValue) End(limit.Value, "playing: " + scope.DescribePlayingCommands());
@@ -226,6 +228,16 @@ namespace KingmakerCutsceneSkip.Core
             SkipBoundary boundary = probe.GetBoundary(scope);
             if (!boundary.IsReached) return false;
             End(boundary.Reason.Value, boundary.Detail);
+            return true;
+        }
+
+        private bool EndIfTimeScaleUnavailable()
+        {
+            if (timeScale.IsCurrent) return false;
+
+            // Command progress can continue at normal speed, so the stall watchdog cannot detect a lost multiplier.
+            // Reveal through the normal cleanup path; never fight another owner's speed by reapplying ours.
+            End(SkipEndReason.TimeScaleUnavailable, "time controller or multiplier no longer matches the skip override");
             return true;
         }
 
@@ -255,7 +267,7 @@ namespace KingmakerCutsceneSkip.Core
             EnterPhase(SkipPhase.Revealing);
             LastReport = report;
             if (reason == SkipEndReason.Error || reason == SkipEndReason.Stalled || reason == SkipEndReason.Watchdog ||
-                reason == SkipEndReason.FadeTimeout)
+                reason == SkipEndReason.FadeTimeout || reason == SkipEndReason.TimeScaleUnavailable)
             {
                 logger.Warning(report.ToString());
             }

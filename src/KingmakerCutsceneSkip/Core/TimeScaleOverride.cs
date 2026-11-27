@@ -23,6 +23,8 @@ namespace KingmakerCutsceneSkip.Core
 
         public bool IsApplied => appliedTo != null;
 
+        public bool IsCurrent => IsApplied && ReferenceEquals(host.Identity, appliedTo) && host.Scale == appliedScale;
+
         public void Apply(float scale)
         {
             if (IsApplied) return;

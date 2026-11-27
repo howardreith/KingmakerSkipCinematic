@@ -69,6 +69,7 @@ so acceleration stops in the same tick:
 | turn-based combat active | `TurnBasedCombat` |
 | every owned cutscene finished | `SceneComplete` |
 | Escape during the skip | `Cancelled` |
+| the skip's time controller/multiplier is unavailable or replaced | `TimeScaleUnavailable` |
 | no owned track changed command for 10 s real time | `Stalled` |
 | 60 s real time spent advancing | `Watchdog` |
 | the native fade did not report full black within 1 s (nothing was accelerated) | `FadeTimeout` |
@@ -79,6 +80,14 @@ Boundaries are also re-evaluated between the substeps of an accelerated frame, s
 at which normal playback would hand over. A request is declined (`BoundaryCommandPlaying`) while a controlling
 cutscene is already showing a loading card; a card already running when a skip begins is classified like one that
 starts during it.
+
+The time override is checked after acquisition, on each advancing update and between substeps, after checking real
+interaction boundaries. `IsCurrent` requires the same controller identity and multiplier that the skip acquired;
+`IsApplied` separately tracks the outstanding cleanup obligation. If acquisition failed or another owner replaced
+the controller or multiplier, the skip releases its fade/audio claims and reports `TimeScaleUnavailable`. It never
+reasserts the multiplier over a later owner. This check does not measure actual playback speed: a real-time presentation
+wait or a substep frame cut short can still be slow while the multiplier remains unchanged. Command progress alone
+cannot detect that acceleration was lost, because even normal-speed command changes reset the stall watchdog.
 
 A staged fight inside a cinematic keeps the Cutscene mode and is skipped; playable combat only begins when the lock is
 released, which is a boundary. Scope: the operation owns every live `Exclusive` cutscene at start, plus cutscenes that
@@ -186,8 +195,8 @@ contract leaves the game untouched and the mod reports itself inactive.
 * No command in `Kingmaker.AreaLogic.Cutscenes*` reads a real-time clock (source audit), but scene-specific logic
   outside those commands, voiced barks and `CommandCustomLoadingScreen` were not reached in a native fixture.
 * Turn-based mode: a skip is declined, and ends, while turn-based combat is active.
-* Bag of Tricks' game-speed multiplier, when set ≠ 1, rewrites `DebugTimeScale` every tick; a skip then runs at that
-  speed (ownership rules leave Bag of Tricks' value in place).
+* Bag of Tricks' game-speed multiplier, when set ≠ 1, rewrites `DebugTimeScale` every tick. If that replaces the skip's
+  multiplier, the skip ends `TimeScaleUnavailable` and reveals; ownership rules leave Bag of Tricks' value in place.
 * A cutscene that waits on something else that does not follow engine time would stall; the 10 s stall watchdog then
   reveals normal playback with the playing commands logged.
 * Logic coupled to Unity-driven systems (animation events, physics, coroutines) sees ×10 steps per rendered frame;

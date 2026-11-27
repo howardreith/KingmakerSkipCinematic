@@ -1,5 +1,52 @@
 # Validation record — Mr. Bard's Kingmaker Cutscene Skip
 
+## Blackout while playback remains at normal speed (2026-11-27, unreleased)
+
+Report: Varnhold DLC and later multi-stage cinematics, including Remus's Kingdom of the Cleansed speech, turn black
+when skipped but continue at ordinary speed; Escape reveals them. The exact reported scenes have **not been reproduced**.
+Source baseline: `503970f43bf6d184a93d24cf0f6a984ca28cee9c` (`main`); product `.cs` files there are unchanged from v0.1.2.
+
+**Confirmed core defect.** A skip applies its time multiplier once. If the controller is replaced or another owner
+changes its multiplier, the old code keeps the fade/audio claims until an ordinary boundary, cancellation or watchdog.
+Commands continuing at normal speed reset the 10-second stall timer, so only the 60-second total watchdog bounds that
+case. A missing time controller also makes `Apply` return without a write, yet the old controller enters `Advancing`.
+
+**Correction under review.** After acquisition and throughout advancement, verify the acquired controller and multiplier
+still match. On failure end `TimeScaleUnavailable`, release the fade/audio claims, and preserve a newer owner's value.
+An ordinary interaction boundary keeps priority. The acquisition check runs before preparing active presentation
+commands. The existing command execution, bark handling and substep scheduling are unchanged.
+
+**Executed checks:** C# 7.3, warnings treated as errors, .NET SDK 10.0.404 / .NET 10.0.15 on Linux. A temporary runner
+under ignored `artifacts/core-check/` linked the production `Core/*.cs`, `Input/ISkipCommandSink.cs`, `Logging/IModLogger.cs`,
+the existing test runner, and `CutsceneSkipControllerTests`, `OverrideOwnershipTests`, `FrameSubstepSchedulerTests`.
+It used the existing `Fakes.cs` with only the unused `FakeKeyboard` class and `using UnityEngine` omitted. No game,
+Unity, UMM or Harmony types were stubbed. These are core behavior checks, **not** the product's .NET Framework build,
+the complete `scripts/Test.ps1` suite, or native gameplay evidence.
+
+| Check | Result |
+|---|---|
+| Existing selected tests before changes | 38/38 passed |
+| Seven new tests against the original production source | 40/45 passed; five failures reproduced the missing guard; two preservation/precedence controls passed |
+| Selected tests with the correction | 45/45 passed |
+
+The new tests cover normal-speed command progress despite loss of acceleration, between-substep termination, a missing
+controller at acquisition, replacement by a controller at the same multiplier, preservation of an external multiplier,
+continued use of a faster prior multiplier, and boundary precedence. They use the real controller and time/fade/audio
+override classes over the existing engine-host fakes. The final tests also assert the diagnostic reason/warning and that
+failed acquisition never prepares presentation commands or records advancement.
+
+**Outstanding:** the connected game machine was offline; no actual Kingmaker assemblies, full product build, package,
+loader matrix or native scene run were available in this investigation. No candidate DLL/ZIP or native hashes exist for
+this change. Do not count the earlier v0.1.2 native runs below as validation of this revision. This is a targeted blackout
+mitigation; it is not evidence that the named scenes now skip correctly.
+
+For the reported scenes, record the active scene/command, controller identity, `DebugTimeScale`, Unity time scale and
+game-time advancement per real second. If the multiplier remains intact, investigate bark-handle initialization/voice
+waits and repeated deferred work stopping accelerated substeps. `PresentationHandlers` only prepares recognized voiced
+`CommandBark` handles before acceleration or immediately after an owned command starts. Neither delayed handles nor
+the reported scenes have been verified against the actual game here. Reproduce through the existing isolated native
+runner from a pre-scene save, compare normal/skip/cancel outcomes, and retain the existing save/install protection.
+
 ## Package contract: the packaged DLL's actual loader references (2026-11-24)
 
 **Compiler inputs.** Every MSBuild compile of the product, through `scripts/Build.ps1` or directly

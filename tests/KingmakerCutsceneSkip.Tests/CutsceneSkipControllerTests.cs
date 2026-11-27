@@ -73,6 +73,107 @@ namespace KingmakerCutsceneSkip.Tests
             f.AssertAllOverridesReleased();
         }
 
+        public static void LostAccelerationRevealsEvenWhenCommandsProgress()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.TimeHost.Scale = 1f;
+            f.Scope.Fingerprint = "next command";
+            f.Clock.Advance(0.1);
+            f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "reveal immediately despite command progress");
+            AssertEx.Equal(SkipEndReason.TimeScaleUnavailable, f.Controller.LastReport.Reason, "report the lost multiplier");
+            AssertEx.True(f.Logger.Lines.Exists(line => line.StartsWith("W ") && line.Contains("TimeScaleUnavailable")),
+                "the failure is logged even without verbose diagnostics");
+            f.AssertAllOverridesReleased();
+        }
+
+        public static void ContinueAdvancingStopsWhenAccelerationIsLost()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.TimeHost.Scale = 1f;
+            AssertEx.False(f.Controller.ContinueAdvancing(), "stop before another substep");
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "reveal without waiting for a rendered-frame update");
+            f.AssertAllOverridesReleased();
+        }
+
+        public static void MissingTimeControllerRevealsWithoutEnteringAdvancing()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.TimeHost.Identity = null;
+            AssertEx.True(f.Controller.TryStart(), "start accepted before the fade completes");
+            f.FadeHost.State = FadeVisualState.Shown;
+            f.Clock.Advance(0.3);
+            f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "reveal when acceleration cannot be applied");
+            AssertEx.Equal(SkipEndReason.TimeScaleUnavailable, f.Controller.LastReport.Reason, "report unavailable acceleration");
+            AssertEx.Equal(0, f.TimeHost.SetCalls, "no time controller was written");
+            AssertEx.Equal(0, f.Scope.PrepareCount, "do not interrupt presentation without acquiring acceleration");
+            AssertEx.Equal(0.0, f.Controller.LastReport.AdvanceSeconds, "never entered advancement");
+            f.AssertAllOverridesReleased();
+        }
+
+        public static void ReplacedTimeControllerRevealsEvenWithTheSameScale()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.TimeHost.Identity = new object();
+            int writesBefore = f.TimeHost.SetCalls;
+            f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "the original controller no longer owns acceleration");
+            AssertEx.Equal(f.Tuning.TimeScale, f.TimeHost.Scale, "replacement controller remains untouched");
+            AssertEx.Equal(writesBefore, f.TimeHost.SetCalls, "do not restore onto the replacement controller");
+            AssertEx.Equal(f.VolumeHost.PlayerSetting, f.VolumeHost.Level, "audio restored");
+            AssertEx.Equal(0, f.FadeHost.ReferenceCount, "fade claim released");
+            AssertEx.False(f.Scope.IsActive, "scope ended");
+        }
+
+        public static void LostAccelerationPreservesAnotherOwnersScale()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.TimeHost.Scale = 2f;
+            int writesBefore = f.TimeHost.SetCalls;
+            f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "reveal when another owner changes the scale");
+            AssertEx.Equal(2f, f.TimeHost.Scale, "the newer owner's speed survives");
+            AssertEx.Equal(writesBefore, f.TimeHost.SetCalls, "neither reapply acceleration nor restore a stale speed");
+            AssertEx.Equal(f.VolumeHost.PlayerSetting, f.VolumeHost.Level, "audio restored");
+            AssertEx.Equal(0, f.FadeHost.ReferenceCount, "fade claim released");
+            AssertEx.False(f.Scope.IsActive, "scope ended");
+        }
+
+        public static void UnchangedFasterPriorScaleKeepsAdvancing()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.TimeHost.Scale = 20f;
+            f.StartAndAdvance();
+            f.Clock.Advance(0.1);
+            f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Advancing, f.Controller.Phase, "a faster captured speed is still valid");
+            AssertEx.True(f.Controller.ContinueAdvancing(), "substeps may continue at the captured faster speed");
+            AssertEx.Equal(20f, f.TimeHost.Scale, "never slow the existing speed");
+            AssertEx.Equal(1, f.FadeHost.ReferenceCount, "keep the accelerated scene covered");
+            f.Controller.TryCancel();
+            AssertEx.Equal(20f, f.TimeHost.Scale, "the prior speed survives cancellation");
+        }
+
+        public static void InteractionBoundaryTakesPrecedenceOverLostAcceleration()
+        {
+            ControllerFixture f = new ControllerFixture();
+            f.StartAndAdvance();
+            f.TimeHost.Scale = 2f;
+            f.Probe.Boundary = SkipBoundary.Of(SkipEndReason.InteractionBoundary, "Dialog");
+            f.Controller.Tick();
+            AssertEx.Equal(SkipPhase.Revealing, f.Controller.Phase, "reveal at the interaction boundary");
+            AssertEx.Equal(SkipEndReason.InteractionBoundary, f.Controller.LastReport.Reason, "report the actual boundary");
+            AssertEx.Equal(2f, f.TimeHost.Scale, "the external speed survives the boundary");
+            AssertEx.Equal(f.VolumeHost.PlayerSetting, f.VolumeHost.Level, "audio restored");
+            AssertEx.Equal(0, f.FadeHost.ReferenceCount, "fade claim released");
+            AssertEx.False(f.Scope.IsActive, "scope ended");
+        }
+
         public static void StartedOperationsCountsOnlyAcceptedStarts()
         {
             ControllerFixture f = new ControllerFixture();

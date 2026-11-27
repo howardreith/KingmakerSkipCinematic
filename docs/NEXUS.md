@@ -30,7 +30,8 @@ prologue cinematic.
 * A skipped cinematic uses up to about a second more in-game time per segment. Timed effects count that time, so a buff
   about to expire can run out during a skipped scene when it would not have during a watched one.
 * Skips are not available on the global map or in turn-based mode.
-* If Bag of Tricks' game-speed multiplier is not 1, skips run at that speed.
+* If Bag of Tricks or another mod replaces the skip's time multiplier, the skip ends and the scene becomes visible
+  again. The other mod's multiplier is left unchanged.
 
 **Saves.** The mod adds no data of its own to save files, so a save does not need the mod to load. A skip still runs the
 game's scripts, and their results are saved as usual.
