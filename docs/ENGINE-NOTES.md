@@ -135,8 +135,9 @@ fogged speaker.
   Every advancing Cutscene-mode frame is run this way, a frame shorter than one step as a single tick
   (`Core/AcceleratedFramePolicy`): the first accelerated frame is such a frame, because Unity computed its
   `Time.deltaTime` before the skip raised `Time.timeScale`. Only the time controller's just-activated frame,
-  turn-based combat and a controller list without exactly one `TimeController` use the native tick, so
-  `TimeController.Tick` (and any mod patch on it) does not run while a skip advances.
+  turn-based combat and a controller list without exactly one `TimeController` use the native tick. All eligible
+  advancing Cutscene-mode frames therefore use the driver, and `TimeController.Tick` (with any mod patch on it) runs
+  during a skip only on those excluded frames.
 * Each substep ticks the mode's controller list in native order. `TimeController` is replaced by its own Cutscene-mode
   bookkeeping for one substep (`DeltaTime` and `GameDeltaTime` = step, `Player.GameTime += step`, `Time.timeScale`
   re-derived). Each controller is isolated with try/catch as in `GameMode.Tick`.
@@ -222,7 +223,7 @@ contract leaves the game untouched and the mod reports itself inactive.
   "set to default" button also writes `DebugTimeScale`). Before PR #4 the first accelerated frame took the native
   tick whenever unscaled frame time × prior speed ≤ 1/30 s (e.g. Bag of Tricks ≤ 2 at 60 fps), so Bag of Tricks
   replaced the skip's ×10 on that frame. 0.1.2 then ran the skip black at Bag of Tricks' speed, the reported
-  blackout (`VALIDATION.md`). The driver now runs every advancing frame, so the prefix does not run during a skip.
+  blackout (`VALIDATION.md`). All eligible advancing frames now use the driver, so the prefix does not run on them.
   The skip restores Bag of Tricks' value afterwards. Any other writer that replaces the multiplier ends the skip
   `TimeScaleUnavailable`, and its value is left in place. Pre-existing: Bag of Tricks' "stop game time" option
   removes the game-time increment in `TimeController.Tick`, but accelerated frames still advance `Player.GameTime`.
@@ -230,8 +231,8 @@ contract leaves the game untouched and the mod reports itself inactive.
   reveals normal playback with the playing commands logged.
 * Logic coupled to Unity-driven systems (animation events, physics, coroutines) sees ×10 steps per rendered frame;
   only engine-time logic keeps normal granularity.
-* Mods that patch `TimeController.Tick` do not run while a skip advances (the mod performs the Cutscene-mode time
-  bookkeeping itself).
+* Mods that patch `TimeController.Tick` do not run on eligible advancing frames (the mod performs the Cutscene-mode
+  time bookkeeping itself).
 
 ## Observed by the native harness
 

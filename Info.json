@@ -2,7 +2,7 @@
   "Id": "KingmakerCutsceneSkip",
   "DisplayName": "Mr. Bard's Kingmaker Cutscene Skip",
   "Author": "Howie Reith",
-  "Version": "0.1.2",
+  "Version": "0.1.3",
   "ManagerVersion": "0.31.1",
   "GameVersion": "2.1.7",
   "AssemblyName": "KingmakerCutsceneSkip.dll",
