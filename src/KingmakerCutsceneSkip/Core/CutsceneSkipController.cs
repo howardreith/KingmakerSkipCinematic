@@ -27,6 +27,7 @@ namespace KingmakerCutsceneSkip.Core
         private double phaseStartedAt;
         private double fadeOutSeconds;
         private bool reachedFullBlack;
+        private double advanceStartedGameSeconds = double.NaN;
         private double inputGuardUntil = double.NegativeInfinity;
 
         public CutsceneSkipController(
@@ -201,6 +202,7 @@ namespace KingmakerCutsceneSkip.Core
             if (EndIfTimeScaleUnavailable()) return;
 
             scope.PrepareActiveCommandsForAcceleration();
+            advanceStartedGameSeconds = ReadGameSeconds();
             watchdog.Reset(clock.RealTimeSeconds, scope.ProgressFingerprint);
             EnterPhase(SkipPhase.Advancing);
         }
@@ -254,7 +256,8 @@ namespace KingmakerCutsceneSkip.Core
                 AdvanceSeconds = wasAdvancing ? now - phaseStartedAt : 0,
                 TotalHeldSeconds = now - operationStartedAt,
                 ReachedFullBlack = reachedFullBlack,
-                ProgressEvents = wasAdvancing ? watchdog.ProgressEvents : 0
+                ProgressEvents = wasAdvancing ? watchdog.ProgressEvents : 0,
+                GameSecondsAdvanced = wasAdvancing ? ReadGameSeconds() - advanceStartedGameSeconds : 0
             };
 
             // Release in reverse order of acquisition. Each release is independent so one failure cannot strand another override.
@@ -283,6 +286,19 @@ namespace KingmakerCutsceneSkip.Core
             catch (Exception exception)
             {
                 logger.Exception("Notify skip operation ended", exception);
+            }
+        }
+
+        /// <summary>Game time for the report only; a failure to read it never affects the operation.</summary>
+        private double ReadGameSeconds()
+        {
+            try
+            {
+                return probe.GameTimeSeconds;
+            }
+            catch (Exception)
+            {
+                return double.NaN;
             }
         }
 

@@ -73,6 +73,49 @@ namespace KingmakerCutsceneSkip.Tests
             f.AssertAllOverridesReleased();
         }
 
+        public static void ReportShowsGameTimeAdvancedAgainstRealTime()
+        {
+            // The log line a player can send must tell an accelerated skip from one that ran at ordinary speed.
+            ControllerFixture f = new ControllerFixture();
+            f.Probe.GameTime = 1000;
+            f.StartAndAdvance();
+            f.Probe.GameTime = 1163.2;
+            f.Clock.Advance(16.5);
+            f.Probe.Boundary = SkipBoundary.Of(SkipEndReason.InteractionBoundary, "Dialog");
+            f.Controller.Tick();
+            SkipOperationReport report = f.Controller.LastReport;
+            AssertEx.Equal(163.2, Math.Round(report.GameSecondsAdvanced, 3), "game time measured from the start of advancing");
+            AssertEx.True(report.ToString().Contains("advance 16.50s (163.20 game s, x9.9)"), "report: " + report);
+
+            ControllerFixture slow = new ControllerFixture();
+            slow.Probe.GameTime = 50;
+            slow.StartAndAdvance();
+            slow.Probe.GameTime = 60;
+            slow.Clock.Advance(10);
+            slow.Probe.Boundary = SkipBoundary.Of(SkipEndReason.InteractionBoundary, "Dialog");
+            slow.Controller.Tick();
+            AssertEx.True(slow.Controller.LastReport.ToString().Contains("advance 10.00s (10.00 game s, x1.0)"),
+                "ordinary-speed advancing is visible in the report: " + slow.Controller.LastReport);
+        }
+
+        public static void ReportOmitsGameTimeWhenItIsUnknownOrNothingAdvanced()
+        {
+            ControllerFixture unknown = new ControllerFixture();
+            unknown.Probe.GameTime = double.NaN;
+            unknown.StartAndAdvance();
+            unknown.Clock.Advance(2);
+            unknown.Probe.Boundary = SkipBoundary.Of(SkipEndReason.Loading, "loading process");
+            unknown.Controller.Tick();
+            AssertEx.False(unknown.Controller.LastReport.ToString().Contains("game s"), "no ratio without a game time");
+
+            ControllerFixture fading = new ControllerFixture();
+            fading.Probe.GameTime = 10;
+            fading.Controller.TryStart();
+            fading.Controller.TryCancel();
+            AssertEx.Equal(0.0, fading.Controller.LastReport.GameSecondsAdvanced, "nothing advanced during fade-out");
+            AssertEx.False(fading.Controller.LastReport.ToString().Contains("game s"), "no ratio for a cancelled fade-out");
+        }
+
         public static void LostAccelerationRevealsEvenWhenCommandsProgress()
         {
             ControllerFixture f = new ControllerFixture();

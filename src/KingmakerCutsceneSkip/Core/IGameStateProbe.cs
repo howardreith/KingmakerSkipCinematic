@@ -6,5 +6,8 @@ namespace KingmakerCutsceneSkip.Core
         SkipStartBlocker GetStartBlocker();
 
         SkipBoundary GetBoundary(ISkipScope scope);
+
+        /// <summary>Engine game time in seconds (NaN when there is no game). Diagnostics only: never a boundary or timer.</summary>
+        double GameTimeSeconds { get; }
     }
 }
