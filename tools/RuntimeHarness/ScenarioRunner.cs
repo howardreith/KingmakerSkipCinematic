@@ -309,6 +309,13 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 case "applyBuff":
                     return ApplyBuff(game, step);
 
+                case "setDebugTimeScale":
+                    // Mechanism test only: stands in for another owner (another mod) writing TimeController.DebugTimeScale.
+                    recorder.Event("setDebugTimeScale", game.TimeController.DebugTimeScale.ToString(CultureInfo.InvariantCulture) + " -> " +
+                        step.Seconds.ToString(CultureInfo.InvariantCulture));
+                    game.TimeController.DebugTimeScale = (float)step.Seconds;
+                    return StepStatus.Done;
+
                 case "markOperations":
                     MarkOperations(step.Label);
                     return StepStatus.Done;
