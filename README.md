@@ -60,13 +60,18 @@ mod.
 * Cinematics on the global map are not skipped (Enter does nothing there).
 * No skipping while turn-based combat mode is active.
 * Animations finish on whole frames at high speed, so a skipped cinematic uses a little more in-game time than
-  watching it (about 0.2–1 s per segment in testing). Timed effects count that extra time, so a buff with less than
-  about a second to spare can run out during a skipped cinematic but not during a watched one.
-* If Bag of Tricks' game-speed multiplier is set to anything other than 1, skips run at that speed instead.
-* Tested in the prologue and the opening of the night attack (see `docs/VALIDATION.md`). Other cinematics use the same
+  watching it (about 0.2–1 s per short segment, and about 7 s over the 2½-minute Kingdom of the Cleansed gathering, in
+  testing). Timed effects count that extra time, so a buff close to expiring can run out during a skipped cinematic but
+  not during a watched one.
+* Bag of Tricks' game-speed setting no longer slows skips down (in 0.1.2, a setting other than 1 could leave a skip
+  black at that speed). The setting is back in effect after the skip. If any other mod changes the game speed
+  during a skip, the skip ends and the scene becomes visible again; that mod's speed is left unchanged.
+* Tested in the prologue, the opening of the night attack, Tristian's Kingdom of the Cleansed gathering and the opening
+  of Varnhold's Lot (see `docs/VALIDATION.md`). Other cinematics use the same
   engine paths but were not individually tested, so a problem in a particular later scene cannot be ruled out. Keep a
   save from before an important scene, as you would with any mod. If you see a problem, please report the quest and
-  location, your Unity Mod Manager and mod versions, and a save from before the scene.
+  location, your Unity Mod Manager and mod versions, a save from before the scene, and the Cutscene Skip lines of the
+  Unity Mod Manager log (each skip logs how much game time it advanced in how many real seconds).
 * If acceleration stalls or exceeds its time limit, the mod stops accelerating and returns to visible playback, logging
   which command it waited on. This does not guarantee that every cinematic is free of scene-specific problems. If the
   screen does not go black, the skip is abandoned and the scene simply continues.

@@ -72,6 +72,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             SubscribeToSkipReports();
+            TrackAdvancing();
             recorder.Tick();
 
             if (Now - startedAt > request.TimeoutSeconds)
@@ -91,6 +92,11 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                     {
                         Enter(Stage.Settling);
                         recorder.Event("saveLoaded", Game.Instance.CurrentlyLoadedArea.name);
+                    }
+                    else if (Now - stageStartedAt > 20.0 && !LoadingProcess.Instance.IsLoadingInProcess && UnityEngine.Object.FindObjectOfType<MainMenu>() != null)
+                    {
+                        // A LoadGameException returns the game to the main menu; nothing further can happen in this run.
+                        Finish(false, "fixture save did not load (the game returned to the main menu; see player-log.txt)");
                     }
 
                     break;
@@ -114,6 +120,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             if (menu == null || LoadingProcess.Instance.IsLoadingInProcess || Now - stageStartedAt < 3.0) return;
 
             UnityModManager.UI.Instance?.ToggleWindow(false);
+            if (!string.IsNullOrEmpty(request.NewGameDlc))
+            {
+                StartDlcNewGame();
+                return;
+            }
+
             string path = Path.Combine(Game.Instance.SaveManager.SavePath, request.Save);
             SaveInfo save = Game.Instance.SaveManager.LoadZipSave(path);
             if (save == null)
@@ -122,9 +134,153 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 return;
             }
 
+            RegisterPlaceholderBlueprints();
             recorder.Event("loadSave", request.Save);
             menu.LoadGame(save);
             Enter(Stage.LoadingSave);
+        }
+
+        /// <summary>
+        /// Measures every advancing segment from outside the product (game and real time when the product's phase enters
+        /// and leaves Advancing), so the same check applies to any build, including ones without a game-time report.
+        /// </summary>
+        private void TrackAdvancing()
+        {
+            Game game = Game.Instance;
+            if (game?.Player == null) return;
+            bool advancing = ProductAccess.Phase == "Advancing";
+            if (advancing && !wasAdvancing)
+            {
+                advanceStartGame = game.Player.GameTime.TotalSeconds;
+                advanceStartReal = Now;
+                advanceOperation = ProductAccess.StartedOperations;
+            }
+            else if (!advancing && wasAdvancing)
+            {
+                lastAdvanceGame = game.Player.GameTime.TotalSeconds - advanceStartGame;
+                lastAdvanceReal = Now - advanceStartReal;
+                lastAdvanceOperation = advanceOperation;
+                recorder.Event("advanceMeasured", new JObject { ["operation"] = advanceOperation, ["gameSeconds"] = Math.Round(lastAdvanceGame, 3), ["realSeconds"] = Math.Round(lastAdvanceReal, 3) });
+            }
+
+            wasAdvancing = advancing;
+        }
+
+        /// <summary>The operation started after the last input mark advanced fast enough over enough of the scene.</summary>
+        private StepStatus ExpectAcceleration(HarnessStep step)
+        {
+            if (lastAdvanceOperation <= operationsAtMark) return Fail(true, "no advancing segment was measured for an operation after the last input mark");
+            double ratio = lastAdvanceReal > 0 ? lastAdvanceGame / lastAdvanceReal : 0;
+            result["acceleration_" + stepIndex] = new JObject { ["gameSeconds"] = lastAdvanceGame, ["realSeconds"] = lastAdvanceReal, ["ratio"] = ratio };
+            if (lastAdvanceGame < step.MinGameSeconds) return Fail(true, "advanced only " + lastAdvanceGame.ToString("0.00", CultureInfo.InvariantCulture) + " game s (minimum " + step.MinGameSeconds + ")");
+            return Fail(ratio < step.MinRatio, "advanced at x" + ratio.ToString("0.00", CultureInfo.InvariantCulture) + " (minimum x" + step.MinRatio + ")");
+        }
+
+        /// <summary>The time scale, fade, manual loading screen and audio level are back to what markPresentation recorded.</summary>
+        private StepStatus ExpectRestored()
+        {
+            if (markedPresentation == null) return Fail(true, "markPresentation was not run");
+            JObject now = StateSnapshot.Presentation();
+            System.Collections.Generic.List<string> differences = new System.Collections.Generic.List<string>();
+            foreach (string key in new[] { "debugTimeScale", "fadeCanvas", "manualLoadingScreen", "audioLevel" })
+            {
+                if (!JToken.DeepEquals(markedPresentation[key], now[key])) differences.Add(key + " " + markedPresentation[key] + " -> " + now[key]);
+            }
+
+            result["restored_" + stepIndex] = now;
+            return Fail(differences.Count > 0, "presentation not restored: " + string.Join("; ", differences.ToArray()));
+        }
+
+        private bool wasAdvancing;
+        private double advanceStartGame;
+        private double advanceStartReal;
+        private int advanceOperation;
+        private double lastAdvanceGame;
+        private double lastAdvanceReal;
+        private int lastAdvanceOperation;
+        private JObject markedPresentation;
+
+        /// <summary>MainMenu.StartNewGame(dlc) with the first pregenerated character, committed as MainMenu.FastStartNewGame does.</summary>
+        private void StartDlcNewGame()
+        {
+            var dlc = (Kingmaker.Blueprints.Root.DlcType)Enum.Parse(typeof(Kingmaker.Blueprints.Root.DlcType), request.NewGameDlc);
+            var root = Kingmaker.Blueprints.Root.BlueprintRoot.Instance;
+            var data = root.DlcSettings.Get(dlc);
+            result["newGameDlc"] = new JObject { ["dlc"] = dlc.ToString(), ["enabled"] = data.Enabled, ["preset"] = data.StartGamePreset != null ? data.StartGamePreset.name : null };
+            if (!data.Enabled || data.StartGamePreset == null)
+            {
+                Finish(false, "DLC " + dlc + " is not available for a new game (enabled=" + data.Enabled + ")");
+                return;
+            }
+
+            Game.NewGamePreset = data.StartGamePreset;
+            var pregen = root.CharGen.GetPregens(dlc).First();
+            var unit = new Kingmaker.UI.LevelUp.ChargenUnit(pregen);
+            EventBus.RaiseEvent(delegate(Kingmaker.PubSubSystem.IUIStartChargen h) { h.HandleStartChargen(unit); });
+            Game.Instance.UI.LevelUpController.SelectAlignment(Kingmaker.Enums.Alignment.LawfulGood);
+            Game.Instance.UI.LevelUpController.SelectName("Tester");
+            Game.Instance.UI.LevelUpController.SelectVoice(root.CharGen.MaleVoices.First());
+            Game.Instance.UI.LevelUpController.Commit();
+            // MainMenu.HandleLevelUpComplete enters the game only when no further level-up is available; the DLC preset's
+            // starting experience would have the UI level the pregen first. This discovery path enters the game directly.
+            MainMenu menu = UnityEngine.Object.FindObjectOfType<MainMenu>();
+            bool canLevel = Kingmaker.UnitLogic.Class.LevelUp.LevelUpController.CanLevelUp(Game.Instance.Player.MainCharacter.Value.Descriptor);
+            if (canLevel && menu != null) menu.EnterGame(Game.Instance.LoadNewGame);
+            recorder.Event("newGame", dlc + " preset " + data.StartGamePreset.name + " pregen " + pregen.name + (canLevel ? " (entered without levelling to the preset experience)" : string.Empty));
+            Enter(Stage.LoadingSave);
+        }
+
+        /// <summary>
+        /// Sets Bag of Tricks' game-speed multiplier (the field its settings slider writes, applied by its
+        /// TimeController.Tick prefix) as a player would, so a scenario runs with that mod configured. Test-only.
+        /// </summary>
+        private StepStatus SetBagOfTricksGameSpeed(float value)
+        {
+            Type main = AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetType("BagOfTricks.Main", false)).FirstOrDefault(type => type != null);
+            if (main == null) return Fail(true, "Bag of Tricks is not loaded");
+            object settings = main.GetField("settings", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(null);
+            var field = settings?.GetType().GetField("debugTimeMultiplier");
+            if (field == null) return Fail(true, "Bag of Tricks settings.debugTimeMultiplier not found");
+            object previous = field.GetValue(settings);
+            field.SetValue(settings, value);
+            recorder.Event("bagOfTricksGameSpeed", previous + " -> " + value.ToString(CultureInfo.InvariantCulture));
+            return StepStatus.Done;
+        }
+
+        private void RegisterPlaceholderBlueprints()
+        {
+            if (request.PlaceholderBlueprints == null || request.PlaceholderBlueprints.Count == 0) return;
+            var library = Kingmaker.Blueprints.ResourcesLibrary.LibraryObject;
+            JArray registered = new JArray();
+            foreach (PlaceholderBlueprint placeholder in request.PlaceholderBlueprints)
+            {
+                if (library.BlueprintsByAssetId.ContainsKey(placeholder.Guid))
+                {
+                    registered.Add(placeholder.Guid + " already exists (not replaced)");
+                    continue;
+                }
+
+                Kingmaker.Blueprints.BlueprintScriptableObject blueprint;
+                switch (placeholder.Kind)
+                {
+                    case "feature": blueprint = ScriptableObject.CreateInstance<Kingmaker.Blueprints.Classes.BlueprintFeature>(); break;
+                    case "selection": blueprint = ScriptableObject.CreateInstance<Kingmaker.Blueprints.Classes.Selection.BlueprintFeatureSelection>(); break;
+                    case "ability": blueprint = ScriptableObject.CreateInstance<Kingmaker.UnitLogic.Abilities.Blueprints.BlueprintAbility>(); break;
+                    case "item": blueprint = ScriptableObject.CreateInstance<Kingmaker.Blueprints.Items.BlueprintItem>(); break;
+                    case "kingdomEvent": blueprint = ScriptableObject.CreateInstance<Kingmaker.Kingdom.Blueprints.BlueprintKingdomEvent>(); break;
+                    default: throw new InvalidOperationException("unknown placeholder kind " + placeholder.Kind);
+                }
+
+                blueprint.name = "KMCS_TestPlaceholder_" + placeholder.Guid;
+                blueprint.AssetGuid = placeholder.Guid;
+                library.BlueprintsByAssetId[placeholder.Guid] = blueprint;
+                library.GetAllBlueprints().Add(blueprint);
+                registered.Add(placeholder.Guid + " " + placeholder.Kind);
+            }
+
+            PlayerPostLoadProbe.Install(recorder);
+            result["placeholderBlueprints"] = registered;
+            recorder.Event("placeholderBlueprints", registered);
         }
 
         private void TickSteps()
@@ -231,6 +387,16 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 case "applyBuff":
                     return ApplyBuff(game, step);
 
+                case "setBagOfTricksGameSpeed":
+                    return SetBagOfTricksGameSpeed((float)step.Seconds);
+
+                case "setDebugTimeScale":
+                    // Mechanism test only: stands in for another owner (another mod) writing TimeController.DebugTimeScale.
+                    recorder.Event("setDebugTimeScale", game.TimeController.DebugTimeScale.ToString(CultureInfo.InvariantCulture) + " -> " +
+                        step.Seconds.ToString(CultureInfo.InvariantCulture));
+                    game.TimeController.DebugTimeScale = (float)step.Seconds;
+                    return StepStatus.Done;
+
                 case "markOperations":
                     MarkOperations(step.Label);
                     return StepStatus.Done;
@@ -246,6 +412,17 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                 case "waitSkipIdle":
                     return WaitSkipIdle(step);
+
+                case "markPresentation":
+                    markedPresentation = StateSnapshot.Presentation();
+                    recorder.Event("markPresentation", markedPresentation);
+                    return StepStatus.Done;
+
+                case "expectRestored":
+                    return ExpectRestored();
+
+                case "expectAcceleration":
+                    return ExpectAcceleration(step);
 
                 case "expectNoSkip":
                     return Fail(!ProductAccess.IsIdle || ProductAccess.StartedOperations != operationsAtMark,
@@ -266,6 +443,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                 case "moveTo":
                     return MoveMainCharacter(game, step);
+
+                case "moveToScriptZone":
+                    return MovePartyIntoScriptZone(game, step);
 
                 case "interactNearest":
                     return InteractNearest(game, step);
@@ -540,6 +720,43 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         }
 
         /// <summary>
+        /// Walks the party into the script zone whose blueprint name contains "match", with native move commands (as a
+        /// click on the zone would). The zone's own enter actions start whatever it triggers; completes as soon as the game
+        /// leaves ordinary play, and fails if the party stands inside the zone without anything starting.
+        /// </summary>
+        private StepStatus MovePartyIntoScriptZone(Game game, HarnessStep step)
+        {
+            if (game.CurrentMode != Kingmaker.GameModes.GameModeType.Default) return StepStatus.Done;
+            UnitEntityData unit = game.Player.MainCharacter.Value;
+            if (double.IsNaN(conditionMetAt))
+            {
+                Kingmaker.View.MapObjects.SriptZones.ScriptZone zone = UnityEngine.Object.FindObjectsOfType<Kingmaker.View.MapObjects.SriptZones.ScriptZone>()
+                    .FirstOrDefault(candidate => candidate != null && candidate.Blueprint != null &&
+                        candidate.Blueprint.name.IndexOf(step.Match ?? string.Empty, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (zone == null) return Fail(true, "no script zone named " + step.Match);
+                var shape = zone.Shapes.FirstOrDefault();
+                scriptZoneTarget = shape != null ? shape.Center() : zone.transform.position;
+                scriptZoneTarget = Kingmaker.View.ObstacleAnalyzer.GetDeepNavmeshPoint(scriptZoneTarget, 1.0f);
+                conditionMetAt = Now;
+                foreach (UnitEntityData member in game.Player.Party)
+                {
+                    if (member != null && member.IsInGame && !member.Descriptor.State.IsFinallyDead) member.Commands.Run(new UnitMoveTo(scriptZoneTarget, 0.5f));
+                }
+
+                recorder.Event("moveToScriptZone", zone.Blueprint.name + " active=" + zone.IsActive + " target=" + scriptZoneTarget.ToString("F2") +
+                    " from=" + unit.Position.ToString("F2") + " inside=" + zone.ContainsPosition(unit.Position));
+                return StepStatus.Running;
+            }
+
+            Vector3 delta = unit.Position - scriptZoneTarget;
+            delta.y = 0;
+            if (delta.magnitude < 1.0f && Now - conditionMetAt > (step.Seconds > 0 ? step.Seconds : 5.0)) return Fail(true, "party reached the zone and nothing started");
+            return StepStatus.Running;
+        }
+
+        private Vector3 scriptZoneTarget;
+
+        /// <summary>
         /// Progresses dialogues deterministically until the requested top mode appears: each step picks the first
         /// selectable answer not chosen earlier in this run (else the last one), at a fixed real-time cadence.
         /// The same rule is used for normal and skipped runs so both reach the same story branch.
@@ -608,7 +825,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             cinematicSince = double.NaN;
-            bool control = game.CurrentMode == Kingmaker.GameModes.GameModeType.Default && !game.CutsceneLock;
+            // "mode" (optional) is an additional end state, e.g. the Pause that combat auto-pause opens.
+            bool control = (game.CurrentMode == Kingmaker.GameModes.GameModeType.Default && !game.CutsceneLock) ||
+                (!string.IsNullOrEmpty(step.Mode) && string.Equals(game.CurrentMode.ToString(), step.Mode, StringComparison.Ordinal));
             if (!control)
             {
                 controlSince = double.NaN;
@@ -822,6 +1041,46 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             recorder.WriteJson("runtime-result.json", result);
             EventBus.Unsubscribe(recorder);
             if (request.ExitAfterCompletion) quitCountdown = 30;
+        }
+    }
+
+    /// <summary>Records what CrossSceneState holds when Player.PostLoad runs (fixture-load diagnosis only).</summary>
+    internal static class PlayerPostLoadProbe
+    {
+        private static EvidenceRecorder probeRecorder;
+        private static bool installed;
+
+        public static void Install(EvidenceRecorder recorder)
+        {
+            probeRecorder = recorder;
+            if (installed) return;
+            installed = true;
+            var harmony = Harmony12.HarmonyInstance.Create("howardreith.kingmaker.cutsceneskip.runtimeharness.postloadprobe");
+            harmony.Patch(typeof(Kingmaker.Player).GetMethod("PostLoad"),
+                new Harmony12.HarmonyMethod(typeof(PlayerPostLoadProbe).GetMethod(nameof(Prefix), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)), null);
+        }
+
+        private static void Prefix(Kingmaker.Player __instance)
+        {
+            try
+            {
+                var all = __instance.CrossSceneState?.AllEntityData?.ToList();
+                string id = __instance.MainCharacter.UniqueId;
+                probeRecorder?.Event("playerPostLoad", new JObject
+                {
+                    ["mainCharacterId"] = id,
+                    ["entities"] = all?.Count ?? -1,
+                    ["units"] = new JArray((all ?? new System.Collections.Generic.List<Kingmaker.EntitySystem.EntityDataBase>())
+                        .OfType<UnitEntityData>().Select(unit => unit.UniqueId + " " + (unit.Blueprint != null ? unit.Blueprint.name : "<null blueprint>")).Take(40)),
+                    ["types"] = new JArray((all ?? new System.Collections.Generic.List<Kingmaker.EntitySystem.EntityDataBase>()).GroupBy(entity => entity == null ? "null" : entity.GetType().Name)
+                        .Select(group => group.Key + "=" + group.Count()))
+                });
+                probeRecorder?.Flush();
+            }
+            catch (Exception exception)
+            {
+                probeRecorder?.Event("playerPostLoadProbeFailed", exception.ToString());
+            }
         }
     }
 }

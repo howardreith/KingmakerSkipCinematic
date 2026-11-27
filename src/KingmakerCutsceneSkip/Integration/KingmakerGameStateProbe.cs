@@ -26,6 +26,15 @@ namespace KingmakerCutsceneSkip.Integration
             return SkipStartBlocker.None;
         }
 
+        public double GameTimeSeconds
+        {
+            get
+            {
+                Player player = Game.Instance?.Player;
+                return player == null ? double.NaN : player.GameTime.TotalSeconds;
+            }
+        }
+
         public SkipBoundary GetBoundary(ISkipScope scope)
         {
             Game game = Game.Instance;

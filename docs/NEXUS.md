@@ -27,10 +27,13 @@ prologue cinematic.
   ruled out. Keep a save from before an important scene, as with any mod.
 * If acceleration stalls or exceeds its time limit, the mod stops accelerating and returns to visible playback. This does
   not guarantee that every cinematic is free of scene-specific problems.
-* A skipped cinematic uses up to about a second more in-game time per segment. Timed effects count that time, so a buff
+* A skipped cinematic uses a little more in-game time than watching it: up to about a second for a short segment, about
+  7 s over a long scene such as the Kingdom of the Cleansed gathering. Timed effects count that time, so a buff
   about to expire can run out during a skipped scene when it would not have during a watched one.
 * Skips are not available on the global map or in turn-based mode.
-* If Bag of Tricks' game-speed multiplier is not 1, skips run at that speed.
+* Bag of Tricks' game-speed setting no longer slows skips down (in 0.1.2, a setting other than 1 could leave a skip
+  black at that speed). The setting is back in effect after the skip. If any other mod changes the game speed
+  during a skip, the skip ends and the scene becomes visible again; that mod's speed is left unchanged.
 
 **Saves.** The mod adds no data of its own to save files, so a save does not need the mod to load. A skip still runs the
 game's scripts, and their results are saved as usual.

@@ -27,6 +27,7 @@ namespace KingmakerCutsceneSkip.Core
         private double phaseStartedAt;
         private double fadeOutSeconds;
         private bool reachedFullBlack;
+        private double advanceStartedGameSeconds = double.NaN;
         private double inputGuardUntil = double.NegativeInfinity;
 
         public CutsceneSkipController(
@@ -146,7 +147,7 @@ namespace KingmakerCutsceneSkip.Core
             if (Phase != SkipPhase.Advancing) return false;
             try
             {
-                return !EndIfBoundaryReached();
+                return !EndIfBoundaryReached() && !EndIfTimeScaleUnavailable();
             }
             catch (Exception exception)
             {
@@ -197,15 +198,18 @@ namespace KingmakerCutsceneSkip.Core
 
             reachedFullBlack = true;
             fadeOutSeconds = elapsed;
-            scope.PrepareActiveCommandsForAcceleration();
             timeScale.Apply(tuning.TimeScale);
+            if (EndIfTimeScaleUnavailable()) return;
+
+            scope.PrepareActiveCommandsForAcceleration();
+            advanceStartedGameSeconds = ReadGameSeconds();
             watchdog.Reset(clock.RealTimeSeconds, scope.ProgressFingerprint);
             EnterPhase(SkipPhase.Advancing);
         }
 
         private void TickAdvancing()
         {
-            if (EndIfBoundaryReached()) return;
+            if (EndIfBoundaryReached() || EndIfTimeScaleUnavailable()) return;
 
             SkipEndReason? limit = watchdog.Observe(clock.RealTimeSeconds, scope.ProgressFingerprint);
             if (limit.HasValue) End(limit.Value, "playing: " + scope.DescribePlayingCommands());
@@ -229,6 +233,16 @@ namespace KingmakerCutsceneSkip.Core
             return true;
         }
 
+        private bool EndIfTimeScaleUnavailable()
+        {
+            if (timeScale.IsCurrent) return false;
+
+            // Command progress can continue at normal speed, so the stall watchdog cannot detect a lost multiplier.
+            // Reveal through the normal cleanup path; never fight another owner's speed by reapplying ours.
+            End(SkipEndReason.TimeScaleUnavailable, "time controller or multiplier no longer matches the skip override");
+            return true;
+        }
+
         private void End(SkipEndReason reason, string detail)
         {
             double now = clock.RealTimeSeconds;
@@ -242,7 +256,9 @@ namespace KingmakerCutsceneSkip.Core
                 AdvanceSeconds = wasAdvancing ? now - phaseStartedAt : 0,
                 TotalHeldSeconds = now - operationStartedAt,
                 ReachedFullBlack = reachedFullBlack,
-                ProgressEvents = wasAdvancing ? watchdog.ProgressEvents : 0
+                ProgressEvents = wasAdvancing ? watchdog.ProgressEvents : 0,
+                // A load can replace the game whose time was sampled: no figure rather than a wrong one.
+                GameSecondsAdvanced = !wasAdvancing ? 0 : reason == SkipEndReason.Loading ? double.NaN : ReadGameSeconds() - advanceStartedGameSeconds
             };
 
             // Release in reverse order of acquisition. Each release is independent so one failure cannot strand another override.
@@ -255,7 +271,7 @@ namespace KingmakerCutsceneSkip.Core
             EnterPhase(SkipPhase.Revealing);
             LastReport = report;
             if (reason == SkipEndReason.Error || reason == SkipEndReason.Stalled || reason == SkipEndReason.Watchdog ||
-                reason == SkipEndReason.FadeTimeout)
+                reason == SkipEndReason.FadeTimeout || reason == SkipEndReason.TimeScaleUnavailable)
             {
                 logger.Warning(report.ToString());
             }
@@ -271,6 +287,19 @@ namespace KingmakerCutsceneSkip.Core
             catch (Exception exception)
             {
                 logger.Exception("Notify skip operation ended", exception);
+            }
+        }
+
+        /// <summary>Game time for the report only; a failure to read it never affects the operation.</summary>
+        private double ReadGameSeconds()
+        {
+            try
+            {
+                return probe.GameTimeSeconds;
+            }
+            catch (Exception)
+            {
+                return double.NaN;
             }
         }
 

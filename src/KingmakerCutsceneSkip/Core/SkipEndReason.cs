@@ -34,6 +34,9 @@ namespace KingmakerCutsceneSkip.Core
         Error,
 
         /// <summary>The mod was disabled or unloaded.</summary>
-        Disabled
+        Disabled,
+
+        /// <summary>The skip's time multiplier could not be applied, or its controller/value was replaced.</summary>
+        TimeScaleUnavailable
     }
 }

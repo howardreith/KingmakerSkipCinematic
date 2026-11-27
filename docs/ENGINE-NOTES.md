@@ -69,6 +69,7 @@ so acceleration stops in the same tick:
 | turn-based combat active | `TurnBasedCombat` |
 | every owned cutscene finished | `SceneComplete` |
 | Escape during the skip | `Cancelled` |
+| the skip's time controller/multiplier is unavailable or replaced | `TimeScaleUnavailable` |
 | no owned track changed command for 10 s real time | `Stalled` |
 | 60 s real time spent advancing | `Watchdog` |
 | the native fade did not report full black within 1 s (nothing was accelerated) | `FadeTimeout` |
@@ -79,6 +80,14 @@ Boundaries are also re-evaluated between the substeps of an accelerated frame, s
 at which normal playback would hand over. A request is declined (`BoundaryCommandPlaying`) while a controlling
 cutscene is already showing a loading card; a card already running when a skip begins is classified like one that
 starts during it.
+
+The time override is checked after acquisition, on each advancing update and between substeps, after checking real
+interaction boundaries. `IsCurrent` requires the same controller identity and multiplier that the skip acquired;
+`IsApplied` separately tracks the outstanding cleanup obligation. If acquisition failed or another owner replaced
+the controller or multiplier, the skip releases its fade/audio claims and reports `TimeScaleUnavailable`. It never
+reasserts the multiplier over a later owner. This check does not measure actual playback speed: a real-time presentation
+wait or a substep frame cut short can still be slow while the multiplier remains unchanged. Command progress alone
+cannot detect that acceleration was lost, because even normal-speed command changes reset the stall watchdog.
 
 A staged fight inside a cinematic keeps the Cutscene mode and is skipped; playable combat only begins when the lock is
 released, which is a boundary. Scope: the operation owns every live `Exclusive` cutscene at start, plus cutscenes that
@@ -98,6 +107,24 @@ start while an owned command executes (child scenes) or that themselves lock con
 | `CommandCustomLoadingScreen` (real-time card) | boundary (`Loading`) |
 | Unknown/new command types | ordinary execution under acceleration; the stall watchdog reveals normal playback if one waits on something that does not accelerate |
 
+### Bark handles (2.1.7b, read for the 2026-11 blackout report)
+
+`CommandBark` asks `UIAccess.Bark`. A `SharedText` bark passes `durationByVoice = BarkDurationByText`: when the line
+has a voice-over (`LocalizedString.PlayVoiceOver` returns a status only if the sound pack maps the key to a Wwise
+event) the handle waits for that voice; otherwise it times the text (`0.6 s` per word). Which handle the engine returns
+decides the clock:
+
+| Handle | When | Clock | While skipping |
+|---|---|---|---|
+| `BarkController` (`BarkBase`, one reused per speaker by `BarkManager`) | speaker not in fog of war | `m_RemainingTime -= TimeController.DeltaTime` once per rendered frame | engine time: accelerated (the driver reports the simulated delta) |
+| `BarkVm` | speaker `IsInFogOfWar` (or no `BarkManager`) | `EndTime` against `Player.RealTime` (unscaled) | **not** accelerated; a voiced one is interrupted, an unvoiced one is not handled |
+| either, voiced | voice-over found | until the Wwise `AK_EndOfEvent` callback sets `VoiceOverStatus.IsEnded` (`Stop()` itself does not set it) or 60 s | interrupted (`InterruptBark` clears the status) |
+
+`FogOfWarController` runs in the Cutscene mode; a unit is fogged beyond about 11.7–13.7 m of every revealer or behind an
+obstacle. In both native scenes measured for the report every awaited bark used `BarkController` with the speaker
+visible. The `BarkVm` real-time path was not exercised; it remains a possible slow wait for an unvoiced bark by a
+fogged speaker.
+
 ## Accelerated frames: whole-tick substepping
 
 `GameMode.Tick` prefix, active only while a skip is advancing and the top mode is Cutscene
@@ -105,7 +132,12 @@ start while an owned command executes (child scenes) or that themselves lock con
 
 * The frame's engine delta is `TimeController.Tick`'s own formula, `min(PlayerTimeScale·DebugTimeScale/12,
   Time.deltaTime)`; it is divided into `n = ceil(delta / (1/30))` equal substeps, at most 25 (the formula's cap at ×10).
-  Frames that need no division, the frame a mode was just activated, and turn-based combat use the native tick.
+  Every advancing Cutscene-mode frame is run this way, a frame shorter than one step as a single tick
+  (`Core/AcceleratedFramePolicy`): the first accelerated frame is such a frame, because Unity computed its
+  `Time.deltaTime` before the skip raised `Time.timeScale`. Only the time controller's just-activated frame,
+  turn-based combat and a controller list without exactly one `TimeController` use the native tick. All eligible
+  advancing Cutscene-mode frames therefore use the driver, and `TimeController.Tick` (with any mod patch on it) runs
+  during a skip only on those excluded frames.
 * Each substep ticks the mode's controller list in native order. `TimeController` is replaced by its own Cutscene-mode
   bookkeeping for one substep (`DeltaTime` and `GameDeltaTime` = step, `Player.GameTime += step`, `Time.timeScale`
   re-derived). Each controller is isolated with try/catch as in `GameMode.Tick`.
@@ -184,16 +216,23 @@ contract leaves the game untouched and the mod reports itself inactive.
 
 * Global-map cinematics (`GameModeType.CutsceneGlobalMap`) are declined: not exercised natively.
 * No command in `Kingmaker.AreaLogic.Cutscenes*` reads a real-time clock (source audit), but scene-specific logic
-  outside those commands, voiced barks and `CommandCustomLoadingScreen` were not reached in a native fixture.
+  outside those commands and `CommandCustomLoadingScreen` were not reached in a native fixture. Voiced barks were
+  reached in the Varnhold's Lot opening (`VALIDATION.md`).
 * Turn-based mode: a skip is declined, and ends, while turn-based combat is active.
-* Bag of Tricks' game-speed multiplier, when set ≠ 1, rewrites `DebugTimeScale` every tick; a skip then runs at that
-  speed (ownership rules leave Bag of Tricks' value in place).
+* Bag of Tricks (1.16.4) applies its game-speed multiplier, when set ≠ 1, in a `TimeController.Tick` prefix (its
+  "set to default" button also writes `DebugTimeScale`). Before PR #4 the first accelerated frame took the native
+  tick whenever unscaled frame time × prior speed ≤ 1/30 s (e.g. Bag of Tricks ≤ 2 at 60 fps), so Bag of Tricks
+  replaced the skip's ×10 on that frame. 0.1.2 then ran the skip black at Bag of Tricks' speed, the reported
+  blackout (`VALIDATION.md`). All eligible advancing frames now use the driver, so the prefix does not run on them.
+  The skip restores Bag of Tricks' value afterwards. Any other writer that replaces the multiplier ends the skip
+  `TimeScaleUnavailable`, and its value is left in place. Pre-existing: Bag of Tricks' "stop game time" option
+  removes the game-time increment in `TimeController.Tick`, but accelerated frames still advance `Player.GameTime`.
 * A cutscene that waits on something else that does not follow engine time would stall; the 10 s stall watchdog then
   reveals normal playback with the playing commands logged.
 * Logic coupled to Unity-driven systems (animation events, physics, coroutines) sees ×10 steps per rendered frame;
   only engine-time logic keeps normal granularity.
-* Mods that patch `TimeController.Tick` do not see the substeps of an accelerated frame (the mod performs the
-  Cutscene-mode time bookkeeping itself).
+* Mods that patch `TimeController.Tick` do not run on eligible advancing frames (the mod performs the Cutscene-mode
+  time bookkeeping itself).
 
 ## Observed by the native harness
 

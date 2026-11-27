@@ -22,6 +22,26 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         [JsonProperty("captureEveryFrames")] public int CaptureEveryFrames = 4;
 
         [JsonProperty("steps")] public List<HarnessStep> Steps = new List<HarnessStep>();
+
+        /// <summary>
+        /// Instead of loading "save", start a new game of this DLC campaign (e.g. "Varnhold") from the main menu with its first
+        /// pregenerated character, through the same calls as the engine's own MainMenu.FastStartNewGame. Test-only.
+        /// </summary>
+        [JsonProperty("newGameDlc")] public string NewGameDlc;
+
+        /// <summary>
+        /// Inert stand-ins registered before the fixture loads, for blueprints of a mod that is no longer installed but that
+        /// the fixture save still names (Kingmaker drops a whole unit whose fact names a missing blueprint). Test-only.
+        /// </summary>
+        [JsonProperty("placeholderBlueprints")] public List<PlaceholderBlueprint> PlaceholderBlueprints = new List<PlaceholderBlueprint>();
+    }
+
+    public sealed class PlaceholderBlueprint
+    {
+        [JsonProperty("guid")] public string Guid;
+
+        /// <summary>feature, selection or ability.</summary>
+        [JsonProperty("kind")] public string Kind;
     }
 
     public sealed class HarnessStep
@@ -61,6 +81,12 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
         /// <summary>World position "x,y,z" for moveTo.</summary>
         [JsonProperty("position")] public string Position;
+
+        /// <summary>expectAcceleration: minimum game seconds per real second over the last advancing segment.</summary>
+        [JsonProperty("minRatio")] public double MinRatio;
+
+        /// <summary>expectAcceleration: minimum game seconds the last advancing segment must cover.</summary>
+        [JsonProperty("minGameSeconds")] public double MinGameSeconds;
 
         public override string ToString()
         {

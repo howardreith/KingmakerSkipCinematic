@@ -1,0 +1,17 @@
+{
+  "description": "Discovery: start a new Varnhold's Lot campaign from the main menu with the first pregenerated character (harness newGameDlc, the engine's FastStartNewGame calls with the DLC's StartGamePreset) and play normally, answering dialogues with the deterministic rule, recording every cinematic until free control.",
+  "newGameDlc": "Varnhold",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "autoplayUntilControl",
+      "mode": "Pause",
+      "seconds": 5.0,
+      "timeoutSeconds": 600
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

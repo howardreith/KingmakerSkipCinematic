@@ -1,0 +1,62 @@
+{
+  "description": "[skip and cancel requested via product API, not key input] Varnhold's Lot opening: new DLC campaign from the main menu with the first pregenerated character (harness newGameDlc: the engine's FastStartNewGame calls with the DLC StartGamePreset; the game is entered without levelling the pregen to the preset experience), StartDLC2_enterchapter, the interchapter dialogue answered by the deterministic rule, then BaronationCeremonyDLC2 (voiced barks); skip 2 s into BaronationCeremonyDLC2, cancel 3 s after acceleration began, continue natively to free control.",
+  "newGameDlc": "Varnhold",
+  "captureEveryFrames": 15,
+  "steps": [
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 120
+    },
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 0.5,
+      "timeoutSeconds": 120
+    },
+    {
+      "op": "waitCutscene",
+      "match": "BaronationCeremonyDLC2",
+      "seconds": 2.0,
+      "timeoutSeconds": 180
+    },
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "skipDirect"
+    },
+    {
+      "op": "waitSkipPhase",
+      "mode": "Advancing",
+      "timeoutSeconds": 5
+    },
+    {
+      "op": "wait",
+      "seconds": 3.0
+    },
+    {
+      "op": "cancelDirect"
+    },
+    {
+      "op": "waitSkipIdle",
+      "mode": "Cancelled",
+      "timeoutSeconds": 10
+    },
+    {
+      "op": "snapshot",
+      "label": "cancelled"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "mode": "Pause",
+      "seconds": 3.0,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

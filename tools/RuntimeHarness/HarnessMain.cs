@@ -40,6 +40,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
                 ProductAccess.InstallFaultInjection(harmony);
                 ProductAccess.InstallPanelFaultWatch(harmony);
                 CommandTrace.Install(harmony, recorder);
+                SkipDiagnostics.Install(harmony, request.EvidenceDir);
             }
             catch (Exception exception)
             {

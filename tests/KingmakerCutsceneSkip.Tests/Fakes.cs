@@ -55,6 +55,9 @@ namespace KingmakerCutsceneSkip.Tests
         public SkipStartBlocker Blocker = SkipStartBlocker.None;
         public SkipBoundary Boundary = SkipBoundary.None;
         public Exception ThrowOnBoundary;
+        public double GameTime;
+
+        public double GameTimeSeconds => GameTime;
 
         public SkipStartBlocker GetStartBlocker() => Blocker;
 

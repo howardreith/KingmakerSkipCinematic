@@ -72,6 +72,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             }
 
             RecordStoryChanges(game, phase);
+            SkipDiagnostics.Sample();
             if (!ProductAccess.IsIdle) ExtendCapture(CaptureTailSeconds);
             if (captureEveryFrames > 0 && Time.realtimeSinceStartup <= captureUntil && Time.frameCount - lastCaptureFrame >= captureEveryFrames)
             {
@@ -131,6 +132,7 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         public void Flush()
         {
             WriteJson("timeline.json", timeline);
+            SkipDiagnostics.Flush();
         }
 
         public void HandleCutsceneStarted(CutscenePlayerData cutscene, bool queued) =>
