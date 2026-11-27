@@ -21,6 +21,10 @@ namespace KingmakerCutsceneSkip.Integration
     /// movement, unit actions, script zones, projectiles and every other simulation controller stay interleaved exactly
     /// as in normal playback.
     /// <para>
+    /// Every advancing Cutscene-mode frame is run this way, even one that needs a single tick, so the native
+    /// TimeController.Tick (and any mod patch on it) does not run while the skip owns the time scale.
+    /// </para>
+    /// <para>
     /// Between substeps the frame stops early whenever normal playback would have ended the frame first: the skip
     /// reached a boundary, the game scheduled work for the start of the next frame (deferred game-mode changes, a
     /// dialogue start, a control lock change), or a load began. Unsimulated time is simply not consumed.
@@ -81,23 +85,25 @@ namespace KingmakerCutsceneSkip.Integration
         public static bool IsResolved => ModeControllersField != null && BeforeTickActionsField != null;
 
         /// <summary>
-        /// Runs the mode's frame substepped. Returns false (nothing executed; the native tick must run) when the frame
-        /// does not need substepping or this is not the plain Cutscene mode.
+        /// Runs the mode's frame as complete ticks of at most one normal frame each (a single tick when the frame is that
+        /// short). Returns false (nothing executed; the native tick must run) for the frames
+        /// <see cref="AcceleratedFramePolicy"/> leaves to the engine.
         /// </summary>
         public bool TryRunFrame(GameMode mode)
         {
             FrameInProgress = false;
-            if (mode == null || mode.Type != GameModeType.Cutscene) return false;
+            if (mode == null) return false;
             game = Game.Instance;
             time = game?.TimeController;
-            if (time == null || game.Player == null || time.m_JustActivated || CombatController.IsInTurnBasedCombat()) return false;
+            if (time == null || game.Player == null) return false;
 
             IController[] controllers = ModeControllersField.GetValue(mode) as IController[];
-            if (controllers == null || CountTimeControllers(controllers) != 1) return false;
+            if (controllers == null) return false;
+            if (!AcceleratedFramePolicy.RunsFrame(mode.Type == GameModeType.Cutscene, time.m_JustActivated,
+                CombatController.IsInTurnBasedCombat(), CountTimeControllers(controllers))) return false;
 
             // TimeController.Tick's own formula for this frame's engine delta (outside turn-based combat).
             float frameDelta = Math.Min(time.PlayerTimeScale * time.DebugTimeScale / 12f, Time.deltaTime);
-            if (scheduler.SubstepCount(frameDelta) <= 1) return false;
 
             beforeTickActions = BeforeTickActionsField.GetValue(game) as List<Action>;
             FrameInProgress = true;

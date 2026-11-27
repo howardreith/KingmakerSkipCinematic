@@ -53,6 +53,31 @@ namespace KingmakerCutsceneSkip.Tests
             AssertEx.True(Math.Abs(simulated - 10 * NormalFrame) < 1e-5, "whole frame simulated");
         }
 
+        public static void AdvancingFrameThatNeedsOneStepIsStillRunByTheDriver()
+        {
+            // The first accelerated frame: Unity computed Time.deltaTime before the skip raised Time.timeScale, so it is
+            // shorter than one step. Handing it to the native tick ran TimeController.Tick, where Bag of Tricks re-applied
+            // its multiplier (native run 165303Z: released 0.1.2 stayed black at x0.9 until the watchdog).
+            AssertEx.True(AcceleratedFramePolicy.RunsFrame(true, false, false, 1), "a plain Cutscene-mode frame is run by the driver");
+            AssertEx.False(AcceleratedFramePolicy.RunsFrame(false, false, false, 1), "other modes keep the native tick");
+            AssertEx.False(AcceleratedFramePolicy.RunsFrame(true, true, false, 1), "the time controller's just-activated frame stays native");
+            AssertEx.False(AcceleratedFramePolicy.RunsFrame(true, false, true, 1), "turn-based combat stays native");
+            AssertEx.False(AcceleratedFramePolicy.RunsFrame(true, false, false, 0), "no time controller: native");
+            AssertEx.False(AcceleratedFramePolicy.RunsFrame(true, false, false, 2), "two time controllers: native");
+
+            // Such a frame is one complete tick in which the time controller is replaced by the driver's bookkeeping.
+            FrameSubstepScheduler scheduler = new FrameSubstepScheduler(NormalFrame, 25);
+            List<string> controllers = new List<string> { "time", "keyboard", "sim" };
+            List<float> steps = new List<float>();
+            List<string> ticked = new List<string>();
+            float frame = NormalFrame * 0.5f;
+            float simulated = scheduler.Run(controllers, RoleOf, frame, steps.Add, ticked.Add, () => true);
+            AssertEx.Equal(1, steps.Count, "one tick of engine time");
+            AssertEx.True(Math.Abs(steps[0] - frame) < 1e-7, "the whole short frame in that tick");
+            AssertEx.Equal("keyboard,sim", string.Join(",", ticked.ToArray()), "TimeController itself is never ticked");
+            AssertEx.True(Math.Abs(simulated - frame) < 1e-7, "simulated time reported");
+        }
+
         public static void StopRequestEndsTheFrameAfterACompleteTick()
         {
             FrameSubstepScheduler scheduler = new FrameSubstepScheduler(NormalFrame, 25);
