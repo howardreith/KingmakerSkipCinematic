@@ -49,6 +49,39 @@ namespace KingmakerCutsceneSkip.Core
         }
 
         /// <summary>
+        /// One rendered frame of an advancing skip. When <see cref="AcceleratedFramePolicy"/> gives the frame to the mod,
+        /// calls <paramref name="beginFrame"/>, runs it with <see cref="Run{TController}"/> (a frame shorter than one step
+        /// as a single complete tick) and returns true. Otherwise executes nothing and returns false: the native tick
+        /// must run.
+        /// </summary>
+        public bool TryRunAdvancingFrame<TController>(
+            IList<TController> controllers,
+            Func<TController, SubstepRole> roleOf,
+            bool isCutsceneMode,
+            bool timeJustActivated,
+            bool turnBasedCombat,
+            float frameDelta,
+            Action beginFrame,
+            Action<float> advanceTime,
+            Action<TController> tick,
+            Func<bool> mayContinue,
+            out float simulated)
+        {
+            simulated = 0;
+            if (controllers == null || roleOf == null) return false;
+            int timeControllers = 0;
+            for (int index = 0; index < controllers.Count; index++)
+            {
+                if (roleOf(controllers[index]) == SubstepRole.Time) timeControllers++;
+            }
+
+            if (!AcceleratedFramePolicy.RunsFrame(isCutsceneMode, timeJustActivated, turnBasedCombat, timeControllers)) return false;
+            beginFrame?.Invoke();
+            simulated = Run(controllers, roleOf, frameDelta, advanceTime, tick, mayContinue);
+            return true;
+        }
+
+        /// <summary>
         /// Ticks <paramref name="controllers"/> as <see cref="SubstepCount"/> complete ticks of equal size.
         /// <paramref name="mayContinue"/> is consulted only between complete ticks; when it returns false the rest of the
         /// frame's delta is not simulated (as when normal playback reaches the end of a frame), so no controller ever

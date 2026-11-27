@@ -67,6 +67,7 @@ namespace KingmakerCutsceneSkip.Integration
         private readonly Action<IController> tickController = TickController;
         private readonly Func<bool> mayContinue;
         private readonly Action<float> advanceTime;
+        private readonly Action beginFrame;
         private TimeController time;
         private Game game;
         private List<Action> beforeTickActions;
@@ -77,6 +78,7 @@ namespace KingmakerCutsceneSkip.Integration
             this.continueSkip = continueSkip ?? throw new ArgumentNullException(nameof(continueSkip));
             mayContinue = MayContinue;
             advanceTime = AdvanceTime;
+            beginFrame = BeginFrame;
         }
 
         /// <summary>True from the first substep of a frame until it finished (for exception recovery).</summary>
@@ -98,16 +100,12 @@ namespace KingmakerCutsceneSkip.Integration
             if (time == null || game.Player == null) return false;
 
             IController[] controllers = ModeControllersField.GetValue(mode) as IController[];
-            if (controllers == null) return false;
-            if (!AcceleratedFramePolicy.RunsFrame(mode.Type == GameModeType.Cutscene, time.m_JustActivated,
-                CombatController.IsInTurnBasedCombat(), CountTimeControllers(controllers))) return false;
 
             // TimeController.Tick's own formula for this frame's engine delta (outside turn-based combat).
             float frameDelta = Math.Min(time.PlayerTimeScale * time.DebugTimeScale / 12f, Time.deltaTime);
-
-            beforeTickActions = BeforeTickActionsField.GetValue(game) as List<Action>;
-            FrameInProgress = true;
-            float simulated = scheduler.Run(controllers, roleOf, frameDelta, advanceTime, tickController, mayContinue);
+            if (!scheduler.TryRunAdvancingFrame(controllers, roleOf, mode.Type == GameModeType.Cutscene, time.m_JustActivated,
+                CombatController.IsInTurnBasedCombat(), frameDelta, beginFrame, advanceTime, tickController, mayContinue,
+                out float simulated)) return false;
 
             // Code outside the mode tick (unit views, barks, camera rig) reads the frame's delta later in this frame:
             // report the engine time actually simulated, as an unsubstepped frame would.
@@ -115,6 +113,12 @@ namespace KingmakerCutsceneSkip.Integration
             time.SetGameDeltaTime(simulated);
             FrameInProgress = false;
             return true;
+        }
+
+        private void BeginFrame()
+        {
+            beforeTickActions = BeforeTickActionsField.GetValue(game) as List<Action>;
+            FrameInProgress = true;
         }
 
         private bool MayContinue()
@@ -165,15 +169,5 @@ namespace KingmakerCutsceneSkip.Integration
             return SubstepRole.Simulation;
         }
 
-        private static int CountTimeControllers(IController[] controllers)
-        {
-            int count = 0;
-            for (int index = 0; index < controllers.Length; index++)
-            {
-                if (controllers[index] is TimeController) count++;
-            }
-
-            return count;
-        }
     }
 }

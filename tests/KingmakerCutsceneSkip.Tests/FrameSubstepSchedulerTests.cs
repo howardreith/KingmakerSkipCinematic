@@ -65,17 +65,46 @@ namespace KingmakerCutsceneSkip.Tests
             AssertEx.False(AcceleratedFramePolicy.RunsFrame(true, false, false, 0), "no time controller: native");
             AssertEx.False(AcceleratedFramePolicy.RunsFrame(true, false, false, 2), "two time controllers: native");
 
-            // Such a frame is one complete tick in which the time controller is replaced by the driver's bookkeeping.
+            // The driver's routing (AcceleratedFrameDriver.TryRunFrame delegates to TryRunAdvancingFrame): such a frame is
+            // run by the mod as one complete tick in which TimeController is replaced by the driver's bookkeeping.
             FrameSubstepScheduler scheduler = new FrameSubstepScheduler(NormalFrame, 25);
             List<string> controllers = new List<string> { "time", "keyboard", "sim" };
             List<float> steps = new List<float>();
             List<string> ticked = new List<string>();
+            int begun = 0;
             float frame = NormalFrame * 0.5f;
-            float simulated = scheduler.Run(controllers, RoleOf, frame, steps.Add, ticked.Add, () => true);
+            bool ran = scheduler.TryRunAdvancingFrame(controllers, RoleOf, true, false, false, frame, () => begun++, steps.Add, ticked.Add,
+                () => true, out float simulated);
+            AssertEx.True(ran, "a frame shorter than one step is run by the mod, not handed to the native tick");
+            AssertEx.Equal(1, begun, "the frame is begun once");
             AssertEx.Equal(1, steps.Count, "one tick of engine time");
             AssertEx.True(Math.Abs(steps[0] - frame) < 1e-7, "the whole short frame in that tick");
             AssertEx.Equal("keyboard,sim", string.Join(",", ticked.ToArray()), "TimeController itself is never ticked");
             AssertEx.True(Math.Abs(simulated - frame) < 1e-7, "simulated time reported");
+        }
+
+        public static void FramesThePolicyLeavesToTheEngineExecuteNothing()
+        {
+            FrameSubstepScheduler scheduler = new FrameSubstepScheduler(NormalFrame, 25);
+            List<string> touched = new List<string>();
+            List<string> standard = new List<string> { "time", "keyboard", "sim" };
+            List<string> twoClocks = new List<string> { "time", "time", "sim" };
+            float total = 0;
+            AssertEx.False(Try(scheduler, standard, false, false, false, touched, ref total), "not the Cutscene mode");
+            AssertEx.False(Try(scheduler, standard, true, true, false, touched, ref total), "just-activated frame");
+            AssertEx.False(Try(scheduler, standard, true, false, true, touched, ref total), "turn-based combat");
+            AssertEx.False(Try(scheduler, twoClocks, true, false, false, touched, ref total), "two time controllers");
+            AssertEx.Equal(0, touched.Count, "nothing executed for a frame left to the native tick");
+            AssertEx.Equal(0f, total, "nothing simulated");
+        }
+
+        private static bool Try(FrameSubstepScheduler scheduler, List<string> controllers, bool cutscene, bool justActivated, bool turnBased,
+            List<string> touched, ref float total)
+        {
+            bool ran = scheduler.TryRunAdvancingFrame(controllers, RoleOf, cutscene, justActivated, turnBased, 10 * NormalFrame,
+                () => touched.Add("begin"), step => touched.Add("time"), touched.Add, () => true, out float simulated);
+            total += simulated;
+            return ran;
         }
 
         public static void StopRequestEndsTheFrameAfterACompleteTick()
