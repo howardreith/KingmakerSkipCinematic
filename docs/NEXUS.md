@@ -27,7 +27,8 @@ prologue cinematic.
   ruled out. Keep a save from before an important scene, as with any mod.
 * If acceleration stalls or exceeds its time limit, the mod stops accelerating and returns to visible playback. This does
   not guarantee that every cinematic is free of scene-specific problems.
-* A skipped cinematic uses up to about a second more in-game time per segment. Timed effects count that time, so a buff
+* A skipped cinematic uses a little more in-game time than watching it: up to about a second for a short segment, about
+  7 s over a long scene such as the Kingdom of the Cleansed gathering. Timed effects count that time, so a buff
   about to expire can run out during a skipped scene when it would not have during a watched one.
 * Skips are not available on the global map or in turn-based mode.
 * If Bag of Tricks or another mod replaces the skip's time multiplier, the skip ends and the scene becomes visible

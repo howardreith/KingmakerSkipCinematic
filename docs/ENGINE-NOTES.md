@@ -107,6 +107,24 @@ start while an owned command executes (child scenes) or that themselves lock con
 | `CommandCustomLoadingScreen` (real-time card) | boundary (`Loading`) |
 | Unknown/new command types | ordinary execution under acceleration; the stall watchdog reveals normal playback if one waits on something that does not accelerate |
 
+### Bark handles (2.1.7b, read for the 2026-11 blackout report)
+
+`CommandBark` asks `UIAccess.Bark`. A `SharedText` bark passes `durationByVoice = BarkDurationByText`: when the line
+has a voice-over (`LocalizedString.PlayVoiceOver` returns a status only if the sound pack maps the key to a Wwise
+event) the handle waits for that voice; otherwise it times the text (`0.6 s` per word). Which handle the engine returns
+decides the clock:
+
+| Handle | When | Clock | While skipping |
+|---|---|---|---|
+| `BarkController` (`BarkBase`, one reused per speaker by `BarkManager`) | speaker not in fog of war | `m_RemainingTime -= TimeController.DeltaTime` once per rendered frame | engine time: accelerated (the driver reports the simulated delta) |
+| `BarkVm` | speaker `IsInFogOfWar` (or no `BarkManager`) | `EndTime` against `Player.RealTime` (unscaled) | **not** accelerated; a voiced one is interrupted, an unvoiced one is not handled |
+| either, voiced | voice-over found | until the Wwise `AK_EndOfEvent` callback sets `VoiceOverStatus.IsEnded` (`Stop()` itself does not set it) or 60 s | interrupted (`InterruptBark` clears the status) |
+
+`FogOfWarController` runs in the Cutscene mode; a unit is fogged beyond about 11.7–13.7 m of every revealer or behind an
+obstacle. In both native scenes measured for the report every awaited bark used `BarkController` with the speaker
+visible, so the `BarkVm` real-time path was not exercised; it remains a possible slow wait for an unvoiced bark by a
+fogged speaker.
+
 ## Accelerated frames: whole-tick substepping
 
 `GameMode.Tick` prefix, active only while a skip is advancing and the top mode is Cutscene
@@ -193,10 +211,14 @@ contract leaves the game untouched and the mod reports itself inactive.
 
 * Global-map cinematics (`GameModeType.CutsceneGlobalMap`) are declined: not exercised natively.
 * No command in `Kingmaker.AreaLogic.Cutscenes*` reads a real-time clock (source audit), but scene-specific logic
-  outside those commands, voiced barks and `CommandCustomLoadingScreen` were not reached in a native fixture.
+  outside those commands and `CommandCustomLoadingScreen` were not reached in a native fixture. Voiced barks were
+  reached in the Varnhold's Lot opening (`VALIDATION.md`).
 * Turn-based mode: a skip is declined, and ends, while turn-based combat is active.
-* Bag of Tricks' game-speed multiplier, when set ≠ 1, rewrites `DebugTimeScale` every tick. If that replaces the skip's
-  multiplier, the skip ends `TimeScaleUnavailable` and reveals; ownership rules leave Bag of Tricks' value in place.
+* Bag of Tricks (1.16.4) applies its game-speed multiplier, when set ≠ 1, in a `TimeController.Tick` prefix.
+  Substepped frames do not call `TimeController.Tick` (the driver does the Cutscene-mode time bookkeeping), so it can
+  only replace the skip's multiplier on a frame that runs the native tick, e.g. one that needs no substeps (an
+  unscaled frame under about 3.3 ms). The skip then ends `TimeScaleUnavailable` and reveals; ownership rules leave Bag
+  of Tricks' value in place.
 * A cutscene that waits on something else that does not follow engine time would stall; the 10 s stall watchdog then
   reveals normal playback with the playing commands logged.
 * Logic coupled to Unity-driven systems (animation events, physics, coroutines) sees ×10 steps per rendered frame;

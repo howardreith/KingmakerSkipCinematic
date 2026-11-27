@@ -1,51 +1,128 @@
 # Validation record — Mr. Bard's Kingmaker Cutscene Skip
 
-## Blackout while playback remains at normal speed (2026-11-27, unreleased)
+## Blackout while playback remains at normal speed (2026-11-27, PR #4, unreleased)
 
-Report: Varnhold DLC and later multi-stage cinematics, including Remus's Kingdom of the Cleansed speech, turn black
-when skipped but continue at ordinary speed; Escape reveals them. The exact reported scenes have **not been reproduced**.
-Source baseline: `503970f43bf6d184a93d24cf0f6a984ca28cee9c` (`main`); product `.cs` files there are unchanged from v0.1.2.
+Report: Varnhold DLC cinematics and later multi-stage scenes such as "the Kingdom of the Cleansed one with Remus'
+speech" go black when skipped but keep playing at ordinary speed until Escape.
 
-**Confirmed core defect.** A skip applies its time multiplier once. If the controller is replaced or another owner
-changes its multiplier, the old code keeps the fade/audio claims until an ordinary boundary, cancellation or watchdog.
-Commands continuing at normal speed reset the 10-second stall timer, so only the 60-second total watchdog bounds that
-case. A missing time controller also makes `Apply` return without a write, yet the old controller enters `Advancing`.
+**Outcome: not reproduced; root cause in the reporter's game not established.** Both report targets were reached through
+their normal triggers on DATA and skip correctly with the released 0.1.2 build, PR #4 and the candidate below. One
+mechanism that produces exactly the reported symptom was reproduced natively, by test injection: another owner
+replacing the skip's time multiplier. 0.1.2 then stays black at about ordinary speed until the 60 s watchdog; the
+candidate reveals at once. Nothing in the tested environment performs that override during real play, so this is not
+shown to be what happens in the reporter's game. The report stays open.
 
-**Correction under review.** After acquisition and throughout advancement, verify the acquired controller and multiplier
-still match. On failure end `TimeScaleUnavailable`, release the fade/audio claims, and preserve a newer owner's value.
-An ordinary interaction boundary keeps priority. The acquisition check runs before preparing active presentation
-commands. The existing command execution, bark handling and substep scheduling are unchanged.
+### Candidate
 
-**Executed checks:** C# 7.3, warnings treated as errors, .NET SDK 10.0.404 / .NET 10.0.15 on Linux. A temporary runner
-under ignored `artifacts/core-check/` linked the production `Core/*.cs`, `Input/ISkipCommandSink.cs`, `Logging/IModLogger.cs`,
-the existing test runner, and `CutsceneSkipControllerTests`, `OverrideOwnershipTests`, `FrameSubstepSchedulerTests`.
-It used the existing `Fakes.cs` with only the unused `FakeKeyboard` class and `using UnityEngine` omitted. No game,
-Unity, UMM or Harmony types were stubbed. These are core behavior checks, **not** the product's .NET Framework build,
-the complete `scripts/Test.ps1` suite, or native gameplay evidence.
-
-| Check | Result |
+| Item | Value |
 |---|---|
-| Existing selected tests before changes | 38/38 passed |
-| Seven new tests against the original production source | 40/45 passed; five failures reproduced the missing guard; two preservation/precedence controls passed |
-| Selected tests with the correction | 45/45 passed |
+| Product commits | `2cd8579` (time-override ownership check), `0ff67e3` (game time in the skip report); candidate built and packaged at `f57cd00` from a clean tree |
+| `KingmakerCutsceneSkip.dll` | `38e97ae6be46992b3d598dcf1f4e386cd664379d299524a674f22614a9def7f9`, MVID `648f71bb-4a4e-43e6-aa71-72ae387d12e1` |
+| `KingmakerCutsceneSkip-0.1.2.zip` | `2967eafc70691ac6680c9c940931b09fe2aabdcbc9e6696fff02e89f8dc42e96` (version string unchanged; identify by hash). `Validate-Package.ps1` passed (references UnityModManager 0.31.1.0, 0Harmony12 1.2.0.1) |
+| Compared builds | released 0.1.2 ZIP `c1be6ae2…05fb` (DLL `a2a8706b…a1ba`); PR #4 head `2cd8579` DLL `9f853960…ac58` |
+| Tests | `scripts/Test.ps1` at `0ff67e3`: unit 64/64, provenance 70/70, package provenance 35/35 (.NET Framework 4.7.2, C# 7.3, warnings as errors) |
+| Environment | DATA, Kingmaker 2.1.7b (build 6757524), disposable game copy, owner's 16 mods on UMM 0.33.0 unless noted, English |
 
-The new tests cover normal-speed command progress despite loss of acceleration, between-substep termination, a missing
-controller at acquisition, replacement by a controller at the same multiplier, preservation of an external multiplier,
-continued use of a faster prior multiplier, and boundary precedence. They use the real controller and time/fade/audio
-override classes over the existing engine-host fakes. The final tests also assert the diagnostic reason/warning and that
-failed acquisition never prepares presentation commands or records advancement.
+### Report targets and triggers
 
-**Outstanding:** the connected game machine was offline; no actual Kingmaker assemblies, full product build, package,
-loader matrix or native scene run were available in this investigation. No candidate DLL/ZIP or native hashes exist for
-this change. Do not count the earlier v0.1.2 native runs below as validation of this revision. This is a targeted blackout
-mitigation; it is not evidence that the named scenes now skip correctly.
+* **Remus / Kingdom of the Cleansed** is Tristian's quest. Remus is the "Doomsayer" whose sermon opens
+  `C22-TristianQ1_Gathering` ("It looks like Remus has returned from his exile..."). Amalia and the First Faithful
+  follow, and the gathering ends in the `FirstFaithful_BeforeFight` dialogue. Answering it starts
+  `C22-GatheringAmaliaRun`, another dialogue, then combat. Sixteen sermon lines are `CommandBark`s with
+  `BarkDurationByText` and `AwaitFinish` (about 113 s of text-timed waits), none voiced. Trigger: the party walks into
+  the `C22-TristianQ1_Gathering` script zone (enter action `PlayCutscene`; requires Tristian in the party and
+  `Visit_the_Gathering` started). Fixture: the owner's `Quick_432.zks` (`15ca7a07…8cb2`), saved in the
+  KingdomOfTheCleansed area before the trigger.
+  It does not load under the current mod set. It names 28 blueprints that no installed mod provides (2 features,
+  6 feature selections and 10 spells on party members, a kingdom event, and 9 vendor items), so Kingmaker drops
+  `Player.MainCharacter` and `Player.PostLoad` throws. The scenarios register inert, component-free stand-ins for
+  exactly those GUIDs before loading; the save file is not modified (`placeholderNote` in the scenarios).
+* **Varnhold's Lot**: no Varnhold campaign save exists on DATA. A new DLC campaign is started from the main menu with
+  the first pregen (`VarnholdPregenBardUnit`) through the engine's `FastStartNewGame` calls and the DLC's
+  `StartGamePreset`. The pregen is not levelled to the preset experience. The run plays `StartDLC2_enterchapter` and the
+  interchapter dialogue, then the opening `BaronationCeremonyDLC2` (about 125 s, voiced barks). Only this Varnhold
+  cinematic was tested; the reporter's Varnhold scene is unknown and remains unverified.
 
-For the reported scenes, record the active scene/command, controller identity, `DebugTimeScale`, Unity time scale and
-game-time advancement per real second. If the multiplier remains intact, investigate bark-handle initialization/voice
-waits and repeated deferred work stopping accelerated substeps. `PresentationHandlers` only prepares recognized voiced
-`CommandBark` handles before acceleration or immediately after an owned command starts. Neither delayed handles nor
-the reported scenes have been verified against the actual game here. Reproduce through the existing isolated native
-runner from a pre-scene save, compare normal/skip/cancel outcomes, and retain the existing save/install protection.
+### Measurements
+
+`tools/native/summarize_diag.py` over the harness's per-frame `diag.jsonl` (time controller identity, multipliers,
+planned/executed substeps, bark handles). Skips requested through the product API 2 s into each episode (`*-direct`).
+
+| Scene, build | Run | Real s advancing | Game s | Ratio | Substeps executed/planned | End |
+|---|---|---|---|---|---|---|
+| Gathering, normal playback | 152145Z | trigger to dialogue 160.6 | 159.0 | 1.0 | – | dialogue |
+| Gathering, 0.1.2 | 152837Z | 16.58 | 163.39 | 9.86 | 5134/5143 | `ControlReturned` (the engine's one Default frame before the dialogue) |
+| Gathering, PR #4 | 152620Z | 16.57 | 163.16 | 9.85 | 5129/5134 | same |
+| Gathering + AmaliaRun, PR #4 | 153526Z | 16.44 + 1.46 | 162.19 + 13.90 | 9.87, 9.50 | 5099/5101, 439/448 | `ControlReturned`, `InteractionBoundary` |
+| Varnhold opening, 0.1.2 / PR #4 | 154751Z / 154550Z | 12.50 / 12.53 | 121.11 / 121.36 | 9.69 / 9.68 | 3811/3819, 3818/3825 | `ControlReturned` (free control) |
+| Gathering, candidate | 160931Z | 16.85 | 163.97 | 9.7 | – | `ControlReturned` |
+| Varnhold opening, candidate | 161724Z | 12.27 | 121.41 | 9.9 | – | `ControlReturned` |
+
+In every run the time controller kept one identity and `DebugTimeScale` stayed 10. Each accelerated frame was cut short
+at most once, by the `StopMode` deferred action that starts the next mode. Every awaited Gathering bark used
+`BarkController` (engine time) with the speaker outside fog of war. The Varnhold voiced barks were interrupted when
+acceleration began or the command started. No `BarkVm` (real-time) handle was seen.
+
+### Story state, candidate ZIP (`compare_runs.py`, tolerances unchanged)
+
+| Comparison | Runs | Result |
+|---|---|---|
+| Gathering normal vs skip, at the dialogue | 160543Z / 160931Z | MATCH (26 units, 65 quests, 404 flags, 346 stacks); game time +7.36 s; real 159.7 s → 18.8 s |
+| Gathering normal vs skip cancelled 3 s into advancing, at the dialogue | 160543Z / 161057Z | MATCH; +0.20 s; the cutscene continued natively |
+| Gathering + AmaliaRun normal vs skips, at the combat auto-pause | 155947Z / 160406Z | **DIFFERENT (1)**: `C22-Amalia` 1.7 m behind (tolerance 1.5 m); everything else equal; +6.72 s; real 177.8 s → 26.2 s |
+| Same, PR #4 head (earlier build) | 153048Z / 153526Z | same difference: Amalia 1.9 m behind, +8.00 s |
+| Gathering + AmaliaRun normal vs normal (control) | 153048Z / 155947Z | MATCH; +0.42 s |
+| Varnhold opening normal vs skip, at free control | 161416Z / 161724Z | MATCH (32 units); −0.53 s; real 126.7 s → 16.1 s |
+| Varnhold opening normal vs cancelled skip | 161416Z / 161842Z | MATCH; +0.30 s |
+| Prologue chain normal vs 3 skips (regression), at free control | 162123Z / 162320Z | MATCH; +0.97 s |
+
+The Amalia difference is skip-related and repeatable. Amalia runs off during `C22-GatheringAmaliaRun` and is still
+moving when combat pauses. Her command starts at the same game time in both runs (±0.1 s) and the next dialogue starts
+0.6 s later in the skipped run, yet she has covered less ground. 1.7 m is about one rendered frame of ×10 game time at
+this frame rate. That fits the documented limitation for Unity-driven systems (Animator, per-rendered-frame updates),
+but her movement start was not instrumented, so this is not proven. Quests, flags, inventory and every other unit
+match. The extra game time of the long Gathering (+7.4 s over 157 s) is larger than the 0.2–1.3 s measured on prologue
+segments. It comes from the same per-rendered-frame animation completion; the scene contains many sequential
+`CommandUnitPlayCutsceneAnimation`s.
+
+### Mechanism: another owner replaces the skip's multiplier (test injection, not a gameplay trigger)
+
+`cleansed-gathering-override-direct`: skip 2 s into the gathering, and 3 s into advancing the harness sets
+`DebugTimeScale = 1`.
+
+| Build | Run | Result |
+|---|---|---|
+| released 0.1.2 | 162758Z | screen black for the 60 s watchdog (`Watchdog`), scene advancing at ×1.44 (86 game s in 60 s), commands still progressing |
+| candidate | 163116Z | `TimeScaleUnavailable` 3.07 s into advancing; overrides released; the other value (1) left in place |
+
+Bag of Tricks, the one installed mod that writes `DebugTimeScale`, does so in a `TimeController.Tick` prefix that
+substepped frames never call (`ENGINE-NOTES.md`). At its configured ×1 it writes nothing.
+
+### Loader checks
+
+`startgame-skip-direct` with the candidate ZIP, isolated profile: UMM 0.31.1 (162457Z; loaded `UnityModManager
+0.31.1.0`, `0Harmony12 1.2.0.1`) and UMM 0.32.4 (162603Z): one operation each, `InteractionBoundary` at Amiri's
+dialogue. UMM 0.33.0 (owner loader): every run above. 0.27.12 and the synthetic profile were not rerun.
+
+### Not executed or not resolved
+
+* **Real keys.** Enter and Escape were not sent: the RDP session was unattended and Windows refused the foreground
+  change (154946Z; the harness sends no input then). Cancellation was exercised through the product API. That shows
+  release of overrides and native continuation (MATCH above), but not that a real Escape press opens no menu and selects
+  no dialogue answer in these scenes. Scenarios ready: `cleansed-gathering-chain-skip-enter`,
+  `cleansed-gathering-cancel-escape`.
+* The reporter's mods, settings, frame rate, language and exact Varnhold scene are unknown. A `BarkVm` real-time wait
+  (unvoiced bark by a fogged speaker) and native-tick frames under Bag of Tricks ≠ 1 remain possible slow paths. Neither
+  occurred in these scenes.
+* To resume: the reporter's UMM log after a failing skip now contains `advance Xs (Y game s, xR)`, and the warning
+  names the end reason and the playing commands. Also needed: their mod list, or a save from just before the Varnhold
+  scene they skipped.
+* Runs that are not evidence: 140338Z, 142005Z, 143940Z, 144916Z, 151242Z, 151539Z, 151737Z, 151944Z (fixture would not
+  load before the stand-ins were complete), 153927Z (runner error before launch), 153949Z (new-game path incomplete).
+  All were restored with owner saves and installation unchanged.
+
+Every run listed reports the installation restored and the owner's 95 saves and installation unchanged. The candidate
+and harness were never installed in the owner's game.
 
 ## Package contract: the packaged DLL's actual loader references (2026-11-24)
 
@@ -410,5 +487,6 @@ run: `scripts\runtime\Invoke-NativeRun.ps1 -RecoverOnly`.
 
 ## Resume point
 
-0.1.2 is released. The package-contract check above is a tooling change on a draft PR; merging it and any later release
+PR #4 (blackout report): see the top section. The report is not reproduced and stays open; the real-key
+Enter/Escape rows for the gathering need the owner present. 0.1.2 is released. The package-contract check above is a tooling change on a draft PR; merging it and any later release
 or Nexus upload are the owner's decision. `Auto_1120` scenarios need `-ModProfile owner`.
