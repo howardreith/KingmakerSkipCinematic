@@ -15,8 +15,9 @@ namespace KingmakerCutsceneSkip.Core
         public int ProgressEvents { get; set; }
 
         /// <summary>
-        /// Engine game time that passed while advancing (NaN when unknown, e.g. a load replaced the game). Compared with
-        /// <see cref="AdvanceSeconds"/> it shows whether the scene actually ran faster than normal playback.
+        /// Engine game time that passed while advancing (NaN when unknown: no game, or the skip ended because loading
+        /// began). Compared with <see cref="AdvanceSeconds"/> it shows whether the scene actually ran faster than normal
+        /// playback. It includes any game time the scene itself jumps forward (for example a scripted time skip).
         /// </summary>
         public double GameSecondsAdvanced { get; set; }
         public string PlayingCommandsAtEnd { get; set; }

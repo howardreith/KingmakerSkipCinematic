@@ -257,7 +257,8 @@ namespace KingmakerCutsceneSkip.Core
                 TotalHeldSeconds = now - operationStartedAt,
                 ReachedFullBlack = reachedFullBlack,
                 ProgressEvents = wasAdvancing ? watchdog.ProgressEvents : 0,
-                GameSecondsAdvanced = wasAdvancing ? ReadGameSeconds() - advanceStartedGameSeconds : 0
+                // A load can replace the game whose time was sampled: no figure rather than a wrong one.
+                GameSecondsAdvanced = !wasAdvancing ? 0 : reason == SkipEndReason.Loading ? double.NaN : ReadGameSeconds() - advanceStartedGameSeconds
             };
 
             // Release in reverse order of acquisition. Each release is independent so one failure cannot strand another override.

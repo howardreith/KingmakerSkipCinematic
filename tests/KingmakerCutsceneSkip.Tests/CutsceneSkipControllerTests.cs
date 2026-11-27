@@ -104,9 +104,19 @@ namespace KingmakerCutsceneSkip.Tests
             unknown.Probe.GameTime = double.NaN;
             unknown.StartAndAdvance();
             unknown.Clock.Advance(2);
-            unknown.Probe.Boundary = SkipBoundary.Of(SkipEndReason.Loading, "loading process");
+            unknown.Probe.Boundary = SkipBoundary.Of(SkipEndReason.InteractionBoundary, "Dialog");
             unknown.Controller.Tick();
             AssertEx.False(unknown.Controller.LastReport.ToString().Contains("game s"), "no ratio without a game time");
+
+            ControllerFixture loaded = new ControllerFixture();
+            loaded.Probe.GameTime = 100;
+            loaded.StartAndAdvance();
+            loaded.Probe.GameTime = 5000; // the loaded save's clock, not this scene's
+            loaded.Clock.Advance(2);
+            loaded.Probe.Boundary = SkipBoundary.Of(SkipEndReason.Loading, "loading process");
+            loaded.Controller.Tick();
+            AssertEx.True(double.IsNaN(loaded.Controller.LastReport.GameSecondsAdvanced), "a load leaves the figure unknown");
+            AssertEx.False(loaded.Controller.LastReport.ToString().Contains("game s"), "no ratio across a load");
 
             ControllerFixture fading = new ControllerFixture();
             fading.Probe.GameTime = 10;
