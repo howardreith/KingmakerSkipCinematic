@@ -24,15 +24,15 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
         [JsonProperty("steps")] public List<HarnessStep> Steps = new List<HarnessStep>();
 
         /// <summary>
-        /// Inert stand-ins registered before the fixture loads, for blueprints of a mod that is no longer installed but that
-        /// the fixture save still names (Kingmaker drops a whole unit whose fact names a missing blueprint). Test-only.
-        /// </summary>
-        /// <summary>
         /// Instead of loading "save", start a new game of this DLC campaign (e.g. "Varnhold") from the main menu with its first
         /// pregenerated character, through the same calls as the engine's own MainMenu.FastStartNewGame. Test-only.
         /// </summary>
         [JsonProperty("newGameDlc")] public string NewGameDlc;
 
+        /// <summary>
+        /// Inert stand-ins registered before the fixture loads, for blueprints of a mod that is no longer installed but that
+        /// the fixture save still names (Kingmaker drops a whole unit whose fact names a missing blueprint). Test-only.
+        /// </summary>
         [JsonProperty("placeholderBlueprints")] public List<PlaceholderBlueprint> PlaceholderBlueprints = new List<PlaceholderBlueprint>();
     }
 

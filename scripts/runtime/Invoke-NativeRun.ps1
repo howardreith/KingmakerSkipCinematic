@@ -55,6 +55,7 @@ if ($RecoverOnly) {
 
 if (-not $Scenario) { throw '-Scenario is required.' }
 $scenarioData = Get-Content -LiteralPath $Scenario -Raw | ConvertFrom-Json
+if (-not (Get-OptionalProperty $scenarioData 'save' $null) -and -not (Get-OptionalProperty $scenarioData 'newGameDlc' $null)) { throw "Scenario names neither a fixture 'save' nor a 'newGameDlc': $Scenario" }
 if (-not $Label) { $Label = [IO.Path]::GetFileNameWithoutExtension($Scenario) }
 $runId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + '-' + $Label + '-' + $ModProfile + $(if ($NoProduct) { '-noproduct' } else { '' })
 $game = Get-KingmakerConfiguration
