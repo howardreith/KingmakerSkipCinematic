@@ -1,0 +1,38 @@
+{
+  "description": "Varnhold's Lot opening: new DLC campaign from the main menu with the first pregenerated character (harness newGameDlc: the engine's FastStartNewGame calls with the DLC StartGamePreset; the game is entered without levelling the pregen to the preset experience), StartDLC2_enterchapter, the interchapter dialogue answered by the deterministic rule, then BaronationCeremonyDLC2 (voiced barks), played normally until free control.",
+  "newGameDlc": "Varnhold",
+  "captureEveryFrames": 0,
+  "steps": [
+    {
+      "op": "waitMode",
+      "mode": "Dialog",
+      "timeoutSeconds": 120
+    },
+    {
+      "op": "advanceUntil",
+      "mode": "Cutscene",
+      "seconds": 0.5,
+      "timeoutSeconds": 120
+    },
+    {
+      "op": "waitCutscene",
+      "match": "BaronationCeremonyDLC2",
+      "seconds": 2.0,
+      "timeoutSeconds": 180
+    },
+    {
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "op": "autoplayUntilControl",
+      "mode": "Pause",
+      "seconds": 3.0,
+      "timeoutSeconds": 400
+    },
+    {
+      "op": "snapshot",
+      "label": "control"
+    }
+  ]
+}

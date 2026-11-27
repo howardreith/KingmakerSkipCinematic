@@ -170,13 +170,16 @@ try {
     $profile = Join-Path $lab.Profiles $runId
     $profileSaves = Join-Path $profile 'Saved Games'
     New-Item -ItemType Directory -Force -Path $profileSaves | Out-Null
-    $fixtureSaves = @($scenarioData.save) + @(Get-OptionalProperty $scenarioData 'extraSaves' @())
+    $fixtureSaves = @(@(Get-OptionalProperty $scenarioData 'save' $null) + @(Get-OptionalProperty $scenarioData 'extraSaves' @()) | Where-Object { $_ })
     foreach ($name in $fixtureSaves) { Copy-Item -LiteralPath (Resolve-FixtureSave $lab $name) -Destination (Join-Path $profileSaves $name) }
     $request = [ordered]@{
-        runId = $runId; evidenceDir = $evidence; profileDir = $profile; save = $scenarioData.save
+        runId = $runId; evidenceDir = $evidence; profileDir = $profile; save = (Get-OptionalProperty $scenarioData 'save' $null)
         timeoutSeconds = $TimeoutSeconds - 60; exitAfterCompletion = $true
         captureEveryFrames = Get-OptionalProperty $scenarioData 'captureEveryFrames' 4
         steps = $scenarioData.steps
+        # Test-only stand-ins for blueprints of mods no longer installed that a fixture save still names (see the harness).
+        placeholderBlueprints = @(Get-OptionalProperty $scenarioData 'placeholderBlueprints' @())
+        newGameDlc = Get-OptionalProperty $scenarioData 'newGameDlc' $null
     }
     $requestPath = Join-Path $evidence 'runtime-request.json'
     $request | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $requestPath -Encoding UTF8
