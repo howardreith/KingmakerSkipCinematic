@@ -169,6 +169,23 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
             Enter(Stage.LoadingSave);
         }
 
+        /// <summary>
+        /// Sets Bag of Tricks' game-speed multiplier (the field its settings slider writes, applied by its
+        /// TimeController.Tick prefix) as a player would, so a scenario runs with that mod configured. Test-only.
+        /// </summary>
+        private StepStatus SetBagOfTricksGameSpeed(float value)
+        {
+            Type main = AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetType("BagOfTricks.Main", false)).FirstOrDefault(type => type != null);
+            if (main == null) return Fail(true, "Bag of Tricks is not loaded");
+            object settings = main.GetField("settings", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(null);
+            var field = settings?.GetType().GetField("debugTimeMultiplier");
+            if (field == null) return Fail(true, "Bag of Tricks settings.debugTimeMultiplier not found");
+            object previous = field.GetValue(settings);
+            field.SetValue(settings, value);
+            recorder.Event("bagOfTricksGameSpeed", previous + " -> " + value.ToString(CultureInfo.InvariantCulture));
+            return StepStatus.Done;
+        }
+
         private void RegisterPlaceholderBlueprints()
         {
             if (request.PlaceholderBlueprints == null || request.PlaceholderBlueprints.Count == 0) return;
@@ -308,6 +325,9 @@ namespace KingmakerCutsceneSkip.RuntimeHarness
 
                 case "applyBuff":
                     return ApplyBuff(game, step);
+
+                case "setBagOfTricksGameSpeed":
+                    return SetBagOfTricksGameSpeed((float)step.Seconds);
 
                 case "setDebugTimeScale":
                     // Mechanism test only: stands in for another owner (another mod) writing TimeController.DebugTimeScale.
